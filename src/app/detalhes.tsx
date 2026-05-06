@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as ImagePicker from 'expo-image-picker';
 import {
   StyleSheet,
   View,
@@ -13,6 +14,7 @@ import {
   Alert,
   Linking,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import {
   ChevronLeft,
@@ -60,13 +62,21 @@ export default function DetalhesChamado() {
   const [tecnicos, setTecnicos] = useState<any>({});
   const [categorias, setCategorias] = useState<any>({});
   const [clientes, setClientes] = useState<any>({});
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [notas, setNotas] = useState<string[]>([]);
 
   useEffect(() => {
-  buscarDetalhesChamado();
-  buscarTecnicos();
-  buscarCategorias();
-  buscarClientes();
-}, [id]);
+    buscarDetalhesChamado();
+    buscarTecnicos();
+    buscarCategorias();
+    buscarClientes();
+  }, [id]);
+
+  useEffect(() => {
+    if (calendar?.calendar_id) {
+      carregarFotoLocal();
+    }
+  }, [calendar]);
 
   async function buscarDetalhesChamado() {
     try {
@@ -99,16 +109,16 @@ export default function DetalhesChamado() {
           if (encontrado) {
             setCalendar(encontrado);
           } else {
-            console.log('ID não encontrado na lista. ID buscado:', id);
+            //console.log('ID não encontrado na lista. ID buscado:', id);
             setCalendar(null);
           }
         }
       } catch (parseError) {
-        console.log('Erro ao converter JSON. Resposta do servidor:', text);
+        // console.log('Erro ao converter JSON. Resposta do servidor:', text);
         Alert.alert('Erro', 'O servidor enviou uma resposta inválida.');
       }
     } catch (error) {
-      console.log('ERRO NA REQUISIÇÃO:', error);
+      //console.log('ERRO NA REQUISIÇÃO:', error);
     } finally {
       setLoading(false);
     }
@@ -132,7 +142,7 @@ export default function DetalhesChamado() {
 
       const data = await response.json();
 
-      console.log(" TECNICOS:", data);
+      //console.log(" TECNICOS:", data);
 
       if (data.status === "success") {
         const mapa: any = {};
@@ -146,82 +156,170 @@ export default function DetalhesChamado() {
         setTecnicos(mapa);
       }
     } catch (error) {
-      console.log("ERRO TECNICOS:", error);
+      //console.log("ERRO TECNICOS:", error);
     }
   }
 
   async function buscarCategorias() {
-  try {
-    const token = await AsyncStorage.getItem("token");
+    try {
+      const token = await AsyncStorage.getItem("token");
 
-    const response = await fetch("https://browz.com.br/rest.php", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        class: "ServiceTypeService",
-        method: "loadAll",
-      }),
-    });
-
-    const data = await response.json();
-
-    console.log("CATEGORIAS:", data);
-
-    if (data.status === "success") {
-      const mapa: any = {};
-
-      data.data.forEach((categoria: any) => {
-        mapa[categoria.service_type_id] =
-          categoria.service_type_name;
+      const response = await fetch("https://browz.com.br/rest.php", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          class: "ServiceTypeService",
+          method: "loadAll",
+        }),
       });
 
-      console.log(" MAPA CATEGORIAS:", mapa);
+      const data = await response.json();
 
-      setCategorias(mapa);
+      //console.log("CATEGORIAS:", data);
+
+      if (data.status === "success") {
+        const mapa: any = {};
+
+        data.data.forEach((categoria: any) => {
+          mapa[categoria.service_type_id] =
+            categoria.service_type_name;
+        });
+
+        //console.log(" MAPA CATEGORIAS:", mapa);
+
+        setCategorias(mapa);
+      }
+    } catch (error) {
+      // console.log(" ERRO CATEGORIAS:", error);
     }
-  } catch (error) {
-    console.log(" ERRO CATEGORIAS:", error);
   }
-}
 
-async function buscarClientes() {
-  try {
-    const token = await AsyncStorage.getItem("token");
+  async function buscarClientes() {
+    try {
+      const token = await AsyncStorage.getItem("token");
 
-    const response = await fetch("https://browz.com.br/rest.php", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        class: "CustomerService",
-        method: "loadAll",
-      }),
-    });
-
-    const data = await response.json();
-
-    console.log("🏢 CLIENTES:", data);
-
-    if (data.status === "success") {
-      const mapa: any = {};
-
-      data.data.forEach((cliente: any) => {
-        mapa[cliente.customer_id] = cliente.customer_name;
+      const response = await fetch("https://browz.com.br/rest.php", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          class: "CustomerService",
+          method: "loadAll",
+        }),
       });
 
-      console.log("🗺️ MAPA CLIENTES:", mapa);
+      const data = await response.json();
 
-      setClientes(mapa);
+      //console.log("🏢 CLIENTES:", data);
+
+      if (data.status === "success") {
+        const mapa: any = {};
+
+        data.data.forEach((cliente: any) => {
+          mapa[cliente.customer_id] = cliente.customer_name;
+        });
+
+        //console.log("🗺️ MAPA CLIENTES:", mapa);
+
+        setClientes(mapa);
+      }
+    } catch (error) {
+      //console.log("🔥 ERRO CLIENTES:", error);
     }
-  } catch (error) {
-    console.log("🔥 ERRO CLIENTES:", error);
   }
-}
+
+  async function escolherFoto() {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+
+    if (!permission.granted) {
+      Alert.alert('Permissão necessária', 'Permita o acesso à câmera para tirar foto.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      quality: 0.7,
+    });
+
+    if (!result.canceled) {
+      const uri = result.assets[0].uri;
+
+      const nomeArquivo = `foto_${Date.now()}.jpg`;
+
+      const fotoLocal = {
+        uri,
+        name: nomeArquivo,
+        type: 'image/jpeg',
+        path: `files/calendar/${calendar.calendar_id}/${nomeArquivo}`,
+        calendar_id: calendar.calendar_id,
+      };
+
+      await AsyncStorage.setItem(
+        `foto_chamado_${calendar.calendar_id}`,
+        JSON.stringify(fotoLocal)
+      );
+
+      setPhotoUri(uri);
+
+      Alert.alert('Foto salva', 'A foto foi salva localmente no chamado.');
+    }
+  }
+  async function carregarFotoLocal() {
+    const fotoSalva = await AsyncStorage.getItem(
+      `foto_chamado_${calendar.calendar_id}`
+    );
+
+    if (fotoSalva) {
+      const foto = JSON.parse(fotoSalva);
+      setPhotoUri(foto.uri);
+    }
+  }
+
+  async function enviarFotoApi(uri: string) {
+    try {
+      const token = await AsyncStorage.getItem('token');
+
+      const formData = new FormData();
+
+      const nomeArquivo = `foto_${Date.now()}.jpg`;
+
+      formData.append('class', 'CalendarService');
+      formData.append('method', 'enviarFoto');
+      formData.append('calendar_id', String(calendar.calendar_id));
+
+      formData.append('path', `files/calendar/${calendar.calendar_id}/`);
+
+      formData.append('foto', {
+        uri,
+        name: nomeArquivo,
+        type: 'image/jpeg',
+      } as any);
+
+      const response = await fetch('https://browz.com.br/rest.php', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      console.log(data);
+
+      if (data.status === 'success') {
+        Alert.alert('Sucesso', 'Foto enviada!');
+      }
+
+    } catch (error) {
+      console.log(error);
+    }
+  }
 
   const ticketId = calendar ? `#${calendar.calendar_id}` : '#---';
 
@@ -267,22 +365,32 @@ async function buscarClientes() {
     Linking.openURL(`tel: +55${mobileCliente}`);
   };
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!message.trim()) {
-      return Alert.alert('Atenção', 'Digite uma mensagem antes de enviar.');
+      return Alert.alert('Atenção', 'Digite uma nota antes de enviar.');
     }
 
-    Alert.alert('Mensagem enviada', message);
+    const novaNota = message.trim();
+
+    const novasNotas = [...notas, novaNota];
+    setNotas(novasNotas);
+
+    await AsyncStorage.setItem(
+      `notas_chamado_${calendar.calendar_id}`,
+      JSON.stringify(novasNotas)
+    );
+
+    Alert.alert('Sucesso', 'Nota adicionada com sucesso!');
     setMessage('');
   };
 
   function getClienteText(customerId: any) {
-  return (
-    clientes[customerId] ||
-    `Cliente ID: ${customerId}`
-  );
-}
- function getCategoriaText(serviceTypeId: any) {
+    return (
+      clientes[customerId] ||
+      `Cliente ID: ${customerId}`
+    );
+  }
+  function getCategoriaText(serviceTypeId: any) {
     return (
       categorias[serviceTypeId] ||
       `Categoria ID: ${serviceTypeId}`
@@ -440,7 +548,10 @@ async function buscarClientes() {
             <Link
               href={{
                 pathname: '/check',
-                params: { id: calendar.calendar_id },
+                params: {
+                  id: calendar.calendar_id,
+                  service_type_id: calendar.service_type_id,
+                },
               }}
               asChild
             >
@@ -494,18 +605,47 @@ async function buscarClientes() {
           </View>
         </View>
 
-        
 
-         <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitleText}>AÇÕES DO CHAMADO</Text>
 
-            <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.photoButton}>
-                <Camera size={18} color="#fff" />
-                <Text style={styles.buttonText}>Foto</Text>
-              </TouchableOpacity>
-            </View>
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitleText}>AÇÕES DO CHAMADO</Text>
+
+          <View style={styles.photoArea}>
+            <TouchableOpacity style={styles.photoButton} onPress={escolherFoto}>
+              <Camera size={18} color="#fff" />
+              <Text style={styles.buttonText}>Foto</Text>
+            </TouchableOpacity>
+
+            {photoUri && (
+              <View style={styles.imageContainer}>
+
+                <TouchableOpacity
+                  style={styles.removePhotoButton}
+                  onPress={async () => {
+                    setPhotoUri(null);
+
+                    await AsyncStorage.removeItem(
+                      `foto_chamado_${calendar.calendar_id}`
+                    );
+                  }}
+                >
+                  <Text style={styles.removePhotoText}>×</Text>
+                </TouchableOpacity>
+
+                <Image
+                  source={{ uri: photoUri }}
+                  style={styles.previewImage}
+                />
+              </View>
+            )}
+
+            {notas.map((nota, index) => (
+              <View key={index} style={styles.noteBox}>
+                <Text style={styles.noteText}>{nota}</Text>
+              </View>
+            ))}
           </View>
+        </View>
       </ScrollView>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -687,17 +827,6 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 14,
   },
-
-  photoButton: {
-    backgroundColor: '#3b82f6',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 50,
-    borderRadius: 14,
-  },
-
   buttonText: {
     color: '#fff',
     fontWeight: 'bold',
@@ -777,5 +906,69 @@ const styles = StyleSheet.create({
     gap: 6,
     height: 45,
     borderRadius: 12,
+  },
+
+  photoArea: {
+    width: '100%',
+    gap: 12,
+  },
+
+  photoButton: {
+    width: '100%',
+    backgroundColor: '#3b82f6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 52,
+    borderRadius: 14,
+  },
+
+  previewImage: {
+    width: '100%',
+    height: 190,
+    borderRadius: 16,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+
+  noteBox: {
+    width: '100%',
+    backgroundColor: '#0f172a',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+
+  noteText: {
+    color: '#e5e7eb',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+
+  imageContainer: {
+    position: 'relative',
+  },
+
+  removePhotoButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+
+  removePhotoText: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginTop: -2,
   },
 });

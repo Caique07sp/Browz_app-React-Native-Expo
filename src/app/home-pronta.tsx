@@ -1,35 +1,35 @@
-import { Link, useFocusEffect } from "expo-router";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import React, { useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { Link, useFocusEffect } from "expo-router";
 import {
-  StyleSheet,
+  Bell,
+  Inbox,
+  Info,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Search,
+  Settings,
+  SlidersHorizontal,
+  User,
+  X,
+} from "lucide-react-native";
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
   Image,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
-  ScrollView,
   Modal,
   Platform,
   RefreshControl,
-  ActivityIndicator,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import {
-  Search,
-  SlidersHorizontal,
-  Bell,
-  Menu,
-  LayoutDashboard,
-  Settings,
-  User,
-  Info,
-  LogOut,
-  X,
-  Inbox,
-} from "lucide-react-native";
 
 
 export default function Browz() {
@@ -61,22 +61,22 @@ export default function Browz() {
 
   async function buscarChamados(isRefresh = false) {
     try {
-      console.log("🚀 Iniciando busca de chamados...");
+      //console.log("🚀 Iniciando busca de chamados...");
 
       if (isRefresh) {
-        console.log("🔄 Atualização manual (pull to refresh)");
+        //console.log("🔄 Atualização manual (pull to refresh)");
         setRefreshing(true);
       } else {
-        console.log("⏳ Carregamento inicial");
+        //console.log("⏳ Carregamento inicial");
         setLoading(true);
       }
 
       const token = await AsyncStorage.getItem("token");
 
-      console.log("🔑 TOKEN:", token);
+      //console.log("🔑 TOKEN:", token);
 
       if (!token) {
-        console.log("❌ Token não encontrado!");
+        //console.log("❌ Token não encontrado!");
         return;
       }
 
@@ -85,7 +85,7 @@ export default function Browz() {
         method: "loadAll",
       };
 
-      console.log("📦 BODY ENVIADO:", bodyRequest);
+      //console.log("📦 BODY ENVIADO:", bodyRequest);
 
       const response = await fetch("https://browz.com.br/rest.php", {
         method: "POST",
@@ -96,29 +96,29 @@ export default function Browz() {
         body: JSON.stringify(bodyRequest),
       });
 
-      console.log("🌐 STATUS HTTP:", response.status);
+      //console.log("🌐 STATUS HTTP:", response.status);
 
       const responseText = await response.text();
 
-      console.log("📄 RESPOSTA TEXTO:", responseText);
+      //console.log("📄 RESPOSTA TEXTO:", responseText);
 
       let data;
 
       try {
         data = JSON.parse(responseText);
       } catch (error) {
-        console.log("❌ A resposta não é JSON.");
-        console.log("📄 TEXTO RECEBIDO:", responseText);
+        //console.log("❌ A resposta não é JSON.");
+        //console.log("📄 TEXTO RECEBIDO:", responseText);
         return;
       }
 
-      console.log("📥 RESPOSTA COMPLETA:", data);
+      //console.log("📥 RESPOSTA COMPLETA:", data);
 
       if (data.status === "success") {
-        console.log("✅ SUCESSO! Dados recebidos:", data.data);
+        //console.log("✅ SUCESSO! Dados recebidos:", data.data);
 
         if (Array.isArray(data.data)) {
-          console.log("📊 Quantidade de registros:", data.data.length);
+          //console.log("📊 Quantidade de registros:", data.data.length);
 
           //setChamados(data.data); //  mostra todos
 
@@ -127,10 +127,10 @@ export default function Browz() {
           //Começa aqui   
 
           if (data.status === "success") {
-            console.log("✅ SUCESSO! Dados recebidos:", data.data);
+            //console.log("✅ SUCESSO! Dados recebidos:", data.data);
 
             if (Array.isArray(data.data)) {
-              console.log("📊 Quantidade de registros:", data.data.length);
+              //console.log("📊 Quantidade de registros:", data.data.length);
 
               //setChamados(data.data); //  mostra todos
 
@@ -140,12 +140,12 @@ export default function Browz() {
                 return Number(calendar.representative_id) === Number(representativeId);
               });
 
-              console.log("ID DO TÉCNICO LOGADO:", representativeId);
-              console.log("CHAMADOS DO TÉCNICO:", chamadosDoTecnico);
+              //console.log("ID DO TÉCNICO LOGADO:", representativeId);
+              //console.log("CHAMADOS DO TÉCNICO:", chamadosDoTecnico);
 
               setChamados(chamadosDoTecnico);
             } else {
-              console.log("⚠️ data.data não é array:", data.data);
+              //console.log("⚠️ data.data não é array:", data.data);
               setChamados([]);
             }
           }
@@ -162,18 +162,18 @@ export default function Browz() {
 
 
         } else {
-          console.log("⚠️ data.data não é array:", data.data);
+          //console.log("⚠️ data.data não é array:", data.data);
           setChamados([]);
         }
       } else {
-        console.log("❌ ERRO DA API:", data);
+        //console.log("❌ ERRO DA API:", data);
         setChamados([]);
       }
     } catch (error) {
-      console.log("🔥 ERRO GERAL:", error);
+      //console.log("🔥 ERRO GERAL:", error);
       setChamados([]);
     } finally {
-      console.log("🏁 Finalizando carregamento");
+      //console.log("🏁 Finalizando carregamento");
       setLoading(false);
       setRefreshing(false);
     }
@@ -197,12 +197,12 @@ export default function Browz() {
 
       const data = await response.json();
 
-      console.log("👨‍🔧 TECNICOS:", data);
+      //console.log("👨‍🔧 TECNICOS:", data);
 
       if (data.status === "success") {
         const mapa: any = {};
 
-        console.log("TEC INDIVIDUAL:", data.data[0]);
+        //console.log("TEC INDIVIDUAL:", data.data[0]);
 
         data.data.forEach((usuario: any) => {
           mapa[usuario.id] = usuario.name;
@@ -211,7 +211,7 @@ export default function Browz() {
         setTecnicos(mapa);
       }
     } catch (error) {
-      console.log("ERRO TECNICOS:", error);
+      //console.log("ERRO TECNICOS:", error);
     }
   }
 
@@ -233,7 +233,7 @@ export default function Browz() {
 
       const data = await response.json();
 
-      console.log("📦 CATEGORIAS:", data);
+      //console.log("📦 CATEGORIAS:", data);
 
       if (data.status === "success") {
         const mapa: any = {};
@@ -243,12 +243,12 @@ export default function Browz() {
             categoria.service_type_name;
         });
 
-        console.log("🗺️ MAPA CATEGORIAS:", mapa);
+        //console.log("🗺️ MAPA CATEGORIAS:", mapa);
 
         setCategorias(mapa);
       }
     } catch (error) {
-      console.log("🔥 ERRO CATEGORIAS:", error);
+      //console.log("🔥 ERRO CATEGORIAS:", error);
     }
   }
 
@@ -270,7 +270,7 @@ export default function Browz() {
 
       const data = await response.json();
 
-      console.log("🏢 CLIENTES:", data);
+      //console.log("🏢 CLIENTES:", data);
 
       if (data.status === "success") {
         const mapa: any = {};
@@ -279,12 +279,12 @@ export default function Browz() {
           mapa[cliente.customer_id] = cliente.customer_name;
         });
 
-        console.log("🗺️ MAPA CLIENTES:", mapa);
+        //console.log("🗺️ MAPA CLIENTES:", mapa);
 
         setClientes(mapa);
       }
     } catch (error) {
-      console.log("🔥 ERRO CLIENTES:", error);
+      //console.log("🔥 ERRO CLIENTES:", error);
     }
   }
 
