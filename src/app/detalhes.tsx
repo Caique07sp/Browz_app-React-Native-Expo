@@ -1,0 +1,781 @@
+import React, { useState, useEffect } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  StatusBar,
+  Alert,
+  Linking,
+  ActivityIndicator,
+} from 'react-native';
+import {
+  ChevronLeft,
+  Send,
+  MapPin,
+  User,
+  HardDrive,
+  PlayCircle,
+  Map,
+  Phone,
+  Camera,
+  Copy,
+  Inbox,
+  Wrench,
+  Clock,
+} from 'lucide-react-native';
+import { Link, useLocalSearchParams } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+type DetailRowProps = {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+};
+
+function DetailRow({ icon, label, value }: DetailRowProps) {
+  return (
+    <View style={styles.detailRow}>
+      <View style={styles.detailLabelGroup}>
+        {icon}
+        <Text style={styles.detailLabel}>{label}:</Text>
+      </View>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
+  );
+}
+
+export default function DetalhesChamado() {
+  const { id } = useLocalSearchParams();
+
+  const [calendar, setCalendar] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
+  const [tecnicos, setTecnicos] = useState<any>({});
+  const [categorias, setCategorias] = useState<any>({});
+  const [clientes, setClientes] = useState<any>({});
+
+  useEffect(() => {
+  buscarDetalhesChamado();
+  buscarTecnicos();
+  buscarCategorias();
+  buscarClientes();
+}, [id]);
+
+  async function buscarDetalhesChamado() {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('token');
+
+      const response = await fetch('https://browz.com.br/rest.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          class: 'CalendarService',
+          method: 'loadAll', // 
+        }),
+      });
+
+
+      const text = await response.text();
+
+      try {
+        const result = JSON.parse(text);
+        if (result.status === 'success' && Array.isArray(result.data)) {
+
+          const encontrado = result.data.find(
+            (item: any) => String(item.calendar_id) === String(id)
+          );
+
+          if (encontrado) {
+            setCalendar(encontrado);
+          } else {
+            console.log('ID não encontrado na lista. ID buscado:', id);
+            setCalendar(null);
+          }
+        }
+      } catch (parseError) {
+        console.log('Erro ao converter JSON. Resposta do servidor:', text);
+        Alert.alert('Erro', 'O servidor enviou uma resposta inválida.');
+      }
+    } catch (error) {
+      console.log('ERRO NA REQUISIÇÃO:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function buscarTecnicos() {
+    try {
+      const token = await AsyncStorage.getItem("token");
+
+      const response = await fetch("https://browz.com.br/rest.php", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          class: "RepresentativeService",
+          method: "loadAll",
+        }),
+      });
+
+      const data = await response.json();
+
+      console.log(" TECNICOS:", data);
+
+      if (data.status === "success") {
+        const mapa: any = {};
+
+        console.log("TEC INDIVIDUAL:", data.data[0]);
+
+        data.data.forEach((usuario: any) => {
+          mapa[usuario.id] = usuario.name;
+        });
+
+        setTecnicos(mapa);
+      }
+    } catch (error) {
+      console.log("ERRO TECNICOS:", error);
+    }
+  }
+
+  async function buscarCategorias() {
+  try {
+    const token = await AsyncStorage.getItem("token");
+
+    const response = await fetch("https://browz.com.br/rest.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        class: "ServiceTypeService",
+        method: "loadAll",
+      }),
+    });
+
+    const data = await response.json();
+
+    console.log("CATEGORIAS:", data);
+
+    if (data.status === "success") {
+      const mapa: any = {};
+
+      data.data.forEach((categoria: any) => {
+        mapa[categoria.service_type_id] =
+          categoria.service_type_name;
+      });
+
+      console.log(" MAPA CATEGORIAS:", mapa);
+
+      setCategorias(mapa);
+    }
+  } catch (error) {
+    console.log(" ERRO CATEGORIAS:", error);
+  }
+}
+
+async function buscarClientes() {
+  try {
+    const token = await AsyncStorage.getItem("token");
+
+    const response = await fetch("https://browz.com.br/rest.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        class: "CustomerService",
+        method: "loadAll",
+      }),
+    });
+
+    const data = await response.json();
+
+    console.log("🏢 CLIENTES:", data);
+
+    if (data.status === "success") {
+      const mapa: any = {};
+
+      data.data.forEach((cliente: any) => {
+        mapa[cliente.customer_id] = cliente.customer_name;
+      });
+
+      console.log("🗺️ MAPA CLIENTES:", mapa);
+
+      setClientes(mapa);
+    }
+  } catch (error) {
+    console.log("🔥 ERRO CLIENTES:", error);
+  }
+}
+
+  const ticketId = calendar ? `#${calendar.calendar_id}` : '#---';
+
+  const telefoneCliente =
+    calendar?.calendar_contact_landline_phone ||
+    '';
+
+  const mobileCliente =
+    calendar?.calendar_contact_mobile_phone ||
+    '';
+
+  const endereco = calendar?.calendar_address || 'Endereço não informado';
+
+  const copyTicketId = async () => {
+    await Clipboard.setStringAsync(ticketId);
+    Alert.alert('Copiado', 'Número do chamado copiado!');
+  };
+
+  const openMaps = () => {
+    const address = encodeURIComponent(endereco);
+    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${address}`);
+  };
+
+  const openWaze = () => {
+    const addres = encodeURIComponent(endereco);
+    Linking.openURL(`https://waze.com/ul?q=${addres}`);
+  };
+
+  const callClient = () => {
+    if (!telefoneCliente) {
+      return Alert.alert('Atenção', 'Telefone do cliente não informado.');
+    }
+
+
+    Linking.openURL(`tel: +55${telefoneCliente}`);
+  };
+  const callMobile = () => {
+    if (!mobileCliente) {
+      return Alert.alert('Atenção', 'Celular do cliente não informado.');
+    }
+
+
+    Linking.openURL(`tel: +55${mobileCliente}`);
+  };
+
+  const sendMessage = () => {
+    if (!message.trim()) {
+      return Alert.alert('Atenção', 'Digite uma mensagem antes de enviar.');
+    }
+
+    Alert.alert('Mensagem enviada', message);
+    setMessage('');
+  };
+
+  function getClienteText(customerId: any) {
+  return (
+    clientes[customerId] ||
+    `Cliente ID: ${customerId}`
+  );
+}
+ function getCategoriaText(serviceTypeId: any) {
+    return (
+      categorias[serviceTypeId] ||
+      `Categoria ID: ${serviceTypeId}`
+    );
+  }
+
+  function getStatusText(status: any) {
+    const s = Number(status ?? 0);
+    if (s === 0) return 'ABERTO';
+    if (s === 1) return 'EM ANDAMENTO';
+    if (s === 2) return 'FINALIZADO';
+
+    return 'DESCONHECIDO';
+  }
+
+  function getStatusColor(status: any) {
+    const s = Number(status ?? 0);
+
+    if (s === 0) return '#f59e0b';
+    if (s === 1) return '#3b82f6';
+    if (s === 2) return '#22c55e';
+
+    return '#64748b';
+  }
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3b82f6" />
+          <Text style={styles.loadingText}>Carregando chamado...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!calendar) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" />
+
+        <View style={styles.loadingContainer}>
+          <Inbox size={50} color="#64748b" />
+          <Text style={styles.loadingText}>Chamado não encontrado.</Text>
+
+          <Link href="/home-pronta" asChild>
+            <TouchableOpacity style={styles.backHomeButton}>
+              <Text style={styles.buttonText}>Voltar</Text>
+            </TouchableOpacity>
+          </Link>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
+
+      <View style={styles.header}>
+        <Link href="/home-pronta" asChild>
+          <TouchableOpacity style={styles.backButton}>
+            <ChevronLeft color="#fff" size={26} />
+          </TouchableOpacity>
+        </Link>
+
+        <View style={styles.headerTitleContainer}>
+          <TouchableOpacity onPress={copyTicketId} style={styles.ticketCopyBox}>
+            <Text style={styles.headerId}>Chamado: {ticketId}</Text>
+            <Copy size={15} color="#94a3b8" />
+          </TouchableOpacity>
+
+          <View
+            style={[
+              styles.statusBadge,
+              { borderColor: getStatusColor(calendar.calendar_status) },
+            ]}
+          >
+            <Text
+              style={[
+                styles.statusText,
+                { color: getStatusColor(calendar.calendar_status) },
+              ]}
+            >
+              {getStatusText(calendar.calendar_status)}
+
+
+            </Text>
+          </View>
+        </View>
+
+        <View style={{ width: 26 }} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitleText}>INFORMAÇÕES DO CHAMADO</Text>
+
+          <DetailRow
+            icon={<User size={18} color="#3b82f6" />}
+            label="Cliente"
+            value={getClienteText(calendar.customer_id)}
+          />
+
+          <DetailRow
+            icon={<User size={18} color="#10b981" />}
+            label="Técnico"
+            value={String(tecnicos[calendar.representative_id] || 'Não informado')}
+          />
+
+          <DetailRow
+            icon={<Wrench size={18} color="#22c55e" />}
+            label="Tipo de Serviço"
+            value={String(categorias[calendar.service_type_id] || 'Não informado')}
+          />
+
+          <DetailRow
+            icon={<Clock size={18} color="#3b82f6" />}
+            label="Início"
+            value={
+              calendar.calendar_start
+                ? new Date(calendar.calendar_start).toLocaleString('pt-BR')
+                : 'Não informado'
+            }
+          />
+
+
+        </View>
+
+        <View style={styles.sectionCard}>
+          <View style={styles.rowTitle}>
+            <HardDrive size={18} color="#94a3b8" />
+            <Text style={styles.sectionTitleText}>DESCRIÇÃO DO PROBLEMA</Text>
+          </View>
+
+          <Text style={styles.problemText}>
+            {calendar.calendar_observation || 'Sem descrição'}
+          </Text>
+        </View>
+
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitleText}>ENDEREÇO E LOCALIZAÇÃO</Text>
+
+          <View style={styles.addressBox}>
+            <MapPin size={20} color="#ef4444" />
+            <Text style={styles.addressText}>
+              {calendar.calendar_address || 'Endereço não informado'}
+            </Text>
+          </View>
+
+          <View style={styles.actionContainer}>
+
+
+            <Link
+              href={{
+                pathname: '/check',
+                params: { id: calendar.calendar_id },
+              }}
+              asChild
+            >
+              <TouchableOpacity style={styles.checkInButton}>
+                <PlayCircle size={20} color="#fff" />
+                <Text style={styles.buttonText}>Check-in</Text>
+              </TouchableOpacity>
+            </Link>
+
+
+            <View style={styles.mapRow}>
+              <TouchableOpacity style={styles.mapButton} onPress={openMaps}>
+                <Map size={18} color="#fff" />
+                <Text style={styles.buttonTextSmall}>Maps</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.wazeButton} onPress={openWaze}>
+                <Map size={18} color="#fff" />
+                <Text style={styles.buttonTextSmall}>Waze</Text>
+              </TouchableOpacity>
+            </View>
+
+          </View>
+        </View>
+
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitleText}>CONTATO DO CLIENTE</Text>
+
+          <DetailRow
+            icon={<Phone size={18} color="#22c55e" />}
+            label="Telefone"
+            value={telefoneCliente || 'Não informado'}
+          />
+
+          <DetailRow
+            icon={<Phone size={18} color="#3b82f6" />}
+            label="Celular"
+            value={mobileCliente || 'Não informado'}
+          />
+
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={styles.callButton} onPress={callClient}>
+              <Phone size={18} color="#fff" />
+              <Text style={styles.buttonText}>Telefone</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.callButton2} onPress={callMobile}>
+              <Phone size={18} color="#fff" />
+              <Text style={styles.buttonText}>Celular</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        
+
+         <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitleText}>AÇÕES DO CHAMADO</Text>
+
+            <View style={styles.actionRow}>
+              <TouchableOpacity style={styles.photoButton}>
+                <Camera size={18} color="#fff" />
+                <Text style={styles.buttonText}>Foto</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+      </ScrollView>
+
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.footerInput}>
+          <TextInput
+            style={styles.input}
+            placeholder="Adicionar nota..."
+            placeholderTextColor="#64748b"
+            value={message}
+            onChangeText={setMessage}
+          />
+
+          <TouchableOpacity style={styles.sendIcon} onPress={sendMessage}>
+            <Send color="#fff" size={20} />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#0f172a' },
+
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+
+  loadingText: {
+    color: '#94a3b8',
+    marginTop: 12,
+    fontSize: 15,
+    textAlign: 'center',
+  },
+
+  backHomeButton: {
+    marginTop: 20,
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    backgroundColor: '#1e293b',
+    paddingTop: Platform.OS === 'android' ? 45 : 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+  },
+
+  headerTitleContainer: { alignItems: 'center' },
+
+  ticketCopyBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+
+  headerId: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+
+  statusBadge: {
+    backgroundColor: 'rgba(59,130,246,0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginTop: 6,
+    borderWidth: 1,
+  },
+
+  statusText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+
+  backButton: { padding: 5 },
+
+  scrollContent: { padding: 15, paddingBottom: 40 },
+
+  sectionCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+    elevation: 8,
+  },
+
+  sectionTitleText: {
+    color: '#e2e8f0',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    letterSpacing: 1,
+  },
+
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    gap: 12,
+  },
+
+  detailLabelGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+
+  detailLabel: { color: '#64748b' },
+
+  detailValue: {
+    color: '#fff',
+    fontWeight: '600',
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+
+  rowTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  problemText: {
+    color: '#cbd5e1',
+    fontSize: 15,
+    lineHeight: 22,
+  },
+
+  addressBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 20,
+  },
+
+  addressText: {
+    color: '#fff',
+    flex: 1,
+  },
+
+  actionRow: {
+    flexDirection: 'row',
+    gap: 20,
+    marginBottom: 12,
+  },
+
+  checkInButton: {
+    backgroundColor: '#51a6f5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 55,
+    borderRadius: 16,
+  },
+
+  callButton: {
+    flex: 1,
+    backgroundColor: '#16a34a',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 50,
+    borderRadius: 14,
+  },
+
+  photoButton: {
+    backgroundColor: '#3b82f6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 50,
+    borderRadius: 14,
+  },
+
+  buttonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+
+  footerInput: {
+    flexDirection: 'row',
+    padding: 15,
+    backgroundColor: '#1e293b',
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+    alignItems: 'center',
+  },
+
+  input: {
+    flex: 1,
+    color: '#fff',
+    height: 50,
+    backgroundColor: '#020617',
+    borderRadius: 14,
+    paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+  },
+
+  sendIcon: {
+    marginLeft: 12,
+    backgroundColor: '#3b82f6',
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  callButton2: {
+    flex: 1,
+    backgroundColor: '#51a6f5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 50,
+    borderRadius: 14,
+  },
+  actionContainer: {
+    gap: 10,
+  },
+
+  mapRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  wazeButton: {
+    flex: 1,
+    backgroundColor: '#16a34a',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 45,
+    borderRadius: 12,
+  },
+
+
+  buttonTextSmall: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  mapButton: {
+    flex: 1,
+    backgroundColor: '#0ea5e9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 45,
+    borderRadius: 12,
+  },
+});
