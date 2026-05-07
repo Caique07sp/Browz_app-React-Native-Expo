@@ -1,19 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Check, ChevronLeft } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  Image,
   ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Check, Trash2, PenTool } from 'lucide-react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function FinalizacaoRelatorio() {
   const router = useRouter();
@@ -29,19 +28,21 @@ export default function FinalizacaoRelatorio() {
   const [checklistTemplate, setChecklistTemplate] = useState<any[]>([]); //Aqui guardei os campos que vai aparecer na tela
   const [checklistResponses, setChecklistResponses] = useState<any>({});
   const [loadingChecklist, setLoadingChecklist] = useState(false);
+  const [calendarChecklistId, setCalendarChecklistId] = useState<number | null>(null);
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    checkSignature();
+    //checkSignature();
     buscarChecklist();
   }, []);
 
-  async function checkSignature() {
-    const savedSig = await AsyncStorage.getItem('@assinatura_cliente');
+  //async function checkSignature() {
+    //const savedSig = await AsyncStorage.getItem('@assinatura_cliente');
 
-    if (savedSig) {
-      setSignatureImg(savedSig);
-    }
-  }
+    //if (savedSig) {
+      //setSignatureImg(savedSig);
+    //}
+ // }
 
 
   //Vamos com calma que a gente consegue essa é função para comecar a pegar os dados da API
@@ -58,28 +59,43 @@ export default function FinalizacaoRelatorio() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          class: 'CalendarChecklistService', //Aqui chamei a API do checklist
+          class: 'CalendarChecklistService',
           method: 'loadAll',
         }),
       });
 
       const data = await response.json();
+      console.log('CHAMADO ID DA TELA:', chamadoId);
+      console.log('RETORNO CHECKLIST:', data.data);
 
       if (data.status === 'success' && Array.isArray(data.data)) {
-        const itemChecklist = data.data[0];
+        const itemChecklist = data.data.find(
+          (item: any) => String(item.calendar_id) === String(chamadoId)
+        );
 
-        data.data.forEach((item: any) => {
-          if (itemChecklist?.calendar_checklist_template) //Aqui é o campo com template que a API trouxe
-          {
-            const template = JSON.parse(itemChecklist.calendar_checklist_template); //e aqui converte pq veio em JSON
+        if (!itemChecklist) {
+          setChecklistTemplate([]);
+          return;
+        }
 
-            const ordenado = template.sort(
-              (a: any, b: any) => Number(a.order) - Number(b.order) //Aqui coloca a ordem certa
-            );
+        if (!itemChecklist) {
+          setChecklistTemplate([]);
+          return;
+        }
 
-            setChecklistTemplate(ordenado); //e salva
-          }
-        });
+        setCalendarChecklistId(itemChecklist.calendar_checklist_id);
+
+        if (itemChecklist?.calendar_checklist_template) {
+          const template = JSON.parse(
+            itemChecklist.calendar_checklist_template
+          );
+
+          const ordenado = template.sort(
+            (a: any, b: any) => Number(a.order) - Number(b.order)
+          );
+
+          setChecklistTemplate(ordenado);
+        }
       }
     } catch (error) {
       console.log('ERRO CHECKLIST:', error);
@@ -135,6 +151,8 @@ text     vira tentry
     }));
   }
 
+
+
   function validarChecklistObrigatorio() {
     const obrigatorios = checklistTemplate.filter(
       (field: any) => Number(field.required) === 1
@@ -156,13 +174,63 @@ text     vira tentry
 
     return true;
   }
+async function enviarChecklistParaApi(relatorioFinal: any) {
+  try {
+    const token = await AsyncStorage.getItem('token');
 
-  const handleClearSignature = async () => {
-    await AsyncStorage.removeItem('@assinatura_cliente');
-    setSignatureImg(null);
-  };
+    if (!calendarChecklistId) {
+      console.log('❌ Erro: Nenhum calendar_checklist_id encontrado no estado');
+      return false;
+    }
 
-  const handleFinalize = async () => {
+    // MONTAGEM DO OBJETO DATA
+    const payload = {
+      class: 'CalendarChecklistService',
+      method: 'store',
+      
+     
+      data: {
+        id: Number(calendarChecklistId),
+        calendar_id: chamadoId,
+        calendar_checklist_template: JSON.stringify(checklistTemplate),
+        calendar_checklist_response: JSON.stringify(relatorioFinal.checklist_response),
+      },
+    };
+
+    // LOG PARA DEBUG - Verifique se o calendar_checklist_id está correto aqui!
+    console.log('🚀 ENVIANDO PARA API:', JSON.stringify(payload, null, 2));
+
+    const response = await fetch('https://browz.com.br/rest.php', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await response.json();
+
+    console.log('✅ RETORNO DA API:', data);
+
+    return data.status === 'success';
+  } catch (error) {
+    console.log('BTU - ERRO AO ENVIAR:', error);
+    return false;
+  }
+}
+
+//const handleClearSignature = async () => {
+  //await AsyncStorage.removeItem('@assinatura_cliente');
+  //setSignatureImg(null);
+//};
+
+const handleFinalize = async () => {
+  if (sending) return;
+
+  try {
+    setSending(true);
+
     if (!description.trim()) {
       return Alert.alert('Erro', 'Descreva o serviço.');
     }
@@ -179,27 +247,31 @@ text     vira tentry
       return Alert.alert('Erro', 'Informe o contato de quem assinou.');
     }
 
-    if (!signatureImg) {
-      return Alert.alert('Erro', 'A assinatura é obrigatória.');
-    }
+    //if (!signatureImg) {
+      //return Alert.alert('Erro', 'A assinatura é obrigatória.');
+    //}
 
     const checkin = await AsyncStorage.getItem(`@checkin_${chamadoId}`);
     const foto = await AsyncStorage.getItem(`foto_chamado_${chamadoId}`);
     const notas = await AsyncStorage.getItem(`notas_chamado_${chamadoId}`);
 
-    const relatorioFinal = {
+    const relatorioFinal: any = {
       calendar_id: chamadoId,
       descricao: description.trim(),
       assinante_nome: signerName.trim(),
       assinante_contato: signerContact.trim(),
-      assinatura: signatureImg,
-      checklist_response: Object.values(checklistResponses),// E na hora de finalizar transforma em array para ficar da forma que a API quer receber, o O Object.values pega só os valores do objeto e transforma em array
+      //assinatura: signatureImg,
+      checklist_response: Object.values(checklistResponses),
       checkin: checkin ? JSON.parse(checkin) : null,
       foto: foto ? JSON.parse(foto) : null,
       notas: notas ? JSON.parse(notas) : [],
       finalizado_em: new Date().toISOString(),
       enviado_api: false,
     };
+
+    const enviadoApi = await enviarChecklistParaApi(relatorioFinal);
+
+    relatorioFinal.enviado_api = enviadoApi;
 
     await AsyncStorage.setItem(
       `@relatorio_final_${chamadoId}`,
@@ -210,87 +282,113 @@ text     vira tentry
 
     await AsyncStorage.removeItem('@assinatura_cliente');
 
-    Alert.alert('Sucesso', 'Atendimento finalizado e salvo no celular!', [
-      {
-        text: 'OK',
-        onPress: () => router.replace('/home-pronta'),
-      },
-    ]);
-  };
+    Alert.alert(
+      enviadoApi ? 'Sucesso' : 'Salvo localmente',
+      enviadoApi
+        ? 'Atendimento finalizado e enviado para a API!'
+        : 'Atendimento finalizado, mas ficou salvo localmente para sincronizar depois.',
+      [
+        {
+          text: 'OK',
+          onPress: () => router.replace('/home-pronta'),
+        },
+      ]
+    );
+  } finally {
+    setSending(false);
+  }
+};
 
-  const isFormValid =
-    description.trim() &&
-    signerName.trim() &&
-    signerContact.trim() &&
-    signatureImg;
+const isFormValid =
+  description.trim() &&
+  signerName.trim() &&
+  signerContact.trim(); //&&
+ // signatureImg;
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Relatório de Encerramento</Text>
-        <Text style={styles.subtitle}>Chamado #{chamadoId}</Text>
+return (
+  <SafeAreaView style={styles.container}>
+    <ScrollView contentContainerStyle={styles.scrollContent}>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>O QUE FOI REALIZADO?</Text>
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() =>
+            router.push({
+              pathname: '/check',
+              params: {
+                id: chamadoId,
+              },
+            })
+          }
+        >
+          <ChevronLeft color="#fff" size={26} />
+        </TouchableOpacity>
+      </View>
 
-          <TextInput
-            style={styles.textArea}
-            multiline
-            numberOfLines={9}
-            placeholder="Descreva com detalhes o serviço realizado..."
-            placeholderTextColor="#64748b"
-            value={description}
-            onChangeText={setDescription}
-          />
-        </View>
+      <Text style={styles.title}>Relatório de Encerramento</Text>
+      <Text style={styles.subtitle}>Chamado #{chamadoId}</Text>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>CHECKLIST DO SERVIÇO</Text>
+      <View style={styles.section}>
+        <Text style={styles.label}>O QUE FOI REALIZADO?</Text>
 
-          {loadingChecklist ? (
-            <View style={styles.loadingChecklist}>
-              <ActivityIndicator color="#3b82f6" />
-              <Text style={styles.loadingText}>Carregando checklist...</Text>
-            </View>
-          ) : checklistTemplate.length === 0 ? (
-            <Text style={styles.emptyChecklist}>
-              Nenhum checklist encontrado para este serviço.
-            </Text>
-          ) : (
+        <TextInput
+          style={styles.textArea}
+          multiline
+          numberOfLines={9}
+          placeholder="Descreva com detalhes o serviço realizado..."
+          placeholderTextColor="#64748b"
+          value={description}
+          onChangeText={setDescription}
+        />
+      </View>
 
-            //Aqui vai mostrar os campos na tela e como vão aparecer
-           checklistTemplate.map((field: any, index: number) => (
-             <View key={`${field.id}-${index}`} style={styles.checklistItem}>
-                <Text style={styles.checklistLabel}>
-                  {field.label} {Number(field.required) === 1 ? '*' : ''}
-                </Text>
+      <View style={styles.section}>
+        <Text style={styles.label}>CHECKLIST DO SERVIÇO</Text>
 
+        {loadingChecklist ? (
+          <View style={styles.loadingChecklist}>
+            <ActivityIndicator color="#3b82f6" />
+            <Text style={styles.loadingText}>Carregando checklist...</Text>
+          </View>
+        ) : checklistTemplate.length === 0 ? (
+          <Text style={styles.emptyChecklist}>
+            Nenhum checklist encontrado para este serviço.
+          </Text>
+        ) : (
 
-                {/*Se for texto*/}
-                {field.type === 'text' && (
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Digite aqui..."
-                    placeholderTextColor="#64748b"
-                    value={checklistResponses[field.id]?.field_value || ''}
-                    onChangeText={(text) => handleChecklistChange(field, text)}
-                  />
-                )}
+          //Aqui vai mostrar os campos na tela e como vão aparecer
+          checklistTemplate.map((field: any, index: number) => (
+            <View key={`${field.id}-${index}`} style={styles.checklistItem}>
+              <Text style={styles.checklistLabel}>
+                {field.label} {Number(field.required) === 1 ? '*' : ''}
+              </Text>
 
 
-                 {/*Se for texto area*/}
-                {field.type === 'textarea' && (
-                  <TextInput
-                    style={styles.textAreaSmall}
-                    multiline
-                    placeholder="Digite aqui..."
-                    placeholderTextColor="#64748b"
-                    value={checklistResponses[field.id]?.field_value || ''}
-                    onChangeText={(text) => handleChecklistChange(field, text)}
-                  />
-                )}
+              {/*Se for texto*/}
+              {field.type === 'text' && (
+                <TextInput
+                  style={styles.input}
+                  placeholder="Digite aqui..."
+                  placeholderTextColor="#64748b"
+                  value={checklistResponses[field.id]?.field_value || ''}
+                  onChangeText={(text) => handleChecklistChange(field, text)}
+                />
+              )}
 
-                 {/*Se for select
+
+              {/*Se for texto area*/}
+              {field.type === 'textarea' && (
+                <TextInput
+                  style={styles.textAreaSmall}
+                  multiline
+                  placeholder="Digite aqui..."
+                  placeholderTextColor="#64748b"
+                  value={checklistResponses[field.id]?.field_value || ''}
+                  onChangeText={(text) => handleChecklistChange(field, text)}
+                />
+              )}
+
+              {/*Se for select
                  
                  Aqui as opções vem assim : OPÇÃO 1|OPÇÃO 2|OPÇÃO 3
 
@@ -300,154 +398,160 @@ text     vira tentry
                   OPÇÃO 3
 
                  */}
-                {field.type === 'select' &&
-                  field.options?.split('|').map((option: string, index: number) => (
-                    <TouchableOpacity
-                      key={index}
+              {field.type === 'select' &&
+                field.options?.split('|').map((option: string, index: number) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.optionButton,
+                      checklistResponses[field.id]?.field_value === index &&
+                      styles.optionButtonSelected,
+                    ]}
+                    onPress={() => handleChecklistChange(field, index)}
+                  >
+                    <Text style={styles.optionText}>{option}</Text>
+                  </TouchableOpacity>
+                ))}
+
+
+              {/*aqui se for Radio aqui é so uma opção*/}
+              {field.type === 'radio' &&
+                field.options?.split('|').map((option: string, index: number) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.radioRow}
+                    onPress={() => handleChecklistChange(field, index)}
+                  >
+                    <View
                       style={[
-                        styles.optionButton,
+                        styles.radioCircle,
                         checklistResponses[field.id]?.field_value === index &&
-                        styles.optionButtonSelected,
+                        styles.radioCircleSelected,
                       ]}
-                      onPress={() => handleChecklistChange(field, index)}
-                    >
-                      <Text style={styles.optionText}>{option}</Text>
-                    </TouchableOpacity>
-                  ))}
+                    />
+
+                    <Text style={styles.optionText}>{option}</Text>
+                  </TouchableOpacity>
+                ))}
 
 
-                {/*aqui se for Radio aqui é so uma opção*/}
-                {field.type === 'radio' &&
-                  field.options?.split('|').map((option: string, index: number) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.radioRow}
-                      onPress={() => handleChecklistChange(field, index)}
-                    >
-                      <View
-                        style={[
-                          styles.radioCircle,
-                          checklistResponses[field.id]?.field_value === index &&
-                          styles.radioCircleSelected,
-                        ]}
-                      />
-
-                      <Text style={styles.optionText}>{option}</Text>
-                    </TouchableOpacity>
-                  ))}
-
-
-                {/*aqui se for checkbox
+              {/*aqui se for checkbox
                 
                 Que pode marcar varias opções
 
                 se o template tiver required:1 é obrigatorio
                 
                 */}
-                {field.type === 'checkbox' &&
-                  field.options?.split('|').map((option: string, index: number) => {
-                    const selected =
-                      checklistResponses[field.id]?.field_value
-                        ?.split(',')
-                        .includes(String(index)) || false;
+              {field.type === 'checkbox' &&
+                field.options?.split('|').map((option: string, index: number) => {
+                  const selected =
+                    checklistResponses[field.id]?.field_value
+                      ?.split(',')
+                      .includes(String(index)) || false;
 
-                    return (
-                      <TouchableOpacity
-                        key={index}
-                        style={styles.radioRow}
-                        onPress={() => {
-                          const current =
-                            checklistResponses[field.id]?.field_value
-                              ?.split(',')
-                              .filter(Boolean) || [];
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.radioRow}
+                      onPress={() => {
+                        const current =
+                          checklistResponses[field.id]?.field_value
+                            ?.split(',')
+                            .filter(Boolean) || [];
 
-                          let updated;
+                        let updated;
 
-                          if (current.includes(String(index))) {
-                            updated = current.filter(
-                              (i: string) => i !== String(index)
-                            );
-                          } else {
-                            updated = [...current, String(index)];
-                          }
+                        if (current.includes(String(index))) {
+                          updated = current.filter(
+                            (i: string) => i !== String(index)
+                          );
+                        } else {
+                          updated = [...current, String(index)];
+                        }
 
-                          handleChecklistChange(field, updated.join(','));
-                        }}
-                      >
-                        <View
-                          style={[
-                            styles.checkboxBox,
-                            selected && styles.checkboxBoxSelected,
-                          ]}
-                        />
+                        handleChecklistChange(field, updated.join(','));
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.checkboxBox,
+                          selected && styles.checkboxBoxSelected,
+                        ]}
+                      />
 
-                        <Text style={styles.optionText}>{option}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-              </View>
-            ))
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.label}>DADOS DE QUEM ASSINOU</Text>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Nome completo"
-            placeholderTextColor="#64748b"
-            value={signerName}
-            onChangeText={setSignerName}
-          />
-
-          <TextInput
-            style={styles.input}
-            placeholder="E-mail"
-            placeholderTextColor="#64748b"
-            value={signerContact}
-            onChangeText={setSignerContact}
-            keyboardType="email-address"
-          />
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.signatureHeader}>
-            <Text style={styles.label}>ASSINATURA DO CLIENTE</Text>
-
-            {signatureImg && (
-              <TouchableOpacity onPress={handleClearSignature} style={styles.clearBtn}>
-                <Trash2 color="#ef4444" size={16} />
-                <Text style={styles.clearBtnText}>Remover</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {signatureImg ? (
-            <View style={styles.previewContainer}>
-              <Image source={{ uri: signatureImg }} style={styles.previewImage} />
+                      <Text style={styles.optionText}>{option}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
             </View>
-          ) : (
-            <TouchableOpacity
-              style={styles.signatureTrigger}
-              onPress={() => router.push('/assinatura-cliente')}
-            >
-              <PenTool color="#3b82f6" size={28} />
-              <Text style={styles.signatureTriggerText}>Coletar Assinatura</Text>
+          ))
+        )}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.label}>DADOS DE QUEM ASSINOU</Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Nome completo"
+          placeholderTextColor="#64748b"
+          value={signerName}
+          onChangeText={setSignerName}
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="E-mail"
+          placeholderTextColor="#64748b"
+          value={signerContact}
+          onChangeText={setSignerContact}
+          keyboardType="email-address"
+        />
+      </View>
+
+      {/*<View style={styles.section}>
+        <View style={styles.signatureHeader}>
+          <Text style={styles.label}>ASSINATURA DO CLIENTE</Text>
+
+          {signatureImg && (
+            <TouchableOpacity onPress={handleClearSignature} style={styles.clearBtn}>
+              <Trash2 color="#ef4444" size={16} />
+              <Text style={styles.clearBtnText}>Remover</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        <TouchableOpacity
-          style={[styles.submitBtn, !isFormValid && styles.submitBtnDisabled]}
-          onPress={handleFinalize}
-        >
-          <Check color="#fff" size={24} />
-          <Text style={styles.submitBtnText}>Finalizar Atendimento</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
-  );
+        {signatureImg ? (
+          <View style={styles.previewContainer}>
+            <Image source={{ uri: signatureImg }} style={styles.previewImage} />
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.signatureTrigger}
+            onPress={() => router.push('/assinatura-cliente')}
+          >
+            <PenTool color="#3b82f6" size={28} />
+            <Text style={styles.signatureTriggerText}>Coletar Assinatura</Text>
+          </TouchableOpacity>
+        )}
+      </View> */}
+
+      <TouchableOpacity
+        disabled={!isFormValid || sending}
+        style={[
+          styles.submitBtn,
+          (!isFormValid || sending) && styles.submitBtnDisabled,
+        ]}
+        onPress={handleFinalize}
+      >
+        <Check color="#fff" size={24} />
+        <Text style={styles.submitBtnText}>
+          {sending ? 'Enviando...' : 'Finalizar Atendimento'}
+        </Text>
+      </TouchableOpacity>
+    </ScrollView>
+  </SafeAreaView>
+);
 }
 
 const styles = StyleSheet.create({
@@ -659,5 +763,17 @@ const styles = StyleSheet.create({
   submitBtnText: {
     color: '#fff',
     fontWeight: 'bold',
+  },
+  topBar: {
+    marginBottom: 15,
+  },
+
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#1e293b',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

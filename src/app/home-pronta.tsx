@@ -511,9 +511,9 @@ export default function Browz() {
 
 
 
-                  <Text style={styles.footerText}>
+                  { /*<Text style={styles.footerText}>
                     Técnico: {getTecnicoText(calendar.representative_id)}
-                  </Text>
+                  </Text> */}
                 </View>
               </TouchableOpacity>
             </Link>
