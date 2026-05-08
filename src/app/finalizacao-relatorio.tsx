@@ -1,10 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Check, ChevronLeft } from 'lucide-react-native';
+import { Check, ChevronLeft, PenTool, Trash2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -32,17 +33,18 @@ export default function FinalizacaoRelatorio() {
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    //checkSignature();
+    checkSignature();
+    carregarRascunhoRelatorio();
     buscarChecklist();
   }, []);
 
-  //async function checkSignature() {
-    //const savedSig = await AsyncStorage.getItem('@assinatura_cliente');
+  async function checkSignature() {
+    const savedSig = await AsyncStorage.getItem('@assinatura_cliente');
 
-    //if (savedSig) {
-      //setSignatureImg(savedSig);
-    //}
- // }
+    if (savedSig) {
+      setSignatureImg(savedSig);
+    }
+  }
 
 
   //Vamos com calma que a gente consegue essa é função para comecar a pegar os dados da API
@@ -105,6 +107,141 @@ export default function FinalizacaoRelatorio() {
     }
   }
 
+
+  {/*async function enviarFotoParaApi() {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const fotoSalva = await AsyncStorage.getItem(`foto_chamado_${chamadoId}`);
+
+      if (!fotoSalva) return true;
+      const foto = JSON.parse(fotoSalva);
+
+      const formData = new FormData();
+      formData.append('class', 'CalendarService');
+      formData.append('method', 'store');
+      formData.append('data[id]', String(chamadoId));
+
+      // Monta o caminho como solicitado para salvar na coluna do MySQL
+      const caminhoBanco = `files/calendar/${chamadoId}/${foto.name}`;
+      formData.append('data[calendar_images]', caminhoBanco);
+
+      // Define a pasta de destino no servidor
+      formData.append('path', `files/calendar/${chamadoId}`);
+
+      formData.append('file', {
+        uri: foto.uri,
+        name: foto.name,
+        type: 'image/jpeg',
+      } as any);
+
+      const response = await fetch('https://browz.com.br/rest.php', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      const data = await response.json();
+      return data.status === 'success';
+    } catch (error) {
+      console.log('❌ Erro no upload da foto:', error);
+      return false;
+    }
+  } */}
+
+  async function enviarFotosParaApi() {
+  try {
+    const token = await AsyncStorage.getItem('token');
+    const fotosSalvasStr = await AsyncStorage.getItem(`@fotos_chamado_${chamadoId}`);
+
+    if (!fotosSalvasStr) return true;
+
+    const listaFotos = JSON.parse(fotosSalvasStr);
+    
+    // O segredo está neste loop "for...of" com "await"
+    for (const [index, fotoUri] of listaFotos.entries()) {
+      const formData = new FormData();
+      
+      // Criamos um nome que mude SEMPRE (timestamp + index)
+      const nomeArquivo = `foto_${Date.now()}_${index}.jpg`;
+
+      formData.append('class', 'CalendarService');
+      formData.append('method', 'store');
+      
+      // Se o seu PHP usa 'id' para dar UPDATE, ele vai sobrescrever.
+      // Verifique se você não deveria enviar o 'calendar_id' em vez de apenas 'id'
+      formData.append('data[id]', String(chamadoId)); 
+      
+      const caminhoBanco = `files/calendar/${chamadoId}/${nomeArquivo}`;
+      formData.append('data[calendar_images]', caminhoBanco);
+      formData.append('path', `files/calendar/${chamadoId}`);
+
+      formData.append('file', {
+        uri: fotoUri,
+        name: nomeArquivo,
+        type: 'image/jpeg',
+      } as any);
+
+      console.log(`📤 Enviando foto ${index + 1}...`);
+
+      const response = await fetch('https://browz.com.br/rest.php', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      const data = await response.json();
+      
+      // Log para debugar: veja se o servidor retorna 'success' nas duas vezes
+      console.log(`✅ Resposta foto ${index + 1}:`, data);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('❌ Erro no upload:', error);
+    return false;
+  }
+}
+
+  async function enviarAssinaturaParaApi() {
+    try {
+      if (!signatureImg) return true;
+      const token = await AsyncStorage.getItem('token');
+
+      // Define o nome do arquivo
+      const nomeArquivo = `assinatura.png`;
+      // Define o caminho exato que você quer no banco
+      const caminhoBanco = `file/signatures/${chamadoId}/${nomeArquivo}`;
+
+      const formData = new FormData();
+      formData.append('class', 'CalendarService');
+      formData.append('method', 'store');
+      formData.append('data[id]', chamadoId);
+
+      // Esta linha grava o caminho que você pediu no banco de dados
+      formData.append('data[calendar_signature]', caminhoBanco);
+
+      // Define a pasta onde o arquivo físico será salvo no servidor
+      formData.append('path', `file/signatures/${chamadoId}`);
+
+      // O arquivo propriamente dito
+      formData.append('file', {
+        uri: signatureImg,
+        name: nomeArquivo,
+        type: 'image/png'
+      } as any);
+
+      const res = await fetch('https://browz.com.br/rest.php', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      const resultado = await res.json();
+      return resultado.status === 'success';
+    } catch (e) {
+      return false;
+    }
+  }
 
   //Aqui eu criei meio que um mapa, pq na API vem esses nome tcombo tentry essas coisa, vai ser um relacionamento e tranformar tambem nos campos
 
@@ -174,62 +311,127 @@ text     vira tentry
 
     return true;
   }
-async function enviarChecklistParaApi(relatorioFinal: any) {
-  try {
-    const token = await AsyncStorage.getItem('token');
+  async function enviarChecklistParaApi(relatorioFinal: any) {
+    try {
+      const token = await AsyncStorage.getItem('token');
 
-    if (!calendarChecklistId) {
-      console.log('❌ Erro: Nenhum calendar_checklist_id encontrado no estado');
+      if (!calendarChecklistId) {
+        console.log('❌ Erro: Nenhum calendar_checklist_id encontrado no estado');
+        return false;
+      }
+
+      // MONTAGEM DO OBJETO DATA
+      const payload = {
+        class: 'CalendarChecklistService',
+        method: 'store',
+
+
+        data: {
+          id: Number(calendarChecklistId),
+          calendar_id: chamadoId,
+          calendar_checklist_template: JSON.stringify(checklistTemplate),
+          calendar_checklist_response: JSON.stringify(relatorioFinal.checklist_response),
+        },
+      };
+
+      // LOG PARA DEBUG - Verifique se o calendar_checklist_id está correto aqui!
+      console.log('🚀 ENVIANDO PARA API:', JSON.stringify(payload, null, 2));
+
+      const response = await fetch('https://browz.com.br/rest.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      console.log('✅ RETORNO DA API:', data);
+
+      return data.status === 'success';
+    } catch (error) {
+      console.log('BTU - ERRO AO ENVIAR:', error);
       return false;
     }
+  }
 
-    // MONTAGEM DO OBJETO DATA
-    const payload = {
-      class: 'CalendarChecklistService',
-      method: 'store',
-      
-     
-      data: {
-        id: Number(calendarChecklistId),
-        calendar_id: chamadoId,
-        calendar_checklist_template: JSON.stringify(checklistTemplate),
-        calendar_checklist_response: JSON.stringify(relatorioFinal.checklist_response),
-      },
+  async function enviarRelatorioCalendarParaApi(relatorioFinal: any) {
+    try {
+      const token = await AsyncStorage.getItem('token');
+
+      const payload = {
+        class: 'CalendarService',
+        method: 'store',
+
+        data: {
+          id: Number(chamadoId),
+          calendar_id: Number(chamadoId),
+
+          calendar_report: relatorioFinal.descricao,
+          calendar_signatory_name: relatorioFinal.assinante_nome,
+          calendar_signatory_email: relatorioFinal.assinante_contato,
+         calendar_signature: `file/signatures/${chamadoId}/assinatura.png`,
+          calendar_status: 2,
+        },
+      };
+
+      //console.log('🚀 ENVIANDO RELATÓRIO:', JSON.stringify(payload, null, 2));
+
+      const response = await fetch('https://browz.com.br/rest.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      //console.log('✅ RETORNO ENVIO RELATÓRIO:', data);
+
+      return data.status === 'success';
+    } catch (error) {
+      console.log('❌ ERRO AO ENVIAR RELATÓRIO:', error);
+      return false;
+    }
+  }
+
+  const handleClearSignature = async () => {
+    await AsyncStorage.removeItem('@assinatura_cliente');
+    setSignatureImg(null);
+  };
+
+  async function salvarRascunhoRelatorio() {
+    const rascunho = {
+      description,
+      signerName,
+      signerContact,
+      checklistResponses,
     };
 
-    // LOG PARA DEBUG - Verifique se o calendar_checklist_id está correto aqui!
-    console.log('🚀 ENVIANDO PARA API:', JSON.stringify(payload, null, 2));
-
-    const response = await fetch('https://browz.com.br/rest.php', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await response.json();
-
-    console.log('✅ RETORNO DA API:', data);
-
-    return data.status === 'success';
-  } catch (error) {
-    console.log('BTU - ERRO AO ENVIAR:', error);
-    return false;
+    await AsyncStorage.setItem(
+      `@rascunho_relatorio_${chamadoId}`,
+      JSON.stringify(rascunho)
+    );
   }
-}
 
-//const handleClearSignature = async () => {
-  //await AsyncStorage.removeItem('@assinatura_cliente');
-  //setSignatureImg(null);
-//};
+  async function carregarRascunhoRelatorio() {
+    const saved = await AsyncStorage.getItem(`@rascunho_relatorio_${chamadoId}`);
 
-const handleFinalize = async () => {
-  if (sending) return;
+    if (saved) {
+      const rascunho = JSON.parse(saved);
 
-  try {
-    setSending(true);
+      setDescription(rascunho.description || '');
+      setSignerName(rascunho.signerName || '');
+      setSignerContact(rascunho.signerContact || '');
+      setChecklistResponses(rascunho.checklistResponses || {});
+    }
+  }
+  const handleFinalize = async () => {
+    if (sending) return;
 
     if (!description.trim()) {
       return Alert.alert('Erro', 'Descreva o serviço.');
@@ -239,156 +441,153 @@ const handleFinalize = async () => {
       return;
     }
 
-    if (!signerName.trim()) {
-      return Alert.alert('Erro', 'Informe o nome de quem assinou.');
+    if (!signerName.trim() || !signerContact.trim() || !signatureImg) {
+      return Alert.alert('Erro', 'Preencha todos os campos e a assinatura.');
     }
 
-    if (!signerContact.trim()) {
-      return Alert.alert('Erro', 'Informe o contato de quem assinou.');
+    try {
+      setSending(true);
+
+      const checkin = await AsyncStorage.getItem(`@checkin_${chamadoId}`);
+      const fotoStr = await AsyncStorage.getItem(`foto_chamado_${chamadoId}`);
+      const notasStr = await AsyncStorage.getItem(`notas_chamado_${chamadoId}`);
+
+      const relatorioFinal = {
+        calendar_id: chamadoId,
+        descricao: description.trim(),
+        assinante_nome: signerName.trim(),
+        assinante_contato: signerContact.trim(),
+        assinatura: signatureImg,
+        checklist_response: Object.values(checklistResponses),
+        checkin: checkin ? JSON.parse(checkin) : null,
+        foto: fotoStr ? JSON.parse(fotoStr) : null,
+        notas: notasStr ? JSON.parse(notasStr) : [],
+        finalizado_em: new Date().toISOString(),
+      };
+
+      const enviadoChecklist = await enviarChecklistParaApi(relatorioFinal);
+      const enviadoRelatorio = await enviarRelatorioCalendarParaApi(relatorioFinal);
+      const enviadoAssinatura = await enviarAssinaturaParaApi();
+      const enviadoFotos = await enviarFotosParaApi();
+
+      if (enviadoChecklist && enviadoRelatorio && enviadoAssinatura && enviadoFotos) {
+        await AsyncStorage.multiRemove([
+          `@rascunho_relatorio_${chamadoId}`,
+          `@assinatura_cliente`,
+          `@fotos_chamado_${chamadoId}`,
+          `foto_chamado_${chamadoId}`,
+          `notas_chamado_${chamadoId}`,
+        ]);
+
+        await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
+
+        Alert.alert('Sucesso', 'Atendimento finalizado com sucesso!', [
+          { text: 'OK', onPress: () => router.replace('/home-pronta') },
+        ]);
+      } else {
+        Alert.alert(
+          'Atenção',
+          'Alguns dados podem não ter sido enviados. Verifique a conexão e tente novamente.'
+        );
+      }
+    } catch (error) {
+      console.error('ERRO CRÍTICO NO FINALIZE:', error);
+      Alert.alert('Erro', 'Ocorreu um erro inesperado ao finalizar.');
+    } finally {
+      setSending(false);
     }
+  };
 
-    //if (!signatureImg) {
-      //return Alert.alert('Erro', 'A assinatura é obrigatória.');
-    //}
+  const isFormValid =
+    description.trim() &&
+    signerName.trim() &&
+    signerContact.trim() &&
+    signatureImg;
 
-    const checkin = await AsyncStorage.getItem(`@checkin_${chamadoId}`);
-    const foto = await AsyncStorage.getItem(`foto_chamado_${chamadoId}`);
-    const notas = await AsyncStorage.getItem(`notas_chamado_${chamadoId}`);
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
 
-    const relatorioFinal: any = {
-      calendar_id: chamadoId,
-      descricao: description.trim(),
-      assinante_nome: signerName.trim(),
-      assinante_contato: signerContact.trim(),
-      //assinatura: signatureImg,
-      checklist_response: Object.values(checklistResponses),
-      checkin: checkin ? JSON.parse(checkin) : null,
-      foto: foto ? JSON.parse(foto) : null,
-      notas: notas ? JSON.parse(notas) : [],
-      finalizado_em: new Date().toISOString(),
-      enviado_api: false,
-    };
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() =>
+              router.push({
+                pathname: '/check',
+                params: {
+                  id: chamadoId,
+                },
+              })
+            }
+          >
+            <ChevronLeft color="#fff" size={26} />
+          </TouchableOpacity>
+        </View>
 
-    const enviadoApi = await enviarChecklistParaApi(relatorioFinal);
+        <Text style={styles.title}>Relatório de Encerramento</Text>
+        <Text style={styles.subtitle}>Chamado #{chamadoId}</Text>
 
-    relatorioFinal.enviado_api = enviadoApi;
+        <View style={styles.section}>
+          <Text style={styles.label}>O QUE FOI REALIZADO?</Text>
 
-    await AsyncStorage.setItem(
-      `@relatorio_final_${chamadoId}`,
-      JSON.stringify(relatorioFinal)
-    );
+          <TextInput
+            style={styles.textArea}
+            multiline
+            numberOfLines={9}
+            placeholder="Descreva com detalhes o serviço realizado..."
+            placeholderTextColor="#64748b"
+            value={description}
+            onChangeText={setDescription}
+          />
+        </View>
 
-    await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
+        <View style={styles.section}>
+          <Text style={styles.label}>CHECKLIST DO SERVIÇO</Text>
 
-    await AsyncStorage.removeItem('@assinatura_cliente');
+          {loadingChecklist ? (
+            <View style={styles.loadingChecklist}>
+              <ActivityIndicator color="#3b82f6" />
+              <Text style={styles.loadingText}>Carregando checklist...</Text>
+            </View>
+          ) : checklistTemplate.length === 0 ? (
+            <Text style={styles.emptyChecklist}>
+              Nenhum checklist encontrado para este serviço.
+            </Text>
+          ) : (
 
-    Alert.alert(
-      enviadoApi ? 'Sucesso' : 'Salvo localmente',
-      enviadoApi
-        ? 'Atendimento finalizado e enviado para a API!'
-        : 'Atendimento finalizado, mas ficou salvo localmente para sincronizar depois.',
-      [
-        {
-          text: 'OK',
-          onPress: () => router.replace('/home-pronta'),
-        },
-      ]
-    );
-  } finally {
-    setSending(false);
-  }
-};
-
-const isFormValid =
-  description.trim() &&
-  signerName.trim() &&
-  signerContact.trim(); //&&
- // signatureImg;
-
-return (
-  <SafeAreaView style={styles.container}>
-    <ScrollView contentContainerStyle={styles.scrollContent}>
-
-      <View style={styles.topBar}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() =>
-            router.push({
-              pathname: '/check',
-              params: {
-                id: chamadoId,
-              },
-            })
-          }
-        >
-          <ChevronLeft color="#fff" size={26} />
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.title}>Relatório de Encerramento</Text>
-      <Text style={styles.subtitle}>Chamado #{chamadoId}</Text>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>O QUE FOI REALIZADO?</Text>
-
-        <TextInput
-          style={styles.textArea}
-          multiline
-          numberOfLines={9}
-          placeholder="Descreva com detalhes o serviço realizado..."
-          placeholderTextColor="#64748b"
-          value={description}
-          onChangeText={setDescription}
-        />
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>CHECKLIST DO SERVIÇO</Text>
-
-        {loadingChecklist ? (
-          <View style={styles.loadingChecklist}>
-            <ActivityIndicator color="#3b82f6" />
-            <Text style={styles.loadingText}>Carregando checklist...</Text>
-          </View>
-        ) : checklistTemplate.length === 0 ? (
-          <Text style={styles.emptyChecklist}>
-            Nenhum checklist encontrado para este serviço.
-          </Text>
-        ) : (
-
-          //Aqui vai mostrar os campos na tela e como vão aparecer
-          checklistTemplate.map((field: any, index: number) => (
-            <View key={`${field.id}-${index}`} style={styles.checklistItem}>
-              <Text style={styles.checklistLabel}>
-                {field.label} {Number(field.required) === 1 ? '*' : ''}
-              </Text>
+            //Aqui vai mostrar os campos na tela e como vão aparecer
+            checklistTemplate.map((field: any, index: number) => (
+              <View key={`${field.id}-${index}`} style={styles.checklistItem}>
+                <Text style={styles.checklistLabel}>
+                  {field.label} {Number(field.required) === 1 ? '*' : ''}
+                </Text>
 
 
-              {/*Se for texto*/}
-              {field.type === 'text' && (
-                <TextInput
-                  style={styles.input}
-                  placeholder="Digite aqui..."
-                  placeholderTextColor="#64748b"
-                  value={checklistResponses[field.id]?.field_value || ''}
-                  onChangeText={(text) => handleChecklistChange(field, text)}
-                />
-              )}
+                {/*Se for texto*/}
+                {field.type === 'text' && (
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Digite aqui..."
+                    placeholderTextColor="#64748b"
+                    value={checklistResponses[field.id]?.field_value || ''}
+                    onChangeText={(text) => handleChecklistChange(field, text)}
+                  />
+                )}
 
 
-              {/*Se for texto area*/}
-              {field.type === 'textarea' && (
-                <TextInput
-                  style={styles.textAreaSmall}
-                  multiline
-                  placeholder="Digite aqui..."
-                  placeholderTextColor="#64748b"
-                  value={checklistResponses[field.id]?.field_value || ''}
-                  onChangeText={(text) => handleChecklistChange(field, text)}
-                />
-              )}
+                {/*Se for texto area*/}
+                {field.type === 'textarea' && (
+                  <TextInput
+                    style={styles.textAreaSmall}
+                    multiline
+                    placeholder="Digite aqui..."
+                    placeholderTextColor="#64748b"
+                    value={checklistResponses[field.id]?.field_value || ''}
+                    onChangeText={(text) => handleChecklistChange(field, text)}
+                  />
+                )}
 
-              {/*Se for select
+                {/*Se for select
                  
                  Aqui as opções vem assim : OPÇÃO 1|OPÇÃO 2|OPÇÃO 3
 
@@ -398,160 +597,163 @@ return (
                   OPÇÃO 3
 
                  */}
-              {field.type === 'select' &&
-                field.options?.split('|').map((option: string, index: number) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.optionButton,
-                      checklistResponses[field.id]?.field_value === index &&
-                      styles.optionButtonSelected,
-                    ]}
-                    onPress={() => handleChecklistChange(field, index)}
-                  >
-                    <Text style={styles.optionText}>{option}</Text>
-                  </TouchableOpacity>
-                ))}
-
-
-              {/*aqui se for Radio aqui é so uma opção*/}
-              {field.type === 'radio' &&
-                field.options?.split('|').map((option: string, index: number) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.radioRow}
-                    onPress={() => handleChecklistChange(field, index)}
-                  >
-                    <View
+                {field.type === 'select' &&
+                  field.options?.split('|').map((option: string, index: number) => (
+                    <TouchableOpacity
+                      key={index}
                       style={[
-                        styles.radioCircle,
+                        styles.optionButton,
                         checklistResponses[field.id]?.field_value === index &&
-                        styles.radioCircleSelected,
+                        styles.optionButtonSelected,
                       ]}
-                    />
+                      onPress={() => handleChecklistChange(field, index)}
+                    >
+                      <Text style={styles.optionText}>{option}</Text>
+                    </TouchableOpacity>
+                  ))}
 
-                    <Text style={styles.optionText}>{option}</Text>
-                  </TouchableOpacity>
-                ))}
+
+                {/*aqui se for Radio aqui é so uma opção*/}
+                {field.type === 'radio' &&
+                  field.options?.split('|').map((option: string, index: number) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.radioRow}
+                      onPress={() => handleChecklistChange(field, index)}
+                    >
+                      <View
+                        style={[
+                          styles.radioCircle,
+                          checklistResponses[field.id]?.field_value === index &&
+                          styles.radioCircleSelected,
+                        ]}
+                      />
+
+                      <Text style={styles.optionText}>{option}</Text>
+                    </TouchableOpacity>
+                  ))}
 
 
-              {/*aqui se for checkbox
+                {/*aqui se for checkbox
                 
                 Que pode marcar varias opções
 
                 se o template tiver required:1 é obrigatorio
                 
                 */}
-              {field.type === 'checkbox' &&
-                field.options?.split('|').map((option: string, index: number) => {
-                  const selected =
-                    checklistResponses[field.id]?.field_value
-                      ?.split(',')
-                      .includes(String(index)) || false;
+                {field.type === 'checkbox' &&
+                  field.options?.split('|').map((option: string, index: number) => {
+                    const selected =
+                      checklistResponses[field.id]?.field_value
+                        ?.split(',')
+                        .includes(String(index)) || false;
 
-                  return (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.radioRow}
-                      onPress={() => {
-                        const current =
-                          checklistResponses[field.id]?.field_value
-                            ?.split(',')
-                            .filter(Boolean) || [];
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.radioRow}
+                        onPress={() => {
+                          const current =
+                            checklistResponses[field.id]?.field_value
+                              ?.split(',')
+                              .filter(Boolean) || [];
 
-                        let updated;
+                          let updated;
 
-                        if (current.includes(String(index))) {
-                          updated = current.filter(
-                            (i: string) => i !== String(index)
-                          );
-                        } else {
-                          updated = [...current, String(index)];
-                        }
+                          if (current.includes(String(index))) {
+                            updated = current.filter(
+                              (i: string) => i !== String(index)
+                            );
+                          } else {
+                            updated = [...current, String(index)];
+                          }
 
-                        handleChecklistChange(field, updated.join(','));
-                      }}
-                    >
-                      <View
-                        style={[
-                          styles.checkboxBox,
-                          selected && styles.checkboxBoxSelected,
-                        ]}
-                      />
+                          handleChecklistChange(field, updated.join(','));
+                        }}
+                      >
+                        <View
+                          style={[
+                            styles.checkboxBox,
+                            selected && styles.checkboxBoxSelected,
+                          ]}
+                        />
 
-                      <Text style={styles.optionText}>{option}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                        <Text style={styles.optionText}>{option}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+              </View>
+            ))
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>DADOS DE QUEM ASSINOU</Text>
+
+          <TextInput
+            style={styles.input}
+            placeholder="Nome completo"
+            placeholderTextColor="#64748b"
+            value={signerName}
+            onChangeText={setSignerName}
+          />
+
+          <TextInput
+            style={styles.input}
+            placeholder="E-mail"
+            placeholderTextColor="#64748b"
+            value={signerContact}
+            onChangeText={setSignerContact}
+            keyboardType="email-address"
+          />
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.signatureHeader}>
+            <Text style={styles.label}>ASSINATURA DO CLIENTE</Text>
+
+            {signatureImg && (
+              <TouchableOpacity onPress={handleClearSignature} style={styles.clearBtn}>
+                <Trash2 color="#ef4444" size={16} />
+                <Text style={styles.clearBtnText}>Remover</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {signatureImg ? (
+            <View style={styles.previewContainer}>
+              <Image source={{ uri: signatureImg }} style={styles.previewImage} />
             </View>
-          ))
-        )}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>DADOS DE QUEM ASSINOU</Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Nome completo"
-          placeholderTextColor="#64748b"
-          value={signerName}
-          onChangeText={setSignerName}
-        />
-
-        <TextInput
-          style={styles.input}
-          placeholder="E-mail"
-          placeholderTextColor="#64748b"
-          value={signerContact}
-          onChangeText={setSignerContact}
-          keyboardType="email-address"
-        />
-      </View>
-
-      {/*<View style={styles.section}>
-        <View style={styles.signatureHeader}>
-          <Text style={styles.label}>ASSINATURA DO CLIENTE</Text>
-
-          {signatureImg && (
-            <TouchableOpacity onPress={handleClearSignature} style={styles.clearBtn}>
-              <Trash2 color="#ef4444" size={16} />
-              <Text style={styles.clearBtnText}>Remover</Text>
+          ) : (
+            <TouchableOpacity
+              style={styles.signatureTrigger}
+              onPress={async () => {
+                await salvarRascunhoRelatorio();
+                router.push('/assinatura-cliente');
+              }}
+            >
+              <PenTool color="#3b82f6" size={28} />
+              <Text style={styles.signatureTriggerText}>Coletar Assinatura</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {signatureImg ? (
-          <View style={styles.previewContainer}>
-            <Image source={{ uri: signatureImg }} style={styles.previewImage} />
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={styles.signatureTrigger}
-            onPress={() => router.push('/assinatura-cliente')}
-          >
-            <PenTool color="#3b82f6" size={28} />
-            <Text style={styles.signatureTriggerText}>Coletar Assinatura</Text>
-          </TouchableOpacity>
-        )}
-      </View> */}
-
-      <TouchableOpacity
-        disabled={!isFormValid || sending}
-        style={[
-          styles.submitBtn,
-          (!isFormValid || sending) && styles.submitBtnDisabled,
-        ]}
-        onPress={handleFinalize}
-      >
-        <Check color="#fff" size={24} />
-        <Text style={styles.submitBtnText}>
-          {sending ? 'Enviando...' : 'Finalizar Atendimento'}
-        </Text>
-      </TouchableOpacity>
-    </ScrollView>
-  </SafeAreaView>
-);
+        <TouchableOpacity
+          disabled={!isFormValid || sending}
+          style={[
+            styles.submitBtn,
+            (!isFormValid || sending) && styles.submitBtnDisabled,
+          ]}
+          onPress={handleFinalize}
+        >
+          <Check color="#fff" size={24} />
+          <Text style={styles.submitBtnText}>
+            {sending ? 'Enviando...' : 'Finalizar Atendimento'}
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({

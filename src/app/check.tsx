@@ -39,7 +39,7 @@ export default function CheckInScreen() {
   const [reason, setReason] = useState('');
 
 
-  
+
   const [categorias, setCategorias] = useState<any>({});
 
   const { service_type_id } = useLocalSearchParams();
@@ -120,6 +120,43 @@ export default function CheckInScreen() {
     const loc = await Location.getCurrentPositionAsync({});
     setLocation(loc);
   }
+  async function atualizarStatusChamado(status: number, extraData: any = {}) {
+    try {
+      const token = await AsyncStorage.getItem('token');
+
+      const payload = {
+        class: 'CalendarService',
+        method: 'store',
+
+        data: {
+          id: Number(ticketId),
+          calendar_id: Number(ticketId),
+          calendar_status: status,
+          ...extraData,
+        },
+      };
+
+      console.log('ENVIANDO STATUS:', payload);
+
+      const response = await fetch('https://browz.com.br/rest.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      console.log('RETORNO STATUS:', data);
+
+      return data.status === 'success';
+    } catch (error) {
+      console.log('ERRO AO ATUALIZAR STATUS:', error);
+      return false;
+    }
+  }
 
   async function handleStart() {
     const now = new Date();
@@ -143,6 +180,20 @@ export default function CheckInScreen() {
       `@checkin_${ticketId}`,
       JSON.stringify(checkinData)
     );
+
+
+
+
+    await atualizarStatusChamado(1, {
+      agenda_pause: 0,
+
+      calendar_last_checkin_date: now.toISOString(),
+
+      calendar_last_checkin_geo: JSON.stringify({
+        latitude: location?.coords.latitude || null,
+        longitude: location?.coords.longitude || null,
+      }),
+    });
 
     setCheckInTime(checkinData.horario_formatado);
     setStarted(true);
@@ -186,6 +237,10 @@ export default function CheckInScreen() {
       `@checkin_${ticketId}`,
       JSON.stringify(atualizado)
     );
+
+    await atualizarStatusChamado(1, {
+      agenda_pause: isActive ? 1 : 0,
+    });
 
     setIsActive(!isActive);
     setReason('');
@@ -306,10 +361,19 @@ export default function CheckInScreen() {
         ) : (
           <>
             <View style={styles.actionGrid}>
-              <TouchableOpacity style={styles.secondaryBtn}>
-                <CameraIcon color="#fff" size={20} />
-                <Text style={styles.btnText}>Tirar Foto</Text>
-              </TouchableOpacity>
+              {/* Substitua o botão antigo por este bloco */}
+              <Link
+                href={{
+                  pathname: '/fotos-chamado',
+                  params: { id: ticketId },
+                }}
+                asChild
+              >
+                <TouchableOpacity style={styles.secondaryBtn}>
+                  <CameraIcon color="#fff" size={20} />
+                  <Text style={styles.btnText}>Tirar Foto</Text>
+                </TouchableOpacity>
+              </Link>
 
               <TouchableOpacity
                 style={[
