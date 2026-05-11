@@ -63,16 +63,31 @@ export default function CheckInScreen() {
   }, [ticketId]);
 
   async function carregarCheckInSalvo() {
-    const savedCheckIn = await AsyncStorage.getItem(`@checkin_${ticketId}`);
+  const savedCheckIn = await AsyncStorage.getItem(`@checkin_${ticketId}`);
+  const ticketStatus = await AsyncStorage.getItem(`@ticket_${ticketId}_status`);
 
-    if (savedCheckIn) {
-      const data = JSON.parse(savedCheckIn);
-
-      setCheckInTime(data.horario_formatado);
-      setStarted(true);
-      setIsActive(data.ativo ?? true);
-    }
+  if (ticketStatus === 'concluido' || ticketStatus === 'finalizado') {
+    setStarted(false);
+    setIsActive(false);
+    setCheckInTime(null);
+    return;
   }
+
+  if (savedCheckIn) {
+    const data = JSON.parse(savedCheckIn);
+
+    if (data.status === 'finalizando' || data.status === 'finalizado') {
+      setStarted(false);
+      setIsActive(false);
+      setCheckInTime(null);
+      return;
+    }
+
+    setCheckInTime(data.horario_formatado);
+    setStarted(true);
+    setIsActive(data.ativo ?? true);
+  }
+}
   async function buscarCategorias() {
     try {
       const token = await AsyncStorage.getItem("token");
@@ -252,14 +267,41 @@ export default function CheckInScreen() {
     );
   }
 
-  async function handleFinish() {
-    await AsyncStorage.setItem(`@ticket_${ticketId}_status`, 'finalizando');
+ async function handleFinish() {
+  const savedCheckIn = await AsyncStorage.getItem(`@checkin_${ticketId}`);
 
-    router.push({
-      pathname: '/finalizacao-relatorio',
-      params: { ticketId },
-    });
+  if (savedCheckIn) {
+    const data = JSON.parse(savedCheckIn);
+
+    const finalizado = {
+      ...data,
+      status: 'finalizando',
+      ativo: false,
+      checkout_horario: new Date().toISOString(),
+      checkout_horario_formatado: new Date().toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      checkout_latitude: location?.coords.latitude || null,
+      checkout_longitude: location?.coords.longitude || null,
+    };
+
+    await AsyncStorage.setItem(
+      `@checkin_${ticketId}`,
+      JSON.stringify(finalizado)
+    );
   }
+
+  await AsyncStorage.setItem(`@ticket_${ticketId}_status`, 'finalizando');
+
+  setStarted(false);
+  setIsActive(false);
+
+  router.push({
+    pathname: '/finalizacao-relatorio',
+    params: { ticketId },
+  });
+}
 
   function getCategoriaText(serviceTypeId: any) {
     return (

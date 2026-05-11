@@ -14,6 +14,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 export default function FinalizacaoRelatorio() {
   const router = useRouter();
@@ -31,6 +32,8 @@ export default function FinalizacaoRelatorio() {
   const [loadingChecklist, setLoadingChecklist] = useState(false);
   const [calendarChecklistId, setCalendarChecklistId] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
+  const [loadingDetail, setLoadingDetail] = useState('');
 
   useEffect(() => {
     checkSignature();
@@ -148,59 +151,87 @@ export default function FinalizacaoRelatorio() {
     }
   } */}
 
-  async function enviarFotosParaApi() {
+  const comprimirImagem = async (uri: string) => {
   try {
-    const token = await AsyncStorage.getItem('token');
-    const fotosSalvasStr = await AsyncStorage.getItem(`@fotos_chamado_${chamadoId}`);
+    const manipResult = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 1024 } }], // Redimensiona para largura de 1024px (mantém proporção)
+      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG } // 70% de qualidade
+    );
+    return manipResult.uri;
+  } catch (error) {
+    console.log("Erro na compressão:", error);
+    return uri; // Se der erro, retorna a original para não travar o fluxo
+  }
+};
 
-    if (!fotosSalvasStr) return true;
+  async function enviarFotosParaApi(setLoadingDetail: any) {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const fotosSalvasStr = await AsyncStorage.getItem(`@fotos_chamado_${chamadoId}`);
 
-    const listaFotos = JSON.parse(fotosSalvasStr);
-    
-    // O segredo está neste loop "for...of" com "await"
-    for (const [index, fotoUri] of listaFotos.entries()) {
-      const formData = new FormData();
-      
-      // Criamos um nome que mude SEMPRE (timestamp + index)
-      const nomeArquivo = `foto_${Date.now()}_${index}.jpg`;
+      if (!fotosSalvasStr) return true;
 
-      formData.append('class', 'CalendarService');
-      formData.append('method', 'store');
-      
-      // Se o seu PHP usa 'id' para dar UPDATE, ele vai sobrescrever.
-      // Verifique se você não deveria enviar o 'calendar_id' em vez de apenas 'id'
-      formData.append('data[id]', String(chamadoId)); 
-      
-      const caminhoBanco = `files/calendar/${chamadoId}/${nomeArquivo}`;
-      formData.append('data[calendar_images]', caminhoBanco);
-      formData.append('path', `files/calendar/${chamadoId}`);
+      const listaFotos = JSON.parse(fotosSalvasStr);
 
-      formData.append('file', {
-        uri: fotoUri,
-        name: nomeArquivo,
-        type: 'image/jpeg',
-      } as any);
+      if (!Array.isArray(listaFotos) || listaFotos.length === 0) {
+        return true;
+      }
 
-      console.log(`📤 Enviando foto ${index + 1}...`);
-
-      const response = await fetch('https://browz.com.br/rest.php', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+      const caminhosBanco = listaFotos.map((_: any, index: number) => {
+        return `files/calendar/${chamadoId}/foto_${index + 1}_${Date.now()}.jpg`;
       });
 
-      const data = await response.json();
-      
-      // Log para debugar: veja se o servidor retorna 'success' nas duas vezes
-      console.log(`✅ Resposta foto ${index + 1}:`, data);
-    }
+      for (const [index, fotoUri] of listaFotos.entries()) {
+        setLoadingDetail(`Foto ${index + 1} de ${listaFotos.length}`);
 
-    return true;
-  } catch (error) {
-    console.error('❌ Erro no upload:', error);
-    return false;
+        const uriComprimida = await comprimirImagem(fotoUri);
+
+        const formData = new FormData();
+
+        const caminhoBanco = caminhosBanco[index];
+        const nomeArquivo = caminhoBanco.split('/').pop() || `foto_${Date.now()}_${index}.jpg`;
+
+        formData.append('class', 'CalendarService');
+        formData.append('method', 'store');
+
+        formData.append('data[id]', String(chamadoId));
+        formData.append('data[calendar_id]', String(chamadoId));
+
+        // manda TODOS os caminhos juntos em todas as requisições
+        formData.append('data[calendar_images]', caminhosBanco.join(','));
+
+        formData.append('path', `files/calendar/${chamadoId}`);
+
+        formData.append('file', {
+          uri: uriComprimida,
+          name: nomeArquivo,
+          type: 'image/jpeg',
+        } as any);
+
+        const response = await fetch('https://browz.com.br/rest.php', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        const data = await response.json();
+
+        console.log(`RETORNO FOTO ${index + 1}:`, data);
+
+        if (data.status !== 'success') {
+          return false;
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.log('ERRO AO ENVIAR FOTOS:', error);
+      return false;
+    }
   }
-}
 
   async function enviarAssinaturaParaApi() {
     try {
@@ -372,7 +403,7 @@ text     vira tentry
           calendar_report: relatorioFinal.descricao,
           calendar_signatory_name: relatorioFinal.assinante_nome,
           calendar_signatory_email: relatorioFinal.assinante_contato,
-         calendar_signature: `file/signatures/${chamadoId}/assinatura.png`,
+          calendar_signature: `file/signatures/${chamadoId}/assinatura.png`,
           calendar_status: 2,
         },
       };
@@ -430,79 +461,115 @@ text     vira tentry
       setChecklistResponses(rascunho.checklistResponses || {});
     }
   }
-  const handleFinalize = async () => {
-    if (sending) return;
+ const handleFinalize = async () => {
+  if (sending) return;
 
-    if (!description.trim()) {
-      return Alert.alert('Erro', 'Descreva o serviço.');
+  if (!description.trim()) {
+    return Alert.alert('Erro', 'Descreva o serviço.');
+  }
+
+  if (!validarChecklistObrigatorio()) {
+    return;
+  }
+
+  if (!signerName.trim() || !signerContact.trim() || !signatureImg) {
+    return Alert.alert('Erro', 'Preencha todos os campos e a assinatura.');
+  }
+
+  try {
+    setSending(true);
+
+    // 1. MONTAR O OBJETO PRIMEIRO
+    const checkin = await AsyncStorage.getItem(`@checkin_${chamadoId}`);
+    const fotoStr = await AsyncStorage.getItem(`foto_chamado_${chamadoId}`);
+    const notasStr = await AsyncStorage.getItem(`notas_chamado_${chamadoId}`);
+
+    const relatorioFinal = {
+      calendar_id: chamadoId,
+      descricao: description.trim(),
+      assinante_nome: signerName.trim(),
+      assinante_contato: signerContact.trim(),
+      assinatura: signatureImg,
+      checklist_response: Object.values(checklistResponses),
+      checkin: checkin ? JSON.parse(checkin) : null,
+      foto: fotoStr ? JSON.parse(fotoStr) : null,
+      notas: notasStr ? JSON.parse(notasStr) : [],
+      finalizado_em: new Date().toISOString(),
+    };
+
+    // 2. ENVIOS SEQUENCIAIS COM FEEDBACK NA TELA
+    setLoadingMessage('Enviando checklist...');
+    setLoadingDetail('Sincronizando respostas técnicas');
+    const enviadoChecklist = await enviarChecklistParaApi(relatorioFinal);
+
+    setLoadingMessage('Enviando relatório...');
+    setLoadingDetail('Salvando descrição do atendimento');
+    const enviadoRelatorio = await enviarRelatorioCalendarParaApi(relatorioFinal);
+
+    setLoadingMessage('Enviando assinatura...');
+    setLoadingDetail('Validando assinatura do cliente');
+    const enviadoAssinatura = await enviarAssinaturaParaApi();
+
+    setLoadingMessage('Enviando imagens...');
+    setLoadingDetail('Sincronizando fotos da galeria');
+    const enviadoFotos = await enviarFotosParaApi(setLoadingDetail);
+
+    // 3. VERIFICAÇÃO FINAL
+    if (enviadoChecklist && enviadoRelatorio && enviadoAssinatura && enviadoFotos) {
+      await AsyncStorage.multiRemove([
+        `@rascunho_relatorio_${chamadoId}`,
+        `@assinatura_cliente`,
+        `@fotos_chamado_${chamadoId}`,
+        `foto_chamado_${chamadoId}`,
+        `notas_chamado_${chamadoId}`,
+      ]);
+
+      await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
+
+      Alert.alert('Sucesso', 'Atendimento finalizado com sucesso!', [
+        { text: 'OK', onPress: () => router.replace('/home-pronta') },
+      ]);
+    } else {
+      Alert.alert(
+        'Atenção',
+        'Alguns dados podem não ter sido enviados. Verifique a conexão e tente novamente.'
+      );
     }
-
-    if (!validarChecklistObrigatorio()) {
-      return;
-    }
-
-    if (!signerName.trim() || !signerContact.trim() || !signatureImg) {
-      return Alert.alert('Erro', 'Preencha todos os campos e a assinatura.');
-    }
-
-    try {
-      setSending(true);
-
-      const checkin = await AsyncStorage.getItem(`@checkin_${chamadoId}`);
-      const fotoStr = await AsyncStorage.getItem(`foto_chamado_${chamadoId}`);
-      const notasStr = await AsyncStorage.getItem(`notas_chamado_${chamadoId}`);
-
-      const relatorioFinal = {
-        calendar_id: chamadoId,
-        descricao: description.trim(),
-        assinante_nome: signerName.trim(),
-        assinante_contato: signerContact.trim(),
-        assinatura: signatureImg,
-        checklist_response: Object.values(checklistResponses),
-        checkin: checkin ? JSON.parse(checkin) : null,
-        foto: fotoStr ? JSON.parse(fotoStr) : null,
-        notas: notasStr ? JSON.parse(notasStr) : [],
-        finalizado_em: new Date().toISOString(),
-      };
-
-      const enviadoChecklist = await enviarChecklistParaApi(relatorioFinal);
-      const enviadoRelatorio = await enviarRelatorioCalendarParaApi(relatorioFinal);
-      const enviadoAssinatura = await enviarAssinaturaParaApi();
-      const enviadoFotos = await enviarFotosParaApi();
-
-      if (enviadoChecklist && enviadoRelatorio && enviadoAssinatura && enviadoFotos) {
-        await AsyncStorage.multiRemove([
-          `@rascunho_relatorio_${chamadoId}`,
-          `@assinatura_cliente`,
-          `@fotos_chamado_${chamadoId}`,
-          `foto_chamado_${chamadoId}`,
-          `notas_chamado_${chamadoId}`,
-        ]);
-
-        await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
-
-        Alert.alert('Sucesso', 'Atendimento finalizado com sucesso!', [
-          { text: 'OK', onPress: () => router.replace('/home-pronta') },
-        ]);
-      } else {
-        Alert.alert(
-          'Atenção',
-          'Alguns dados podem não ter sido enviados. Verifique a conexão e tente novamente.'
-        );
-      }
-    } catch (error) {
-      console.error('ERRO CRÍTICO NO FINALIZE:', error);
-      Alert.alert('Erro', 'Ocorreu um erro inesperado ao finalizar.');
-    } finally {
-      setSending(false);
-    }
-  };
+  } catch (error) {
+    console.error('ERRO CRÍTICO NO FINALIZE:', error);
+    Alert.alert('Erro', 'Ocorreu um erro inesperado ao finalizar.');
+  } finally {
+    setSending(false);
+  }
+};
 
   const isFormValid =
     description.trim() &&
     signerName.trim() &&
     signerContact.trim() &&
     signatureImg;
+
+    if (sending) {
+  return (
+    <SafeAreaView style={styles.loadingContainer}>
+      <View style={styles.loadingCard}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+
+        <Text style={styles.loadingTitle}>
+          {loadingMessage}
+        </Text>
+
+        <Text style={styles.loadingSubtitle}>
+          {loadingDetail}
+        </Text>
+
+        <View style={styles.loadingBarBackground}>
+          <View style={styles.loadingBarFill} />
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
 
   return (
     <SafeAreaView style={styles.container}>
@@ -978,4 +1045,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingContainer: {
+  flex: 1,
+  backgroundColor: '#0f172a',
+  justifyContent: 'center',
+  alignItems: 'center',
+  padding: 25,
+},
+
+loadingCard: {
+  width: '100%',
+  backgroundColor: '#1e293b',
+  borderRadius: 30,
+  padding: 30,
+  alignItems: 'center',
+  borderWidth: 1,
+  borderColor: '#334155',
+},
+
+loadingTitle: {
+  color: '#fff',
+  fontSize: 22,
+  fontWeight: 'bold',
+  marginTop: 25,
+  textAlign: 'center',
+},
+
+loadingSubtitle: {
+  color: '#94a3b8',
+  fontSize: 15,
+  marginTop: 10,
+  textAlign: 'center',
+},
+
+loadingBarBackground: {
+  width: '100%',
+  height: 10,
+  backgroundColor: '#0f172a',
+  borderRadius: 999,
+  marginTop: 30,
+  overflow: 'hidden',
+},
+
+loadingBarFill: {
+  width: '70%',
+  height: '100%',
+  backgroundColor: '#3b82f6',
+  borderRadius: 999,
+},
 });

@@ -30,8 +30,9 @@ import {
   Inbox,
   Wrench,
   Clock,
+  CheckCircle,
 } from 'lucide-react-native';
-import { Link, useLocalSearchParams } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -64,6 +65,7 @@ export default function DetalhesChamado() {
   const [clientes, setClientes] = useState<any>({});
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [notas, setNotas] = useState<string[]>([]);
+  const router = useRouter();
 
   useEffect(() => {
     buscarDetalhesChamado();
@@ -545,22 +547,38 @@ export default function DetalhesChamado() {
           <View style={styles.actionContainer}>
 
 
-            <Link
-              href={{
-                pathname: '/check',
-                params: {
-                  id: calendar.calendar_id,
-                  service_type_id: calendar.service_type_id,
-                },
-              }}
-              asChild
-            >
-              <TouchableOpacity style={styles.checkInButton}>
-                <PlayCircle size={20} color="#fff" />
-                <Text style={styles.buttonText}>Check-in</Text>
+            {Number(calendar.calendar_status) === 2 ? (
+              <TouchableOpacity
+                style={styles.finishedButton}
+                onPress={() =>
+                  router.push({
+                    pathname: '/visualizar-relatorio',
+                    params: {
+                      ticketId: calendar.calendar_id,
+                    },
+                  })
+                }
+              >
+                <CheckCircle size={20} color="#fff" />
+                <Text style={styles.buttonText}>Ver relatório finalizado</Text>
               </TouchableOpacity>
-            </Link>
-
+            ) : (
+              <Link
+                href={{
+                  pathname: '/check',
+                  params: {
+                    id: calendar.calendar_id,
+                    service_type_id: calendar.service_type_id,
+                  },
+                }}
+                asChild
+              >
+                <TouchableOpacity style={styles.checkInButton}>
+                  <PlayCircle size={20} color="#fff" />
+                  <Text style={styles.buttonText}>Check-in</Text>
+                </TouchableOpacity>
+              </Link>
+            )}
 
             <View style={styles.mapRow}>
               <TouchableOpacity style={styles.mapButton} onPress={openMaps}>
@@ -605,8 +623,7 @@ export default function DetalhesChamado() {
           </View>
         </View>
 
-
-
+        {/*
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitleText}>AÇÕES DO CHAMADO</Text>
 
@@ -646,6 +663,9 @@ export default function DetalhesChamado() {
             ))}
           </View>
         </View>
+        */}
+
+
       </ScrollView>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -971,4 +991,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: -2,
   },
+  finishedButton: {
+  backgroundColor: '#22c55e',
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 8,
+  height: 55,
+  borderRadius: 16,
+},
 });
