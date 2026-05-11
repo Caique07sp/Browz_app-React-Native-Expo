@@ -151,7 +151,7 @@ export default function FinalizacaoRelatorio() {
     }
   } */}
 
-  const comprimirImagem = async (uri: string) => {
+   const comprimirImagem = async (uri: string) => {
   try {
     const manipResult = await ImageManipulator.manipulateAsync(
       uri,
@@ -580,7 +580,7 @@ text     vira tentry
             style={styles.backButton}
             onPress={() =>
               router.push({
-                pathname: '/check',
+                pathname: '/home-pronta',
                 params: {
                   id: chamadoId,
                 },
