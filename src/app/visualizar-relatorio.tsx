@@ -479,7 +479,7 @@ export default function VisualizarRelatorio() {
 
                         router.push({
 
-                            pathname: '/finalizacao-relatorio',
+                            pathname: '/editar-relatorio',
 
                             params: {
 

@@ -1093,4 +1093,4 @@ loadingBarFill: {
   backgroundColor: '#3b82f6',
   borderRadius: 999,
 },
-});
+}); 
