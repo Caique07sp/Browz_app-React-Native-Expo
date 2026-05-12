@@ -14,7 +14,7 @@ import {
   User,
   X,
 } from "lucide-react-native";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -37,9 +37,11 @@ export default function Browz() {
   const [menuVisible, setMenuVisible] = useState(false);
 
   const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
-  const [selectedDateText, setSelectedDateText] = useState("");
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [nome, setNome] = useState("");
@@ -48,6 +50,10 @@ export default function Browz() {
   const [categorias, setCategorias] = useState<any>({});
   const [clientes, setClientes] = useState<any>({});
   const [chamados, setChamados] = useState<any[]>([]);
+  const [searchText, setSearchText] = useState("");
+
+  const [todosChamados, setTodosChamados] = useState<any[]>([]);
+  const [filteredChamados, setFilteredChamados] = useState<any[]>([]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -58,6 +64,10 @@ export default function Browz() {
       buscarClientes();
     }, [])
   );
+
+  useEffect(() => {
+    aplicarFiltros();
+  }, [searchText, selectedStatus, startDate, endDate, todosChamados, clientes]);
 
   async function buscarChamados(isRefresh = false) {
     try {
@@ -143,7 +153,8 @@ export default function Browz() {
               //console.log("ID DO TÉCNICO LOGADO:", representativeId);
               //console.log("CHAMADOS DO TÉCNICO:", chamadosDoTecnico);
 
-              setChamados(chamadosDoTecnico);
+              setTodosChamados(chamadosDoTecnico);
+              aplicarFiltros(chamadosDoTecnico);
             } else {
               //console.log("⚠️ data.data não é array:", data.data);
               setChamados([]);
@@ -177,6 +188,96 @@ export default function Browz() {
       setLoading(false);
       setRefreshing(false);
     }
+  }
+  function aplicarFiltros(listaOriginal = todosChamados) {
+    let lista = [...listaOriginal];
+
+    // Por padrão não mostra finalizados
+    if (!selectedStatus.includes("finalizado")) {
+      lista = lista.filter((item) => Number(item.calendar_status) !== 2);
+    }
+
+    // Status
+    if (selectedStatus.length > 0) {
+      lista = lista.filter((item) => {
+        const status = Number(item.calendar_status);
+        const pausado = Number(item.agenda_pause) === 1;
+
+        if (selectedStatus.includes("aberto") && status === 0) return true;
+
+        if (
+          selectedStatus.includes("em_atendimento") &&
+          status === 1 &&
+          !pausado
+        ) return true;
+
+        if (
+          selectedStatus.includes("aguardando") &&
+          status === 1 &&
+          pausado
+        ) return true;
+
+        if (selectedStatus.includes("finalizado") && status === 2) return true;
+
+        return false;
+      });
+    }
+
+    // Pesquisa
+    if (searchText.trim()) {
+      const termo = searchText.toLowerCase();
+
+      lista = lista.filter((item) => {
+        const cliente = getClienteText(item.customer_id).toLowerCase();
+        const descricao = String(item.calendar_observation || "").toLowerCase();
+        const categoria = getCategoriaText(item.service_type_id).toLowerCase();
+        const id = String(item.calendar_id);
+
+        return (
+          cliente.includes(termo) ||
+          descricao.includes(termo) ||
+          categoria.includes(termo) ||
+          id.includes(termo)
+        );
+      });
+    }
+
+    // Data selecionada
+    if (startDate && endDate) {
+      const inicio = new Date(startDate);
+      inicio.setHours(0, 0, 0, 0);
+
+      const fim = new Date(endDate);
+      fim.setHours(23, 59, 59, 999);
+
+      lista = lista.filter((item) => {
+        if (!item.calendar_start) return false;
+
+        const dataChamado = new Date(item.calendar_start);
+
+        return dataChamado >= inicio && dataChamado <= fim;
+      });
+    } else {
+      const hoje = new Date();
+
+      const inicioSemana = new Date(hoje);
+      inicioSemana.setDate(hoje.getDate() - hoje.getDay());
+      inicioSemana.setHours(0, 0, 0, 0);
+
+      const fimSemana = new Date(inicioSemana);
+      fimSemana.setDate(inicioSemana.getDate() + 6);
+      fimSemana.setHours(23, 59, 59, 999);
+
+      lista = lista.filter((item) => {
+        if (!item.calendar_start) return false;
+
+        const dataChamado = new Date(item.calendar_start);
+
+        return dataChamado >= inicioSemana && dataChamado <= fimSemana;
+      });
+    }
+
+    setFilteredChamados(lista);
   }
 
   async function buscarTecnicos() {
@@ -305,11 +406,14 @@ export default function Browz() {
     if (nomeSalvo) setNome(nomeSalvo);
     if (perfilSalvo) setPerfil(perfilSalvo);
   }
-  function getStatusText(status: any) {
+
+  function getStatusText(status: any, agendaPause?: any) {
     const s = Number(status ?? -1);
+    const pausado = Number(agendaPause) === 1;
 
     if (s === 0) return "Aberto";
-    if (s === 1) return "Em andamento";
+    if (s === 1 && pausado) return "Aguardando";
+    if (s === 1) return "Em atendimento";
     if (s === 2) return "Finalizado";
 
     return "Desconhecido";
@@ -348,8 +452,8 @@ export default function Browz() {
   }
 
   function getClienteText(customerId: any) {
-  return clientes[customerId] || `Cliente ID: ${customerId}`;
-}
+    return clientes[customerId] || `Cliente ID: ${customerId}`;
+  }
 
 
 
@@ -402,6 +506,8 @@ export default function Browz() {
               placeholder="Pesquisar chamados..."
               placeholderTextColor="#94a3b8"
               style={styles.input}
+              value={searchText}
+              onChangeText={setSearchText}
             />
           </View>
 
@@ -426,7 +532,7 @@ export default function Browz() {
             <ActivityIndicator size="large" color="#3b82f6" />
             <Text style={styles.loadingText}>Carregando chamados...</Text>
           </View>
-        ) : chamados.length === 0 ? (
+        ) : filteredChamados.length === 0 ? (
           <View style={styles.emptyContainer}>
             <View style={styles.illustrationContainer}>
               <View style={styles.isometricBox}>
@@ -444,7 +550,7 @@ export default function Browz() {
           </View>
         ) : (
 
-          chamados.map((calendar, index) => (
+          filteredChamados.map((calendar, index) => (
             <Link
               key={String(calendar.calendar_id || index)}
               href={{
@@ -484,7 +590,7 @@ export default function Browz() {
                     <Text style={styles.statusText}>
 
                       {/*Bruno quis tirar*/}
-                      {getStatusText(calendar.calendar_status)}
+                      {getStatusText(calendar.calendar_status, calendar.agenda_pause)}
 
 
 
@@ -542,66 +648,122 @@ export default function Browz() {
             <Text style={styles.modalLabel}>Status</Text>
 
             <View style={styles.optionColumn}>
+
+
               <TouchableOpacity
                 style={[
                   styles.optionBtn,
-                  selectedStatus.includes("aguardando_pausa") &&
-                  styles.optionBtnActive,
+                  selectedStatus.includes("aberto") && styles.optionBtnActive,
                 ]}
-                onPress={() => toggleStatus("aguardando_pausa")}
+                onPress={() => toggleStatus("aberto")}
               >
-                <Text style={styles.optionText}>Aguardando/Pausa</Text>
+                <Text style={styles.optionText}>Aberto</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
                   styles.optionBtn,
-                  selectedStatus.includes("concluido") &&
-                  styles.optionBtnActive,
-                ]}
-                onPress={() => toggleStatus("concluido")}
-              >
-                <Text style={styles.optionText}>Concluído</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.optionBtn,
-                  selectedStatus.includes("em_atendimento") &&
-                  styles.optionBtnActive,
+                  selectedStatus.includes("em_atendimento") && styles.optionBtnActive,
                 ]}
                 onPress={() => toggleStatus("em_atendimento")}
               >
                 <Text style={styles.optionText}>Em atendimento</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.optionBtn,
+                  selectedStatus.includes("aguardando") && styles.optionBtnActive,
+                ]}
+                onPress={() => toggleStatus("aguardando")}
+              >
+                <Text style={styles.optionText}>Aguardando</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.optionBtn,
+                  selectedStatus.includes("finalizado") && styles.optionBtnActive,
+                ]}
+                onPress={() => toggleStatus("finalizado")}
+              >
+                <Text style={styles.optionText}>Finalizado</Text>
+              </TouchableOpacity>
+
+
             </View>
 
-            <Text style={[styles.modalLabel, { marginTop: 20 }]}>Data</Text>
+            <Text style={[styles.modalLabel, { marginTop: 20 }]}>Período</Text>
 
             <TouchableOpacity
               style={styles.dateInput}
-              onPress={() => setShowDatePicker(true)}
+              onPress={() => {
+                setShowEndPicker(false);
+                setShowStartPicker(true);
+              }}
             >
-              <Text style={{ color: selectedDate ? "#fff" : "#94a3b8" }}>
-                {selectedDate
-                  ? selectedDate.toLocaleDateString("pt-BR")
-                  : "Selecionar data"}
+              <Text style={{ color: startDate ? "#fff" : "#94a3b8" }}>
+                {startDate
+                  ? `Início : ${startDate.toLocaleDateString("pt-BR")}`
+                  : "Selecionar data inicial"}
               </Text>
             </TouchableOpacity>
 
-            {showDatePicker && (
+            <TouchableOpacity
+              style={[styles.dateInput, { marginTop: 10 }]}
+              onPress={() => {
+                setShowStartPicker(false);
+                setShowEndPicker(true);
+              }}
+            >
+              <Text style={{ color: endDate ? "#fff" : "#94a3b8" }}>
+                {endDate
+                  ? `Fim : ${endDate.toLocaleDateString("pt-BR")}`
+                  : "Selecionar data final"}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.clearDateBtn}
+              onPress={() => {
+                setStartDate(null);
+                setEndDate(null);
+              }}
+            >
+              <Text style={styles.clearDateText}>Limpar período</Text>
+            </TouchableOpacity>
+
+            {showStartPicker && (
               <DateTimePicker
-                value={selectedDate || new Date()}
+                value={startDate || new Date()}
                 mode="date"
                 display={Platform.OS === "ios" ? "spinner" : "default"}
+                locale="pt-BR"
                 onChange={(event, date) => {
-                  setShowDatePicker(false);
+                  setShowStartPicker(false);
 
                   if (event.type === "dismissed") return;
 
                   if (date) {
-                    setSelectedDate(date);
-                    setSelectedDateText(date.toLocaleDateString("pt-BR"));
+                    setStartDate(date);
+                  }
+                }}
+              />
+            )}
+
+            {showEndPicker && (
+              <DateTimePicker
+                value={endDate || new Date()}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                locale="pt-BR"
+                onChange={(event, date) => {
+                  setShowEndPicker(false);
+
+                  if (event.type === "dismissed") return;
+
+                  if (date) {
+                    setEndDate(date);
                   }
                 }}
               />
@@ -610,10 +772,7 @@ export default function Browz() {
             <TouchableOpacity
               style={styles.applyBtn}
               onPress={() => {
-                console.log("Filtro aplicado:", {
-                  status: selectedStatus,
-                  data: selectedDateText,
-                });
+                aplicarFiltros();
 
                 setFilterVisible(false);
               }}
@@ -1037,6 +1196,15 @@ const styles = StyleSheet.create({
     color: "#94a3b8",
     marginTop: 12,
     fontSize: 14,
+  },
+  clearDateBtn: {
+    marginTop: 12,
+    alignItems: "center",
+  },
+
+  clearDateText: {
+    color: "#ef4444",
+    fontWeight: "600",
   },
 
 });

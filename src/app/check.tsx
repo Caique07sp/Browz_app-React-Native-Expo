@@ -63,31 +63,31 @@ export default function CheckInScreen() {
   }, [ticketId]);
 
   async function carregarCheckInSalvo() {
-  const savedCheckIn = await AsyncStorage.getItem(`@checkin_${ticketId}`);
-  const ticketStatus = await AsyncStorage.getItem(`@ticket_${ticketId}_status`);
+    const savedCheckIn = await AsyncStorage.getItem(`@checkin_${ticketId}`);
+    const ticketStatus = await AsyncStorage.getItem(`@ticket_${ticketId}_status`);
 
-  if (ticketStatus === 'concluido' || ticketStatus === 'finalizado') {
-    setStarted(false);
-    setIsActive(false);
-    setCheckInTime(null);
-    return;
-  }
-
-  if (savedCheckIn) {
-    const data = JSON.parse(savedCheckIn);
-
-    if (data.status === 'finalizando' || data.status === 'finalizado') {
+    if (ticketStatus === 'concluido' || ticketStatus === 'finalizado') {
       setStarted(false);
       setIsActive(false);
       setCheckInTime(null);
       return;
     }
 
-    setCheckInTime(data.horario_formatado);
-    setStarted(true);
-    setIsActive(data.ativo ?? true);
+    if (savedCheckIn) {
+      const data = JSON.parse(savedCheckIn);
+
+      if (data.status === 'finalizado') {
+        setStarted(false);
+        setIsActive(false);
+        setCheckInTime(null);
+        return;
+      }
+
+      setCheckInTime(data.horario_formatado);
+      setStarted(true);
+      setIsActive(data.ativo ?? true);
+    }
   }
-}
   async function buscarCategorias() {
     try {
       const token = await AsyncStorage.getItem("token");
@@ -179,7 +179,7 @@ export default function CheckInScreen() {
     const checkinData = {
       calendar_id: ticketId,
       horario: now.toISOString(),
-      horario_formatado: now.toLocaleTimeString('pt-BR', {
+      horario_formatado: now.toLocaleTimeString('PT-br', {
         hour: '2-digit',
         minute: '2-digit',
       }),
@@ -219,89 +219,73 @@ export default function CheckInScreen() {
 
   async function handleConfirmAction() {
     if (!reason.trim()) {
-      return Alert.alert('Atenção', 'Por favor, informe o motivo.');
+      return Alert.alert(
+        'Atenção',
+        'Informe o motivo da pausa.'
+      );
     }
 
     const savedCheckIn = await AsyncStorage.getItem(`@checkin_${ticketId}`);
 
     if (!savedCheckIn) {
-      return Alert.alert('Atenção', 'Nenhum check-in encontrado.');
+      return Alert.alert(
+        'Atenção',
+        'Nenhum check-in encontrado.'
+      );
     }
 
     const data = JSON.parse(savedCheckIn);
 
-    const novaPausa = {
-      tipo: isActive ? 'pausa' : 'retorno',
-      motivo: reason.trim(),
-      horario: new Date().toISOString(),
-      horario_formatado: new Date().toLocaleTimeString('pt-BR', {
+    const agora = new Date();
+
+    const pausado = {
+      ...data,
+
+      ativo: false,
+
+      status: 'pausado',
+
+      pausa_motivo: reason.trim(),
+
+      pausa_data: agora.toISOString(),
+      pausa_horario_formatado: agora.toLocaleTimeString('pt-BR', {
         hour: '2-digit',
         minute: '2-digit',
       }),
     };
 
-    const atualizado = {
-      ...data,
-      ativo: !isActive,
-      status: isActive ? 'pausado' : 'em_atendimento',
-      pausas: [...(data.pausas || []), novaPausa],
-      enviado_api: false,
-    };
-
     await AsyncStorage.setItem(
       `@checkin_${ticketId}`,
-      JSON.stringify(atualizado)
+      JSON.stringify(pausado)
     );
 
     await atualizarStatusChamado(1, {
-      agenda_pause: isActive ? 1 : 0,
+      agenda_pause: 1,
     });
+    await AsyncStorage.removeItem(`@checkin_${ticketId}`);
 
-    setIsActive(!isActive);
+    // AQUI ENCERRA O CHECK-IN ATUAL
+    setStarted(false);
+
+    setIsActive(false);
+
+    setCheckInTime(null);
+
     setReason('');
     setModalType(null);
 
     Alert.alert(
-      isActive ? 'Atendimento pausado' : 'Atendimento retomado',
-      'Informação salva no celular.'
+      'Atendimento pausado',
+      'Será necessário realizar novo check-in para continuar.'
     );
   }
 
- async function handleFinish() {
-  const savedCheckIn = await AsyncStorage.getItem(`@checkin_${ticketId}`);
-
-  if (savedCheckIn) {
-    const data = JSON.parse(savedCheckIn);
-
-    const finalizado = {
-      ...data,
-      status: 'finalizando',
-      ativo: false,
-      checkout_horario: new Date().toISOString(),
-      checkout_horario_formatado: new Date().toLocaleTimeString('pt-BR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-      checkout_latitude: location?.coords.latitude || null,
-      checkout_longitude: location?.coords.longitude || null,
-    };
-
-    await AsyncStorage.setItem(
-      `@checkin_${ticketId}`,
-      JSON.stringify(finalizado)
-    );
+  async function handleFinish() {
+    router.push({
+      pathname: '/finalizacao-relatorio',
+      params: { ticketId },
+    });
   }
-
-  await AsyncStorage.setItem(`@ticket_${ticketId}_status`, 'finalizando');
-
-  setStarted(false);
-  setIsActive(false);
-
-  router.push({
-    pathname: '/finalizacao-relatorio',
-    params: { ticketId },
-  });
-}
 
   function getCategoriaText(serviceTypeId: any) {
     return (
@@ -420,23 +404,23 @@ export default function CheckInScreen() {
               <TouchableOpacity
                 style={[
                   styles.secondaryBtn,
-                  { borderColor: isActive ? '#f59e0b' : '#10b981' },
+                  { borderColor: '#f59e0b' },
                 ]}
                 onPress={() => setModalType('pause')}
               >
-                {isActive ? (
-                  <Pause color="#f59e0b" size={20} fill="#f59e0b" />
-                ) : (
-                  <Play color="#10b981" size={20} fill="#10b981" />
-                )}
+                <Pause
+                  color="#f59e0b"
+                  size={20}
+                  fill="#f59e0b"
+                />
 
                 <Text
                   style={[
                     styles.btnText,
-                    { color: isActive ? '#f59e0b' : '#10b981' },
+                    { color: '#f59e0b' },
                   ]}
                 >
-                  {isActive ? 'Pausar' : 'Retomar'}
+                  Pausar
                 </Text>
               </TouchableOpacity>
             </View>

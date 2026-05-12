@@ -482,9 +482,7 @@ export default function VisualizarRelatorio() {
                             pathname: '/editar-relatorio',
 
                             params: {
-
                                 ticketId: chamadoId,
-
                             },
 
                         })
@@ -492,7 +490,7 @@ export default function VisualizarRelatorio() {
                     }
 
                 >
-
+            
                     <Text style={styles.editButtonText}>Editar relatório</Text>
 
                 </TouchableOpacity>
