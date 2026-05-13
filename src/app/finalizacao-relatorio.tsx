@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Check, ChevronLeft, PenTool, Trash2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
+import * as Location from 'expo-location';
 import {
   ActivityIndicator,
   Alert,
@@ -388,47 +389,80 @@ text     vira tentry
     }
   }
 
-  async function enviarRelatorioCalendarParaApi(relatorioFinal: any) {
-    try {
-      const token = await AsyncStorage.getItem('token');
+ async function enviarRelatorioCalendarParaApi(relatorioFinal: any) {
+  try {
+    const token = await AsyncStorage.getItem('token');
 
-      const payload = {
-        class: 'CalendarService',
-        method: 'store',
+    // PEGA LOCALIZAÇÃO ATUAL
+    const location = await Location.getCurrentPositionAsync({});
 
-        data: {
-          id: Number(chamadoId),
-          calendar_id: Number(chamadoId),
+    // AJUSTA GMT-3
+    const now = new Date();
 
-          calendar_report: relatorioFinal.descricao,
-          calendar_signatory_name: relatorioFinal.assinante_nome,
-          calendar_signatory_email: relatorioFinal.assinante_contato,
-          calendar_signature: `file/signatures/${chamadoId}/assinatura.png`,
-          calendar_status: 2,
-        },
-      };
+    const brasilDate = new Date(
+      now.getTime() - 3 * 60 * 60 * 1000
+    ).toISOString();
 
-      //console.log('🚀 ENVIANDO RELATÓRIO:', JSON.stringify(payload, null, 2));
+    const payload = {
+      class: 'CalendarService',
+      method: 'store',
 
-      const response = await fetch('https://browz.com.br/rest.php', {
+      data: {
+        id: Number(chamadoId),
+        calendar_id: Number(chamadoId),
+
+        calendar_report: relatorioFinal.descricao,
+
+        calendar_signatory_name:
+          relatorioFinal.assinante_nome,
+
+        calendar_signatory_email:
+          relatorioFinal.assinante_contato,
+
+        calendar_signature:
+          ` file/signatures/${chamadoId}/assinatura.png`,
+
+        calendar_status: 2,
+
+        // CHECKOUT
+        calendar_last_checkout_date: brasilDate,
+
+        calendar_last_checkout_geo:
+          `${location.coords.latitude},${location.coords.longitude}`,
+      },
+    };
+
+    console.log(
+      '🚀 ENVIANDO RELATÓRIO:',
+      JSON.stringify(payload, null, 2)
+    );
+
+    const response = await fetch(
+      'https://browz.com.br/rest.php',
+      {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
-      });
+      }
+    );
 
-      const data = await response.json();
+    const data = await response.json();
 
-      //console.log('✅ RETORNO ENVIO RELATÓRIO:', data);
+    console.log('✅ RETORNO ENVIO RELATÓRIO:', data);
 
-      return data.status === 'success';
-    } catch (error) {
-      console.log('❌ ERRO AO ENVIAR RELATÓRIO:', error);
-      return false;
-    }
+    return data.status === 'success';
+  } catch (error) {
+    console.log(
+      '❌ ERRO AO ENVIAR RELATÓRIO:',
+      error
+    );
+
+    return false;
   }
+}
 
   const handleClearSignature = async () => {
     await AsyncStorage.removeItem('@assinatura_cliente');

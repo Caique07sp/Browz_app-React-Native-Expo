@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   SafeAreaView,
   StatusBar,
@@ -20,12 +20,36 @@ import {
   LogOut,
   ChevronRight,
 } from "lucide-react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 
 export default function Configuracoes() {
   const router = useRouter();
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(true);
+
+  useEffect(() => {
+  carregarTema();
+}, []);
+
+async function carregarTema() {
+  const temaSalvo = await AsyncStorage.getItem("@theme");
+
+  if (temaSalvo === "light") {
+    setDarkModeEnabled(false);
+  } else {
+    setDarkModeEnabled(true);
+  }
+}
+async function toggleTheme(value: boolean) {
+  setDarkModeEnabled(value);
+
+  await AsyncStorage.setItem(
+    "@theme",
+    value ? "dark" : "light"
+  );
+}
 
   return (
     <SafeAreaView style={styles.container}>
@@ -85,7 +109,7 @@ export default function Configuracoes() {
 
           <Switch
             value={darkModeEnabled}
-            onValueChange={setDarkModeEnabled}
+            onValueChange={toggleTheme}
             trackColor={{ false: "#334155", true: "#3b82f6" }}
             thumbColor="#fff"
           />

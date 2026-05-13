@@ -1,89 +1,141 @@
-import React from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect, useRouter } from "expo-router";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Bell,
+  CheckCircle,
+  Clock,
+} from "lucide-react-native";
+import React, { useCallback, useState } from "react";
 import {
   SafeAreaView,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  ScrollView,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { ArrowLeft, Bell, CheckCircle, AlertCircle, Clock } from "lucide-react-native";
 
 export default function Notificacoes() {
   const router = useRouter();
+
+  const [notificacoes, setNotificacoes] = useState<any[]>([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      carregarNotificacoes();
+    }, [])
+  );
+
+  async function carregarNotificacoes() {
+    const saved = await AsyncStorage.getItem("@notificacoes");
+
+    if (saved) {
+      const lista = JSON.parse(saved);
+
+      lista.sort(
+        (a: any, b: any) =>
+          new Date(b.timestamp).getTime() -
+          new Date(a.timestamp).getTime()
+      );
+
+      setNotificacoes(lista);
+    }
+  }
+
+  function getIcon(tipo: string) {
+    if (tipo === "novo")
+      return <Bell color="#3b82f6" size={22} />;
+
+    if (tipo === "andamento")
+      return <Clock color="#60a5fa" size={22} />;
+
+    if (tipo === "finalizado")
+      return <CheckCircle color="#22c55e" size={22} />;
+
+    return <AlertCircle color="#ef4444" size={22} />;
+  }
+
+  function getColor(tipo: string) {
+    if (tipo === "novo") return "#0f172a";
+
+    if (tipo === "andamento") return "#1e3a8a";
+
+    if (tipo === "finalizado") return "#14532d";
+
+    return "#7f1d1d";
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
 
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => router.back()}
+        >
           <ArrowLeft color="#fff" size={24} />
         </TouchableOpacity>
 
         <Text style={styles.title}>Notificações</Text>
 
-        <View style={{ width: 40 }} />
+        <TouchableOpacity
+          onPress={async () => {
+            await AsyncStorage.multiRemove([
+              "@notificacoes",
+              "@notificacoes_ids",
+              "@chamados_ja_carregados",
+            ]);
+            setNotificacoes([]);
+          }}
+        >
+          <Text style={{ color: "#ef4444", fontWeight: "bold" }}>
+            Limpar
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.notificationCard}>
-          <View style={styles.iconBox}>
-            <Bell color="#3b82f6" size={22} />
-          </View>
+        {notificacoes.length === 0 ? (
+          <Text style={styles.emptyText}>
+            Nenhuma notificação encontrada.
+          </Text>
+        ) : (
+          notificacoes.map((item, index) => (
+            <View
+              key={index}
+              style={styles.notificationCard}
+            >
+              <View
+                style={[
+                  styles.iconBox,
+                  {
+                    backgroundColor: getColor(item.tipo),
+                  },
+                ]}
+              >
+                {getIcon(item.tipo)}
+              </View>
 
-          <View style={styles.notificationInfo}>
-            <Text style={styles.notificationTitle}>Novo chamado atribuído</Text>
-            <Text style={styles.notificationText}>
-              O chamado #10293 foi atribuído para você.
-            </Text>
-            <Text style={styles.notificationDate}>Hoje às 10:45</Text>
-          </View>
-        </View>
+              <View style={styles.notificationInfo}>
+                <Text style={styles.notificationTitle}>
+                  {item.titulo}
+                </Text>
 
-        <View style={styles.notificationCard}>
-          <View style={[styles.iconBox, { backgroundColor: "#1e3a8a" }]}>
-            <Clock color="#60a5fa" size={22} />
-          </View>
+                <Text style={styles.notificationText}>
+                  {item.mensagem}
+                </Text>
 
-          <View style={styles.notificationInfo}>
-            <Text style={styles.notificationTitle}>Atendimento em andamento</Text>
-            <Text style={styles.notificationText}>
-              Você iniciou o atendimento do chamado #10293.
-            </Text>
-            <Text style={styles.notificationDate}>Hoje às 11:00</Text>
-          </View>
-        </View>
-
-        <View style={styles.notificationCard}>
-          <View style={[styles.iconBox, { backgroundColor: "#14532d" }]}>
-            <CheckCircle color="#22c55e" size={22} />
-          </View>
-
-          <View style={styles.notificationInfo}>
-            <Text style={styles.notificationTitle}>Chamado concluído</Text>
-            <Text style={styles.notificationText}>
-              O atendimento foi finalizado com sucesso.
-            </Text>
-            <Text style={styles.notificationDate}>Hoje às 12:30</Text>
-          </View>
-        </View>
-
-        <View style={styles.notificationCard}>
-          <View style={[styles.iconBox, { backgroundColor: "#7f1d1d" }]}>
-            <AlertCircle color="#ef4444" size={22} />
-          </View>
-
-          <View style={styles.notificationInfo}>
-            <Text style={styles.notificationTitle}>Atenção</Text>
-            <Text style={styles.notificationText}>
-              Existe um chamado aguardando atendimento.
-            </Text>
-            <Text style={styles.notificationDate}>Ontem às 16:20</Text>
-          </View>
-        </View>
+                <Text style={styles.notificationDate}>
+                  {item.data}
+                </Text>
+              </View>
+            </View>
+          ))
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -137,7 +189,6 @@ const styles = StyleSheet.create({
     width: 45,
     height: 45,
     borderRadius: 14,
-    backgroundColor: "#0f172a",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -165,4 +216,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 8,
   },
-});
+
+  emptyText: {
+    color: "#94a3b8",
+    textAlign: "center",
+    marginTop: 40,
+  },
+})

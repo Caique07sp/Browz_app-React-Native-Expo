@@ -45,6 +45,14 @@ export default function CheckInScreen() {
   const { service_type_id } = useLocalSearchParams();
   const serviceTypeId = String(service_type_id);
 
+function getBrazilDateTime() {
+     
+
+    return new Date();
+  }
+
+
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
@@ -182,6 +190,7 @@ export default function CheckInScreen() {
       horario_formatado: now.toLocaleTimeString('PT-br', {
         hour: '2-digit',
         minute: '2-digit',
+        timeZone: 'America/Sao_Paulo',
       }),
       latitude: location?.coords.latitude || null,
       longitude: location?.coords.longitude || null,
@@ -202,12 +211,12 @@ export default function CheckInScreen() {
     await atualizarStatusChamado(1, {
       agenda_pause: 0,
 
-      calendar_last_checkin_date: now.toISOString(),
+      calendar_last_checkin_date:
+        now.toLocaleString('sv-SE', {
+          timeZone: 'America/Sao_Paulo',
+        }).replace(' ', 'T'),
 
-      calendar_last_checkin_geo: JSON.stringify({
-        latitude: location?.coords.latitude || null,
-        longitude: location?.coords.longitude || null,
-      }),
+      calendar_last_checkin_geo: `${location?.coords.latitude},${location?.coords.longitude}`,
     });
 
     setCheckInTime(checkinData.horario_formatado);
@@ -236,7 +245,7 @@ export default function CheckInScreen() {
 
     const data = JSON.parse(savedCheckIn);
 
-    const agora = new Date();
+    const agora = getBrazilDateTime();
 
     const pausado = {
       ...data,

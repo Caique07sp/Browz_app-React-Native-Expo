@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
+
 import { Link, useFocusEffect } from "expo-router";
 import {
   Bell,
@@ -31,6 +32,10 @@ import {
   View,
 } from "react-native";
 
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import Constants from 'expo-constants';
+
 
 export default function Browz() {
   const [filterVisible, setFilterVisible] = useState(false);
@@ -55,6 +60,11 @@ export default function Browz() {
   const [todosChamados, setTodosChamados] = useState<any[]>([]);
   const [filteredChamados, setFilteredChamados] = useState<any[]>([]);
 
+  const [ultimosChamados, setUltimosChamados] = useState<any[]>([]);
+  const [quantidadeNotificacoes, setQuantidadeNotificacoes] = useState(0);
+
+
+
   useFocusEffect(
     React.useCallback(() => {
       carregarUsuario();
@@ -62,12 +72,16 @@ export default function Browz() {
       buscarTecnicos();
       buscarCategorias();
       buscarClientes();
+
+      carregarQuantidadeNotificacoes();
     }, [])
   );
 
   useEffect(() => {
     aplicarFiltros();
   }, [searchText, selectedStatus, startDate, endDate, todosChamados, clientes]);
+
+
 
   async function buscarChamados(isRefresh = false) {
     try {
@@ -153,7 +167,12 @@ export default function Browz() {
               //console.log("ID DO TÉCNICO LOGADO:", representativeId);
               //console.log("CHAMADOS DO TÉCNICO:", chamadosDoTecnico);
 
+              await verificarAlteracoes(chamadosDoTecnico);
+
+              setUltimosChamados(chamadosDoTecnico);
+
               setTodosChamados(chamadosDoTecnico);
+
               aplicarFiltros(chamadosDoTecnico);
             } else {
               //console.log("⚠️ data.data não é array:", data.data);
@@ -412,27 +431,32 @@ export default function Browz() {
     const pausado = Number(agendaPause) === 1;
 
     if (s === 0) return "Aberto";
-    if (s === 1 && pausado) return "Aguardando";
+    if (s === 1 && pausado) return "Pausado";
     if (s === 1) return "Em atendimento";
     if (s === 2) return "Finalizado";
 
     return "Desconhecido";
   }
 
-  function getStatusColor(status: any) {
+  function getStatusColor(status: any, agendaPause?: any) {
     const s = Number(status);
+    const pausado = Number(agendaPause) === 1;
 
     if (s === 0) return "#d19326ff";
+    if (s === 1 && pausado) return "#e6739a";
     if (s === 1) return "#1e3a8a";
     if (s === 2) return "#14532d";
 
     return "#334155";
   }
 
-  function getStatusDotColor(status: any) {
+  function getStatusDotColor(status: any, agendaPause?: any) {
     const s = Number(status);
+     const pausado = Number(agendaPause) === 1 ;
+
 
     if (s === 0) return "#ffa200ff";
+    if (s === 1 && pausado) return "#ff00776e";
     if (s === 1) return "#3b82f6";
     if (s === 2) return "#22c55e";
 
@@ -455,6 +479,164 @@ export default function Browz() {
     return clientes[customerId] || `Cliente ID: ${customerId}`;
   }
 
+  async function salvarNotificacao(
+    titulo: string,
+    mensagem: string,
+    tipo: string,
+    uniqueId: string,
+    calendarId: any
+  ) {
+    const saved = await AsyncStorage.getItem("@notificacoes");
+
+    const savedIds = await AsyncStorage.getItem("@notificacoes_ids");
+
+    const jaCarregados =
+      await AsyncStorage.getItem("@chamados_ja_carregados");
+
+    let lista = saved ? JSON.parse(saved) : [];
+
+    let ids = savedIds ? JSON.parse(savedIds) : [];
+
+    let chamadosCarregados = jaCarregados
+      ? JSON.parse(jaCarregados)
+      : [];
+
+
+
+    // NÃO DEIXA REPETIR
+    if (ids.includes(uniqueId)) {
+      return;
+    }
+
+    if (!chamadosCarregados.includes(calendarId)) {
+      chamadosCarregados.push(calendarId);
+
+      await AsyncStorage.setItem(
+        "@chamados_ja_carregados",
+        JSON.stringify(chamadosCarregados)
+      );
+    }
+
+
+    ids.push(uniqueId);
+
+    lista.unshift({
+      titulo,
+      mensagem,
+      tipo,
+      uniqueId,
+
+      data: new Date().toLocaleString("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+      }),
+
+      timestamp: new Date().toISOString(),
+
+    });
+
+    await AsyncStorage.setItem(
+      "@notificacoes",
+      JSON.stringify(lista)
+    );
+
+    await AsyncStorage.setItem(
+      "@notificacoes_ids",
+      JSON.stringify(ids)
+    );
+
+    setQuantidadeNotificacoes(lista.length);
+  }
+
+  async function verificarAlteracoes(novosChamados: any[]) {
+    // 1. Pegar o que tínhamos salvo na última vez
+    const chamadosSalvosStr = await AsyncStorage.getItem("@ultimos_chamados_sync");
+    const ultimosSalvos = chamadosSalvosStr ? JSON.parse(chamadosSalvosStr) : [];
+
+    const jaCarregadosStr = await AsyncStorage.getItem("@chamados_ja_carregados");
+    const chamadosCarregados = jaCarregadosStr ? JSON.parse(jaCarregadosStr) : [];
+
+    for (const novo of novosChamados) {
+      const antigo = ultimosSalvos.find(
+        (item: any) => String(item.calendar_id) === String(novo.calendar_id)
+      );
+
+      // LÓGICA: NOVO CHAMADO
+      // Se não existia na lista anterior e não está na lista de "já notificados"
+      if (!antigo && !chamadosCarregados.includes(novo.calendar_id)) {
+        await salvarNotificacao(
+          "Novo chamado",
+          `Chamado #${novo.calendar_id} atribuído para você`,
+          "novo",
+          `novo_${novo.calendar_id}`,
+          novo.calendar_id
+        );
+      }
+      // LÓGICA: MUDANÇA DE STATUS
+      else if (antigo && Number(antigo.calendar_status) !== Number(novo.calendar_status)) {
+        if (Number(novo.calendar_status) === 2) {
+          await salvarNotificacao(
+            "Chamado finalizado",
+            `Chamado #${novo.calendar_id} foi finalizado`,
+            "finalizado",
+            `finalizado_${novo.calendar_id}`,
+            novo.calendar_id
+          );
+        }
+      }
+    }
+
+    // 2. ATUALIZAR O SNAPSHOT: Salva a lista atual para a próxima comparação
+    await AsyncStorage.setItem("@ultimos_chamados_sync", JSON.stringify(novosChamados));
+  }
+
+  async function carregarQuantidadeNotificacoes() {
+    const saved = await AsyncStorage.getItem("@notificacoes");
+
+    if (saved) {
+      const lista = JSON.parse(saved);
+
+      setQuantidadeNotificacoes(lista.length);
+    } else {
+      setQuantidadeNotificacoes(0);
+    }
+  }
+
+  async function registerForPushNotificationsAsync() {
+    let token;
+
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+    }
+
+    if (Device.isDevice) {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') {
+        alert('Falha ao obter permissão para notificações!');
+        return;
+      }
+
+      // Pega o ID do projeto do seu app.json
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+
+      token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+      console.log("Token do Dispositivo:", token);
+    } else {
+      alert('Push Notifications só funcionam em dispositivos físicos');
+    }
+
+    return token;
+  }
+
 
 
   return (
@@ -474,7 +656,17 @@ export default function Browz() {
           <Link href="/notificacoes" asChild>
 
             <TouchableOpacity style={styles.iconButton}>
-              <Bell size={24} color="#fff" />
+              {/*<View>
+                <Bell size={24} color="#fff" />
+
+                {quantidadeNotificacoes > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                      {quantidadeNotificacoes}
+                    </Text>
+                  </View>
+                )}
+              </View>*/}
             </TouchableOpacity>
           </Link>
 
@@ -490,6 +682,7 @@ export default function Browz() {
       {/* CONTEÚDO */}
       <ScrollView
         contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -561,7 +754,26 @@ export default function Browz() {
               }}
               asChild
             >
-              <TouchableOpacity style={styles.card} activeOpacity={0.8}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={{
+                  backgroundColor: "#1e293b",
+                  borderRadius: 16,
+                  padding: 16,
+                  marginBottom: 15,
+                  borderWidth: 3,
+                  borderLeftColor:"#1e293b",
+                  borderRightColor: getStatusColor(
+                    calendar.calendar_status,
+                    calendar.agenda_pause
+
+                  ),
+                  borderTopColor: "#1e293b",
+                  borderBottomColor: "#1e293b",
+                }}
+              >
+
+
                 <View style={styles.cardHeader}>
                   <View style={styles.idBadge}>
                     <Text style={styles.idText}>
@@ -574,7 +786,11 @@ export default function Browz() {
                       styles.statusBadge,
                       {
 
-                        backgroundColor: getStatusColor(calendar.calendar_status),
+                        backgroundColor: getStatusColor(
+                          calendar.calendar_status,
+                          calendar.agenda_pause
+                          
+                        ),
                       },
                     ]}
                   >
@@ -582,7 +798,10 @@ export default function Browz() {
                       style={[
                         styles.statusDot,
                         {
-                          backgroundColor: getStatusDotColor(calendar.calendar_status),
+                          backgroundColor: getStatusDotColor(
+                            calendar.calendar_status,
+                            calendar.agenda_pause
+                          ),
                         },
                       ]}
                     />
@@ -599,6 +818,16 @@ export default function Browz() {
                   </View>
                 </View>
 
+                <Text style={styles.footerDate}>
+                    {new Date(calendar.calendar_start).toLocaleDateString("pt-BR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </Text>
+
                 <Text style={styles.cardTitle}>
                   {getClienteText(calendar.customer_id)}
                 </Text>
@@ -606,6 +835,8 @@ export default function Browz() {
                 <Text style={styles.cardDescription}>
                   {calendar.calendar_observation || "Sem descrição"}
                 </Text>
+
+              
 
                 <View style={styles.cardFooter}>
                   <View style={styles.footerInfo}>
@@ -615,11 +846,9 @@ export default function Browz() {
                     </Text>
                   </View>
 
+                 
 
-
-                  { /*<Text style={styles.footerText}>
-                    Técnico: {getTecnicoText(calendar.representative_id)}
-                  </Text> */}
+                  
                 </View>
               </TouchableOpacity>
             </Link>
@@ -948,8 +1177,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 15,
-    borderWidth: 1,
-    borderColor: "#334155",
+    borderWidth: 2,
   },
   cardHeader: {
     flexDirection: "row",
@@ -1016,7 +1244,8 @@ const styles = StyleSheet.create({
   },
   footerDate: {
     color: "#64748b",
-    fontSize: 12,
+    fontSize: 14,
+    marginBottom: 10,
   },
   overlay: {
     flex: 1,

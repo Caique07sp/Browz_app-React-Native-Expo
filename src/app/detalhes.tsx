@@ -668,21 +668,7 @@ export default function DetalhesChamado() {
 
       </ScrollView>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.footerInput}>
-          <TextInput
-            style={styles.input}
-            placeholder="Adicionar nota..."
-            placeholderTextColor="#64748b"
-            value={message}
-            onChangeText={setMessage}
-          />
 
-          <TouchableOpacity style={styles.sendIcon} onPress={sendMessage}>
-            <Send color="#fff" size={20} />
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
