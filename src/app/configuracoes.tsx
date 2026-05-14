@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   SafeAreaView,
   StatusBar,
@@ -9,7 +9,9 @@ import {
   ScrollView,
   Switch,
 } from "react-native";
+
 import { useRouter } from "expo-router";
+
 import {
   ArrowLeft,
   User,
@@ -20,128 +22,361 @@ import {
   LogOut,
   ChevronRight,
 } from "lucide-react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { useTheme } from "@/theme/ThemeContext";
 
 export default function Configuracoes() {
   const router = useRouter();
 
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [darkModeEnabled, setDarkModeEnabled] = useState(true);
+  const { theme, darkMode, toggleTheme } = useTheme();
 
-  useEffect(() => {
-  carregarTema();
-}, []);
-
-async function carregarTema() {
-  const temaSalvo = await AsyncStorage.getItem("@theme");
-
-  if (temaSalvo === "light") {
-    setDarkModeEnabled(false);
-  } else {
-    setDarkModeEnabled(true);
-  }
-}
-async function toggleTheme(value: boolean) {
-  setDarkModeEnabled(value);
-
-  await AsyncStorage.setItem(
-    "@theme",
-    value ? "dark" : "light"
-  );
-}
+  const [notificationsEnabled, setNotificationsEnabled] =
+    useState(true);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          backgroundColor: theme.background,
+        },
+      ]}
+    >
+      <StatusBar
+        barStyle={
+          darkMode
+            ? "light-content"
+            : "dark-content"
+        }
+      />
 
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <ArrowLeft color="#fff" size={24} />
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: theme.background,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          style={[
+            styles.backBtn,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            },
+          ]}
+          onPress={() => router.back()}
+        >
+          <ArrowLeft
+            color={theme.text}
+            size={24}
+          />
         </TouchableOpacity>
 
-        <Text style={styles.title}>Configurações</Text>
+        <Text
+          style={[
+            styles.title,
+            {
+              color: theme.text,
+            },
+          ]}
+        >
+          Configurações
+        </Text>
 
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionTitle}>Conta</Text>
+      <ScrollView
+        contentContainerStyle={styles.content}
+      >
+        <Text
+          style={[
+            styles.sectionTitle,
+            {
+              color: theme.subText,
+            },
+          ]}
+        >
+          Conta
+        </Text>
 
-        <TouchableOpacity style={styles.item}>
+        <TouchableOpacity
+          style={[
+            styles.item,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            },
+          ]}
+        >
           <View style={styles.itemLeft}>
-            <User color="#3b82f6" size={22} />
+            <User
+              color={theme.primary}
+              size={22}
+            />
+
             <View>
-              <Text style={styles.itemTitle}>Perfil</Text>
-              <Text style={styles.itemSubtitle}>Editar dados do usuário</Text>
+              <Text
+                style={[
+                  styles.itemTitle,
+                  {
+                    color: theme.text,
+                  },
+                ]}
+              >
+                Perfil
+              </Text>
+
+              <Text
+                style={[
+                  styles.itemSubtitle,
+                  {
+                    color: theme.subText,
+                  },
+                ]}
+              >
+                Editar dados do usuário
+              </Text>
             </View>
           </View>
-          <ChevronRight color="#64748b" size={22} />
+
+          <ChevronRight
+            color={theme.subText}
+            size={22}
+          />
         </TouchableOpacity>
 
-        <Text style={styles.sectionTitle}>Preferências</Text>
+        <Text
+          style={[
+            styles.sectionTitle,
+            {
+              color: theme.subText,
+            },
+          ]}
+        >
+          Preferências
+        </Text>
 
-        <View style={styles.item}>
+        <View
+          style={[
+            styles.item,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            },
+          ]}
+        >
           <View style={styles.itemLeft}>
-            <Bell color="#3b82f6" size={22} />
+            <Bell
+              color={theme.primary}
+              size={22}
+            />
+
             <View>
-              <Text style={styles.itemTitle}>Notificações</Text>
-              <Text style={styles.itemSubtitle}>Receber alertas de chamados</Text>
+              <Text
+                style={[
+                  styles.itemTitle,
+                  {
+                    color: theme.text,
+                  },
+                ]}
+              >
+                Notificações
+              </Text>
+
+              <Text
+                style={[
+                  styles.itemSubtitle,
+                  {
+                    color: theme.subText,
+                  },
+                ]}
+              >
+                Receber alertas de chamados
+              </Text>
             </View>
           </View>
 
           <Switch
             value={notificationsEnabled}
-            onValueChange={setNotificationsEnabled}
-            trackColor={{ false: "#334155", true: "#3b82f6" }}
+            onValueChange={
+              setNotificationsEnabled
+            }
+            trackColor={{
+              false: theme.border,
+              true: theme.primary,
+            }}
             thumbColor="#fff"
           />
         </View>
 
-        <View style={styles.item}>
+        <View
+          style={[
+            styles.item,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            },
+          ]}
+        >
           <View style={styles.itemLeft}>
-            <Moon color="#3b82f6" size={22} />
+            <Moon
+              color={theme.primary}
+              size={22}
+            />
+
             <View>
-              <Text style={styles.itemTitle}>Modo escuro</Text>
-              <Text style={styles.itemSubtitle}>Tema escuro ativado</Text>
+              <Text
+                style={[
+                  styles.itemTitle,
+                  {
+                    color: theme.text,
+                  },
+                ]}
+              >
+                Modo escuro
+              </Text>
+
+              <Text
+                style={[
+                  styles.itemSubtitle,
+                  {
+                    color: theme.subText,
+                  },
+                ]}
+              >
+                Tema escuro ativado
+              </Text>
             </View>
           </View>
 
           <Switch
-            value={darkModeEnabled}
+            value={darkMode}
             onValueChange={toggleTheme}
-            trackColor={{ false: "#334155", true: "#3b82f6" }}
+            trackColor={{
+              false: theme.border,
+              true: theme.primary,
+            }}
             thumbColor="#fff"
           />
         </View>
 
-        <Text style={styles.sectionTitle}>Sistema</Text>
+        <Text
+          style={[
+            styles.sectionTitle,
+            {
+              color: theme.subText,
+            },
+          ]}
+        >
+          Sistema
+        </Text>
 
-        <TouchableOpacity style={styles.item}>
+        <TouchableOpacity
+          style={[
+            styles.item,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            },
+          ]}
+        >
           <View style={styles.itemLeft}>
-            <Shield color="#3b82f6" size={22} />
+            <Shield
+              color={theme.primary}
+              size={22}
+            />
+
             <View>
-              <Text style={styles.itemTitle}>Segurança</Text>
-              <Text style={styles.itemSubtitle}>Senha e privacidade</Text>
+              <Text
+                style={[
+                  styles.itemTitle,
+                  {
+                    color: theme.text,
+                  },
+                ]}
+              >
+                Segurança
+              </Text>
+
+              <Text
+                style={[
+                  styles.itemSubtitle,
+                  {
+                    color: theme.subText,
+                  },
+                ]}
+              >
+                Senha e privacidade
+              </Text>
             </View>
           </View>
-          <ChevronRight color="#64748b" size={22} />
+
+          <ChevronRight
+            color={theme.subText}
+            size={22}
+          />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.item}>
+        <TouchableOpacity
+          style={[
+            styles.item,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            },
+          ]}
+        >
           <View style={styles.itemLeft}>
-            <Info color="#3b82f6" size={22} />
+            <Info
+              color={theme.primary}
+              size={22}
+            />
+
             <View>
-              <Text style={styles.itemTitle}>Sobre o aplicativo</Text>
-              <Text style={styles.itemSubtitle}>Versão 1.0.0</Text>
+              <Text
+                style={[
+                  styles.itemTitle,
+                  {
+                    color: theme.text,
+                  },
+                ]}
+              >
+                Sobre o aplicativo
+              </Text>
+
+              <Text
+                style={[
+                  styles.itemSubtitle,
+                  {
+                    color: theme.subText,
+                  },
+                ]}
+              >
+                Versão 1.0.0
+              </Text>
             </View>
           </View>
-          <ChevronRight color="#64748b" size={22} />
+
+          <ChevronRight
+            color={theme.subText}
+            size={22}
+          />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.logoutBtn}>
-          <LogOut color="#fff" size={20} />
-          <Text style={styles.logoutText}>Sair da conta</Text>
+        <TouchableOpacity
+          style={styles.logoutBtn}
+        >
+          <LogOut
+            color="#fff"
+            size={20}
+          />
+
+          <Text style={styles.logoutText}>
+            Sair da conta
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -149,7 +384,9 @@ async function toggleTheme(value: boolean) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0f172a" },
+  container: {
+    flex: 1,
+  },
 
   header: {
     height: 70,
@@ -163,13 +400,12 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "#1e293b",
+    borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
   },
 
   title: {
-    color: "#fff",
     fontSize: 20,
     fontWeight: "bold",
   },
@@ -180,7 +416,6 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    color: "#64748b",
     fontSize: 12,
     fontWeight: "bold",
     marginBottom: 10,
@@ -189,12 +424,10 @@ const styles = StyleSheet.create({
   },
 
   item: {
-    backgroundColor: "#1e293b",
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#334155",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -208,13 +441,11 @@ const styles = StyleSheet.create({
   },
 
   itemTitle: {
-    color: "#fff",
     fontSize: 15,
     fontWeight: "bold",
   },
 
   itemSubtitle: {
-    color: "#94a3b8",
     fontSize: 12,
     marginTop: 3,
   },

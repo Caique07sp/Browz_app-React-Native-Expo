@@ -1,14 +1,17 @@
-import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
-import SignatureScreen, { SignatureViewRef } from 'react-native-signature-canvas';
-import * as ScreenOrientation from 'expo-screen-orientation';
-import { useRouter } from 'expo-router';
-import { X, Check, RotateCcw } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as ScreenOrientation from 'expo-screen-orientation';
+import { Check, RotateCcw, X } from 'lucide-react-native';
+import React, { useEffect, useRef } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import SignatureScreen, { SignatureViewRef } from 'react-native-signature-canvas';
 
 export default function AssinaturaCliente() {
   const router = useRouter();
   const signatureRef = useRef<SignatureViewRef>(null);
+  const { ticketId } = useLocalSearchParams();
+  const chamadoId = String(ticketId);
+
 
   useEffect(() => {
     async function changeOrientation() {
@@ -26,8 +29,13 @@ export default function AssinaturaCliente() {
     };
   }, []);
 
+  
+
   const handleOK = async (signature: string) => {
-    await AsyncStorage.setItem('@assinatura_cliente', signature);
+    await AsyncStorage.setItem(
+     ` @assinatura_cliente_${ chamadoId }`,
+      signature
+    );
     router.back();
   };
 

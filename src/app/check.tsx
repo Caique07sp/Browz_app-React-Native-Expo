@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
+import { useTheme } from "@/theme/ThemeContext";
 import {
   Camera as CameraIcon,
   CheckCircle,
@@ -44,9 +45,10 @@ export default function CheckInScreen() {
 
   const { service_type_id } = useLocalSearchParams();
   const serviceTypeId = String(service_type_id);
+  const { theme, darkMode } = useTheme();
 
-function getBrazilDateTime() {
-     
+  function getBrazilDateTime() {
+
 
     return new Date();
   }
@@ -304,17 +306,55 @@ function getBrazilDateTime() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          backgroundColor: theme.background,
+        },
+      ]}
+    >
+      <StatusBar
+        barStyle={
+          darkMode
+            ? "light-content"
+            : "dark-content"
+        }
+      />
 
-      <View style={styles.header}>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: theme.card,
+            borderBottomColor: theme.border,
+          },
+        ]}
+      >
         <Link href="/home-pronta" asChild>
-          <TouchableOpacity style={styles.closeButton}>
-            <X color="#94a3b8" size={24} />
+          <TouchableOpacity
+            style={[
+              styles.closeButton,
+              {
+                backgroundColor: theme.background,
+              },
+            ]}
+          >
+            <X
+              color={theme.subText}
+              size={24}
+            />
           </TouchableOpacity>
         </Link>
 
-        <Text style={styles.headerTitle}>
+        <Text
+          style={[
+            styles.headerTitle,
+            {
+              color: theme.text,
+            },
+          ]}
+        >
           {started ? 'Atendimento em Curso' : 'Check-in'}
         </Text>
 
@@ -322,12 +362,21 @@ function getBrazilDateTime() {
       </View>
 
       <View style={styles.content}>
-        <View style={styles.mapContainer}>
+        <View
+          style={[
+            styles.mapContainer,
+            {
+              borderColor: theme.border,
+            },
+          ]}
+        >
           {location ? (
             <MapView
               style={styles.map}
               provider={PROVIDER_GOOGLE}
-              userInterfaceStyle="dark"
+              userInterfaceStyle={
+                darkMode ? "dark" : "light"
+              }
               region={{
                 latitude: location.coords.latitude,
                 longitude: location.coords.longitude,
@@ -337,23 +386,66 @@ function getBrazilDateTime() {
               showsUserLocation
             />
           ) : (
-            <View style={styles.mapLoading}>
-              <Text style={styles.mapText}>Localizando...</Text>
+            <View
+              style={[
+                styles.mapLoading,
+                {
+                  backgroundColor: theme.card,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.mapText,
+                  {
+                    color: theme.subText,
+                  },
+                ]}
+              >Localizando...</Text>
             </View>
           )}
         </View>
 
         <View style={styles.ticketBrief}>
           <Text style={styles.ticketId}>#{ticketId}</Text>
-          <Text style={styles.ticketTitle}>
+          <Text
+            style={[
+              styles.ticketTitle,
+              {
+                color: theme.text,
+              },
+            ]}
+          >
             {categorias[serviceTypeId] || 'Carregando categoria...'}
           </Text>
         </View>
 
-        <View style={styles.timeCard}>
-          <Text style={styles.timeLabel}>HORA ATUAL</Text>
+        <View
+          style={[
+            styles.timeCard,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.timeLabel,
+              {
+                color: theme.subText,
+              },
+            ]}
+          >HORA ATUAL</Text>
 
-          <Text style={styles.timeValue}>
+          <Text
+            style={[
+              styles.timeValue,
+              {
+                color: theme.text,
+              },
+            ]}
+          >
             {currentTime.toLocaleTimeString('pt-BR', {
               hour: '2-digit',
               minute: '2-digit',
@@ -362,7 +454,13 @@ function getBrazilDateTime() {
           </Text>
 
           {checkInTime && (
-            <View style={styles.checkInBadge}>
+            <View style={[
+              styles.checkInBadge,
+              {
+                backgroundColor: theme.background,
+              },
+
+            ]}>
               <Text style={styles.checkInText}>
                 Check-in realizado às {checkInTime}
               </Text>
@@ -373,13 +471,19 @@ function getBrazilDateTime() {
             <View
               style={[
                 styles.statusWorkBadge,
-                { backgroundColor: isActive ? '#052e16' : '#451a03' },
+                {
+                  backgroundColor: '#fff',
+                },
+
               ]}
             >
               <Text
                 style={[
                   styles.statusWorkText,
-                  { color: isActive ? '#22c55e' : '#f59e0b' },
+                  {
+                    color: isActive ? '#22c55e' : '#f59e0b',
+
+                  },
                 ]}
               >
                 {isActive ? 'Em atendimento' : 'Pausado'}
@@ -396,24 +500,47 @@ function getBrazilDateTime() {
         ) : (
           <>
             <View style={styles.actionGrid}>
-              {/* Substitua o botão antigo por este bloco */}
-              <Link
-                href={{
-                  pathname: '/fotos-chamado',
-                  params: { id: ticketId },
-                }}
-                asChild
+              <TouchableOpacity
+                style={[
+                  styles.secondaryBtn,
+                  {
+                    flex: 1,
+                    backgroundColor: theme.card,
+                    borderColor: theme.border,
+                  },
+                ]}
+                onPress={() =>
+                  router.push({
+                    pathname: '/fotos-chamado',
+                    params: { id: ticketId },
+                  })
+                }
               >
-                <TouchableOpacity style={styles.secondaryBtn}>
-                  <CameraIcon color="#fff" size={20} />
-                  <Text style={styles.btnText}>Tirar Foto</Text>
-                </TouchableOpacity>
-              </Link>
+                <CameraIcon
+                  color={theme.text}
+                  size={20}
+                />
+
+                <Text
+                  style={[
+                    styles.btnText,
+                    {
+                      color: theme.text,
+                    },
+                  ]}
+                >
+                  Tirar Foto
+                </Text>
+              </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
                   styles.secondaryBtn,
-                  { borderColor: '#f59e0b' },
+                  {
+                    flex: 1,
+                    backgroundColor: theme.card,
+                    borderColor: '#f59e0b',
+                  },
                 ]}
                 onPress={() => setModalType('pause')}
               >
@@ -444,15 +571,37 @@ function getBrazilDateTime() {
 
       <Modal visible={!!modalType} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
+          <View
+            style={[
+              styles.modalContent,
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.modalTitle,
+                {
+                  color: theme.text,
+                },
+              ]}
+            >
               {isActive ? 'Motivo da Pausa' : 'Motivo do Retorno'}
             </Text>
 
             <TextInput
-              style={styles.reasonInput}
+              style={[
+                styles.reasonInput,
+                {
+                  backgroundColor: theme.background,
+                  color: theme.text,
+                  borderColor: theme.border,
+                },
+              ]}
               placeholder="Digite aqui..."
-              placeholderTextColor="#64748b"
+              placeholderTextColor={theme.subText}
               multiline
               value={reason}
               onChangeText={setReason}
@@ -466,7 +615,16 @@ function getBrazilDateTime() {
                   setModalType(null);
                 }}
               >
-                <Text style={styles.btnText}>Cancelar</Text>
+                <Text
+                  style={[
+                    styles.btnText,
+                    {
+                      color: theme.text,
+                    },
+                  ]}
+                >
+                  Cancelar
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -608,16 +766,13 @@ const styles = StyleSheet.create({
   },
 
   secondaryBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     height: 60,
     borderRadius: 16,
-    backgroundColor: '#1e293b',
     borderWidth: 1,
-    borderColor: '#334155',
   },
 
   btnText: {

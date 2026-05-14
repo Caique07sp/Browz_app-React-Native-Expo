@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
+import { useTheme } from "@/theme/ThemeContext";
 import {
   ActivityIndicator,
   Image,
@@ -62,6 +63,7 @@ export default function Browz() {
 
   const [ultimosChamados, setUltimosChamados] = useState<any[]>([]);
   const [quantidadeNotificacoes, setQuantidadeNotificacoes] = useState(0);
+  const { theme, darkMode } = useTheme();
 
 
 
@@ -442,17 +444,17 @@ export default function Browz() {
     const s = Number(status);
     const pausado = Number(agendaPause) === 1;
 
-    if (s === 0) return "#d19326ff";
-    if (s === 1 && pausado) return "#e6739a";
-    if (s === 1) return "#1e3a8a";
-    if (s === 2) return "#14532d";
+    if (s === 0) return "#e9ae37b4";
+    if (s === 1 && pausado) return "#e673998e";
+    if (s === 1) return "#4b9eddb9";
+    if (s === 2) return "#0d9e479f"; 
 
     return "#334155";
   }
 
   function getStatusDotColor(status: any, agendaPause?: any) {
     const s = Number(status);
-     const pausado = Number(agendaPause) === 1 ;
+    const pausado = Number(agendaPause) === 1;
 
 
     if (s === 0) return "#ffa200ff";
@@ -640,14 +642,38 @@ export default function Browz() {
 
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          backgroundColor: theme.background,
+        },
+      ]}
+    >
+      <StatusBar
+        barStyle={
+          darkMode
+            ? "light-content"
+            : "dark-content"
+        }
+      />
 
       {/* HEADER */}
-      <View style={styles.header}>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: theme.background,
+          },
+        ]}
+      >
         <View style={styles.logoContainer}>
           <Image
-            source={require("@/assets/logo-white.png")}
+            source={
+              darkMode
+                ? require("@/assets/logo-white.png")
+                : require("@/assets/browz.png")
+            }
             style={styles.logoImage}
           />
         </View>
@@ -674,7 +700,10 @@ export default function Browz() {
             style={styles.iconButton}
             onPress={() => setMenuVisible(true)}
           >
-            <Menu size={24} color="#fff" />
+            <Menu
+              size={24}
+              color={theme.text}
+            />
           </TouchableOpacity>
         </View>
       </View>
@@ -693,12 +722,25 @@ export default function Browz() {
         }
       >
         <View style={styles.searchSection}>
-          <View style={styles.searchBar}>
+          <View
+            style={[
+              styles.searchBar,
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+              },
+            ]}
+          >
             <Search size={20} color="#94a3b8" style={{ marginLeft: 10 }} />
             <TextInput
               placeholder="Pesquisar chamados..."
-              placeholderTextColor="#94a3b8"
-              style={styles.input}
+              placeholderTextColor={theme.subText}
+              style={[
+                styles.input,
+                {
+                  color: theme.text,
+                },
+              ]}
               value={searchText}
               onChangeText={setSearchText}
             />
@@ -714,7 +756,14 @@ export default function Browz() {
         </View>
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Chamados Recentes</Text>
+          <Text
+            style={[
+              styles.sectionTitle,
+              {
+                color: theme.text,
+              },
+            ]}
+          >Chamados Recentes</Text>
           <TouchableOpacity>
             <Text style={{ color: "#3b82f6" }}>Ver todos</Text>
           </TouchableOpacity>
@@ -723,7 +772,14 @@ export default function Browz() {
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#3b82f6" />
-            <Text style={styles.loadingText}>Carregando chamados...</Text>
+            <Text
+              style={[
+                styles.loadingText,
+                {
+                  color: theme.subText,
+                },
+              ]}
+            >Carregando chamados...</Text>
           </View>
         ) : filteredChamados.length === 0 ? (
           <View style={styles.emptyContainer}>
@@ -733,11 +789,25 @@ export default function Browz() {
               </View>
             </View>
 
-            <Text style={styles.emptyTitle}>
+            <Text
+              style={[
+                styles.emptyTitle,
+                {
+                  color: theme.text,
+                },
+              ]}
+            >
               Nenhum chamado corresponde aos filtros selecionados
             </Text>
 
-            <Text style={styles.emptySubtitle}>
+            <Text
+              style={[
+                styles.emptySubtitle,
+                {
+                  color: theme.subText,
+                },
+              ]}
+            >
               ↓ Arraste para baixo para sincronizar
             </Text>
           </View>
@@ -757,26 +827,41 @@ export default function Browz() {
               <TouchableOpacity
                 activeOpacity={0.8}
                 style={{
-                  backgroundColor: "#1e293b",
+                  backgroundColor: theme.card,
                   borderRadius: 16,
                   padding: 16,
                   marginBottom: 15,
                   borderWidth: 3,
-                  borderLeftColor:"#1e293b",
+                  borderLeftColor: theme.card,
                   borderRightColor: getStatusColor(
                     calendar.calendar_status,
                     calendar.agenda_pause
 
                   ),
-                  borderTopColor: "#1e293b",
-                  borderBottomColor: "#1e293b",
+                  borderTopColor: theme.card,
+                  borderBottomColor: theme.card,
                 }}
               >
 
 
                 <View style={styles.cardHeader}>
-                  <View style={styles.idBadge}>
-                    <Text style={styles.idText}>
+                  <View
+                    style={[
+                      styles.idBadge,
+                      {
+                        backgroundColor: theme.background,
+                        borderColor: theme.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.idText,
+                        {
+                          color: theme.subText,
+                        },
+                      ]}
+                    >
                       #{calendar.calendar_id}
                     </Text>
                   </View>
@@ -789,7 +874,7 @@ export default function Browz() {
                         backgroundColor: getStatusColor(
                           calendar.calendar_status,
                           calendar.agenda_pause
-                          
+
                         ),
                       },
                     ]}
@@ -808,7 +893,7 @@ export default function Browz() {
 
                     <Text style={styles.statusText}>
 
-                      {/*Bruno quis tirar*/}
+
                       {getStatusText(calendar.calendar_status, calendar.agenda_pause)}
 
 
@@ -818,37 +903,65 @@ export default function Browz() {
                   </View>
                 </View>
 
-                <Text style={styles.footerDate}>
-                    {new Date(calendar.calendar_start).toLocaleDateString("pt-BR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </Text>
+                <Text
+                  style={[
+                    styles.footerDate,
+                    {
+                      color: theme.subText,
+                    },
+                  ]}
+                >
+                  {new Date(calendar.calendar_start).toLocaleDateString("pt-BR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </Text>
 
-                <Text style={styles.cardTitle}>
+                <Text
+                  style={[
+                    styles.cardTitle,
+                    {
+                      color: theme.text,
+                    },
+                  ]}
+                >
                   {getClienteText(calendar.customer_id)}
                 </Text>
 
-                <Text style={styles.cardDescription}>
+                <Text
+                  style={[
+                    styles.cardDescription,
+                    {
+                      color: theme.subText,
+                    },
+                  ]}
+                >
                   {calendar.calendar_observation || "Sem descrição"}
                 </Text>
 
-              
+
 
                 <View style={styles.cardFooter}>
                   <View style={styles.footerInfo}>
                     <Inbox size={14} color="#64748b" />
-                    <Text style={styles.footerText}>
+                    <Text
+                      style={[
+                        styles.footerText,
+                        {
+                          color: theme.subText,
+                        },
+                      ]}
+                    >
                       {getCategoriaText(calendar.service_type_id)}
                     </Text>
                   </View>
 
-                 
 
-                  
+
+
                 </View>
               </TouchableOpacity>
             </Link>
@@ -863,18 +976,43 @@ export default function Browz() {
         animationType="slide"
         visible={filterVisible}
         onRequestClose={() => setFilterVisible(false)}
+
       >
         <View style={styles.overlay}>
-          <View style={styles.modalBox}>
+          <View
+            style={[
+              styles.modalBox,
+              {
+                backgroundColor: theme.card,
+              },
+            ]}
+          >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filtros</Text>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  {
+                    color: theme.text,
+                  },
+                ]}
+              >Filtros</Text>
 
               <TouchableOpacity onPress={() => setFilterVisible(false)}>
-                <X size={24} color="#fff" />
+                <X
+                  size={24}
+                  color={theme.text}
+                />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalLabel}>Status</Text>
+            <Text
+              style={[
+                styles.modalLabel,
+                {
+                  color: theme.subText,
+                },
+              ]}
+            >Status</Text>
 
             <View style={styles.optionColumn}>
 
@@ -882,41 +1020,85 @@ export default function Browz() {
               <TouchableOpacity
                 style={[
                   styles.optionBtn,
+                  {
+                    backgroundColor: theme.background,
+                    borderColor: theme.border,
+                  },
                   selectedStatus.includes("aberto") && styles.optionBtnActive,
                 ]}
                 onPress={() => toggleStatus("aberto")}
               >
-                <Text style={styles.optionText}>Aberto</Text>
+                <Text
+                  style={[
+                    styles.optionText,
+                    {
+                      color: theme.text,
+                    },
+                  ]}
+                >Aberto</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
                   styles.optionBtn,
+                  {
+                    backgroundColor: theme.background,
+                    borderColor: theme.border,
+                  },
                   selectedStatus.includes("em_atendimento") && styles.optionBtnActive,
                 ]}
                 onPress={() => toggleStatus("em_atendimento")}
               >
-                <Text style={styles.optionText}>Em atendimento</Text>
+                <Text
+                  style={[
+                    styles.optionText,
+                    {
+                      color: theme.text,
+                    },
+                  ]}
+                >Em atendimento</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
                   styles.optionBtn,
+                  {
+                    backgroundColor: theme.background,
+                    borderColor: theme.border,
+                  },
                   selectedStatus.includes("aguardando") && styles.optionBtnActive,
                 ]}
                 onPress={() => toggleStatus("aguardando")}
               >
-                <Text style={styles.optionText}>Aguardando</Text>
+                <Text
+                  style={[
+                    styles.optionText,
+                    {
+                      color: theme.text,
+                    },
+                  ]}
+                >Aguardando</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
                   styles.optionBtn,
+                  {
+                    backgroundColor: theme.background,
+                    borderColor: theme.border,
+                  },
                   selectedStatus.includes("finalizado") && styles.optionBtnActive,
                 ]}
                 onPress={() => toggleStatus("finalizado")}
               >
-                <Text style={styles.optionText}>Finalizado</Text>
+                <Text
+                  style={[
+                    styles.optionText,
+                    {
+                      color: theme.text,
+                    },
+                  ]}
+                >Finalizado</Text>
               </TouchableOpacity>
 
 
@@ -925,13 +1107,23 @@ export default function Browz() {
             <Text style={[styles.modalLabel, { marginTop: 20 }]}>Período</Text>
 
             <TouchableOpacity
-              style={styles.dateInput}
+              style={[
+                styles.dateInput,
+                {
+                  backgroundColor: theme.background,
+                  borderColor: theme.border,
+                },
+              ]}
               onPress={() => {
                 setShowEndPicker(false);
                 setShowStartPicker(true);
               }}
             >
-              <Text style={{ color: startDate ? "#fff" : "#94a3b8" }}>
+              <Text style={{
+                color: startDate
+                  ? theme.text
+                  : theme.subText
+              }}>
                 {startDate
                   ? `Início : ${startDate.toLocaleDateString("pt-BR")}`
                   : "Selecionar data inicial"}
@@ -939,13 +1131,23 @@ export default function Browz() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.dateInput, { marginTop: 10 }]}
+              style={[styles.dateInput,
+
+              {
+                backgroundColor: theme.background,
+                borderColor: theme.border,
+              },
+              { marginTop: 10 }]}
               onPress={() => {
                 setShowStartPicker(false);
                 setShowEndPicker(true);
               }}
             >
-              <Text style={{ color: endDate ? "#fff" : "#94a3b8" }}>
+              <Text style={{
+                color: endDate
+                  ? theme.text
+                  : theme.subText
+              }}>
                 {endDate
                   ? `Fim : ${endDate.toLocaleDateString("pt-BR")}`
                   : "Selecionar data final"}
@@ -964,6 +1166,9 @@ export default function Browz() {
 
             {showStartPicker && (
               <DateTimePicker
+                themeVariant={
+                  darkMode ? "dark" : "light"
+                }
                 value={startDate || new Date()}
                 mode="date"
                 display={Platform.OS === "ios" ? "spinner" : "default"}
@@ -982,6 +1187,9 @@ export default function Browz() {
 
             {showEndPicker && (
               <DateTimePicker
+                themeVariant={
+                  darkMode ? "dark" : "light"
+                }
                 value={endDate || new Date()}
                 mode="date"
                 display={Platform.OS === "ios" ? "spinner" : "default"}
@@ -1024,11 +1232,28 @@ export default function Browz() {
           activeOpacity={1}
           onPress={() => setMenuVisible(false)}
         >
-          <View style={styles.menuBox}>
+          <View
+            style={[
+              styles.menuBox,
+              {
+                backgroundColor: theme.card,
+              },
+            ]}
+          >
             <View style={styles.menuHeader}>
-              <Text style={styles.menuTitle}>Menu</Text>
+              <Text
+                style={[
+                  styles.menuTitle,
+                  {
+                    color: theme.text,
+                  },
+                ]}
+              >Menu</Text>
               <TouchableOpacity onPress={() => setMenuVisible(false)}>
-                <X size={24} color="#fff" />
+                <X
+                  size={24}
+                  color={theme.text}
+                />
               </TouchableOpacity>
             </View>
 
@@ -1037,11 +1262,24 @@ export default function Browz() {
                 <User size={22} color="#fff" />
               </View>
               <View>
-                <Text style={styles.userName}>
+                <Text
+                  style={[
+                    styles.userName,
+                    {
+                      color: theme.text,
+                    },
+                  ]}
+                >
                   {nome || "Usuário"}
                 </Text>
-
-                <Text style={styles.userSub}>
+                <Text
+                  style={[
+                    styles.userSub,
+                    {
+                      color: theme.subText,
+                    },
+                  ]}
+                >
                   {perfil || "Técnico"}
                 </Text>
               </View>
@@ -1050,20 +1288,41 @@ export default function Browz() {
             <Link href="/home-pronta" asChild>
               <TouchableOpacity style={styles.menuItem}>
                 <LayoutDashboard size={20} color="#3b82f6" />
-                <Text style={styles.menuText}>Home</Text>
+                <Text
+                  style={[
+                    styles.menuText,
+                    {
+                      color: theme.text,
+                    },
+                  ]}
+                >Home</Text>
               </TouchableOpacity>
             </Link>
 
             <Link href="/configuracoes" asChild>
               <TouchableOpacity style={styles.menuItem}>
                 <Settings size={20} color="#3b82f6" />
-                <Text style={styles.menuText}>Configurações</Text>
+                <Text
+                  style={[
+                    styles.menuText,
+                    {
+                      color: theme.text,
+                    },
+                  ]}
+                >Configurações</Text>
               </TouchableOpacity>
             </Link>
 
             <TouchableOpacity style={styles.menuItem}>
               <Info size={20} color="#3b82f6" />
-              <Text style={styles.menuText}>Sobre</Text>
+              <Text
+                style={[
+                  styles.menuText,
+                  {
+                    color: theme.text,
+                  },
+                ]}
+              >Sobre</Text>
             </TouchableOpacity>
 
             <Link href="/" asChild>

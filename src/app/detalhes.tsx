@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import {
   StyleSheet,
@@ -35,6 +36,7 @@ import {
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme } from "@/theme/ThemeContext";
 
 type DetailRowProps = {
   icon: React.ReactNode;
@@ -43,13 +45,28 @@ type DetailRowProps = {
 };
 
 function DetailRow({ icon, label, value }: DetailRowProps) {
+  const { theme, darkMode } = useTheme();
   return (
     <View style={styles.detailRow}>
       <View style={styles.detailLabelGroup}>
         {icon}
-        <Text style={styles.detailLabel}>{label}:</Text>
+        <Text
+          style={[
+            styles.detailLabel,
+            {
+              color: theme.subText,
+            },
+          ]}
+        >{label}:</Text>
       </View>
-      <Text style={styles.detailValue}>{value}</Text>
+      <Text
+        style={[
+          styles.detailValue,
+          {
+            color: theme.text,
+          },
+        ]}
+      >{value}</Text>
     </View>
   );
 }
@@ -66,6 +83,7 @@ export default function DetalhesChamado() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [notas, setNotas] = useState<string[]>([]);
   const router = useRouter();
+  const { theme, darkMode } = useTheme();
 
   useEffect(() => {
     buscarDetalhesChamado();
@@ -420,11 +438,31 @@ export default function DetalhesChamado() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" />
+      <SafeAreaView
+        style={[
+          styles.container,
+          {
+            backgroundColor: theme.background,
+          },
+        ]}
+      >
+        <StatusBar
+          barStyle={
+            darkMode
+              ? "light-content"
+              : "dark-content"
+          }
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3b82f6" />
-          <Text style={styles.loadingText}>Carregando chamado...</Text>
+          <Text
+            style={[
+              styles.loadingText,
+              {
+                color: theme.subText,
+              },
+            ]}
+          >Carregando chamado...</Text>
         </View>
       </SafeAreaView>
     );
@@ -432,8 +470,21 @@ export default function DetalhesChamado() {
 
   if (!calendar) {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" />
+      <SafeAreaView
+        style={[
+          styles.container,
+          {
+            backgroundColor: theme.background,
+          },
+        ]}
+      >
+        <StatusBar
+          barStyle={
+            darkMode
+              ? "light-content"
+              : "dark-content"
+          }
+        />
 
         <View style={styles.loadingContainer}>
           <Inbox size={50} color="#64748b" />
@@ -450,20 +501,54 @@ export default function DetalhesChamado() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          backgroundColor: theme.background,
+        },
+      ]}
+    >
+      <StatusBar
+        barStyle={
+          darkMode
+            ? "light-content"
+            : "dark-content"
+        }
+      />
 
-      <View style={styles.header}>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: theme.card,
+            borderBottomColor: theme.border,
+          },
+        ]}
+      >
         <Link href="/home-pronta" asChild>
           <TouchableOpacity style={styles.backButton}>
-            <ChevronLeft color="#fff" size={26} />
+            <ChevronLeft
+              color={theme.text}
+              size={26}
+            />
           </TouchableOpacity>
         </Link>
 
         <View style={styles.headerTitleContainer}>
           <TouchableOpacity onPress={copyTicketId} style={styles.ticketCopyBox}>
-            <Text style={styles.headerId}>Chamado: {ticketId}</Text>
-            <Copy size={15} color="#94a3b8" />
+            <Text
+              style={[
+                styles.headerId,
+                {
+                  color: theme.text,
+                },
+              ]}
+            >Chamado: {ticketId}</Text>
+            <Copy
+              size={15}
+              color={theme.subText}
+            />
           </TouchableOpacity>
 
           <View
@@ -489,8 +574,23 @@ export default function DetalhesChamado() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitleText}>INFORMAÇÕES DO CHAMADO</Text>
+        <View
+          style={[
+            styles.sectionCard,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.sectionTitleText,
+              {
+                color: theme.text,
+              },
+            ]}
+          >INFORMAÇÕES DO CHAMADO</Text>
 
           <DetailRow
             icon={<User size={18} color="#3b82f6" />}
@@ -523,23 +623,71 @@ export default function DetalhesChamado() {
 
         </View>
 
-        <View style={styles.sectionCard}>
+        <View
+          style={[
+            styles.sectionCard,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            },
+          ]}
+        >
           <View style={styles.rowTitle}>
+            {/* não gostou
+            
             <HardDrive size={18} color="#94a3b8" />
-            <Text style={styles.sectionTitleText}>DESCRIÇÃO DO PROBLEMA</Text>
+            
+            */}
+            <Text
+              style={[
+                styles.sectionTitleText,
+                {
+                  color: theme.text,
+                },
+              ]}
+            >DESCRIÇÃO DO PROBLEMA</Text>
           </View>
 
-          <Text style={styles.problemText}>
+          <Text
+            style={[
+              styles.problemText,
+              {
+                color: theme.text,
+              },
+            ]}
+          >
             {calendar.calendar_observation || 'Sem descrição'}
           </Text>
         </View>
 
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitleText}>ENDEREÇO E LOCALIZAÇÃO</Text>
+        <View
+          style={[
+            styles.sectionCard,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.sectionTitleText,
+              {
+                color: theme.text,
+              },
+            ]}
+          >ENDEREÇO E LOCALIZAÇÃO</Text>
 
           <View style={styles.addressBox}>
             <MapPin size={20} color="#ef4444" />
-            <Text style={styles.addressText}>
+            <Text
+              style={[
+                styles.addressText,
+                {
+                  color: theme.text,
+                },
+              ]}
+            >
               {calendar.calendar_address || 'Endereço não informado'}
             </Text>
           </View>
@@ -574,7 +722,7 @@ export default function DetalhesChamado() {
                 asChild
               >
                 <TouchableOpacity style={styles.checkInButton}>
-                  <PlayCircle size={20} color="#fff" />
+                  <FontAwesome5 name="check" size={20} color="#fff" />
                   <Text style={styles.buttonText}>Check-in</Text>
                 </TouchableOpacity>
               </Link>
@@ -582,12 +730,12 @@ export default function DetalhesChamado() {
 
             <View style={styles.mapRow}>
               <TouchableOpacity style={styles.mapButton} onPress={openMaps}>
-                <Map size={18} color="#fff" />
-                <Text style={styles.buttonTextSmall}>Maps</Text>
+                <FontAwesome5 name="google" size={20} color="#fff" />
+                <Text style={styles.buttonTextSmall}>Google Maps</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.wazeButton} onPress={openWaze}>
-                <Map size={18} color="#fff" />
+                <MaterialCommunityIcons name="waze" size={25} color="#fff" />
                 <Text style={styles.buttonTextSmall}>Waze</Text>
               </TouchableOpacity>
             </View>
@@ -595,37 +743,67 @@ export default function DetalhesChamado() {
           </View>
         </View>
 
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitleText}>CONTATO DO CLIENTE</Text>
+        <View
+          style={[
+            styles.sectionCard,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.sectionTitleText,
+              {
+                color: theme.text,
+              },
+            ]}
+          >CONTATO DO CLIENTE</Text>
 
           <DetailRow
-            icon={<Phone size={18} color="#22c55e" />}
+            icon={<FontAwesome5 name="phone" size={18} color="#22c55e" />}
             label="Telefone"
             value={telefoneCliente || 'Não informado'}
           />
 
           <DetailRow
-            icon={<Phone size={18} color="#3b82f6" />}
+            icon={<FontAwesome5 name="mobile-alt" size={18} color="#3b82f6" />}
             label="Celular"
             value={mobileCliente || 'Não informado'}
           />
 
           <View style={styles.actionRow}>
             <TouchableOpacity style={styles.callButton} onPress={callClient}>
-              <Phone size={18} color="#fff" />
+              <Phone size={14} color="#fff" />
               <Text style={styles.buttonText}>Telefone</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.callButton2} onPress={callMobile}>
-              <Phone size={18} color="#fff" />
+              <FontAwesome5 name="mobile-alt" size={20} color="#fff" />
               <Text style={styles.buttonText}>Celular</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/*
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitleText}>AÇÕES DO CHAMADO</Text>
+       <View
+  style={[
+    styles.sectionCard,
+    {
+      backgroundColor: theme.card,
+      borderColor: theme.border,
+    },
+  ]}
+>
+        <Text
+  style={[
+    styles.sectionTitleText,
+    {
+      color: theme.text,
+    },
+  ]}
+>AÇÕES DO CHAMADO</Text>
 
           <View style={styles.photoArea}>
             <TouchableOpacity style={styles.photoButton} onPress={escolherFoto}>
@@ -835,8 +1013,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 15,
+    fontSize: 14,
   },
 
   footerInput: {
@@ -888,7 +1065,7 @@ const styles = StyleSheet.create({
   },
   wazeButton: {
     flex: 1,
-    backgroundColor: '#16a34a',
+    backgroundColor: '#0ea5e9',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -900,12 +1077,12 @@ const styles = StyleSheet.create({
 
   buttonTextSmall: {
     color: '#fff',
-    fontWeight: '600',
-    fontSize: 13,
+    fontWeight: 'bold',
+    fontSize: 12,
   },
   mapButton: {
     flex: 1,
-    backgroundColor: '#0ea5e9',
+    backgroundColor: '#16a34a',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -978,12 +1155,12 @@ const styles = StyleSheet.create({
     marginTop: -2,
   },
   finishedButton: {
-  backgroundColor: '#22c55e',
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 8,
-  height: 55,
-  borderRadius: 16,
-},
+    backgroundColor: '#22c55e',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 55,
+    borderRadius: 16,
+  },
 });

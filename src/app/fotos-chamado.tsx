@@ -14,12 +14,14 @@ import { ChevronLeft, Camera, Image as ImageIcon, Trash2 } from 'lucide-react-na
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme } from "@/theme/ThemeContext";
 
 export default function FotosChamado() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const [fotos, setFotos] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const { theme, darkMode } = useTheme();
 
   useEffect(() => {
     carregarFotosSalvas();
@@ -44,7 +46,7 @@ export default function FotosChamado() {
   }
 
   const adicionarFoto = async (origem: 'camera' | 'galeria') => {
-    const permissao = origem === 'camera' 
+    const permissao = origem === 'camera'
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -67,7 +69,8 @@ export default function FotosChamado() {
   const removerFoto = (index: number) => {
     Alert.alert("Remover", "Deseja excluir esta foto?", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Excluir", style: "destructive", onPress: async () => {
+      {
+        text: "Excluir", style: "destructive", onPress: async () => {
           const novaLista = fotos.filter((_, i) => i !== index);
           await salvarNoStorage(novaLista);
         }
@@ -75,15 +78,47 @@ export default function FotosChamado() {
     ]);
   };
 
-  if (loading) return <View style={styles.centered}><ActivityIndicator color="#3b82f6" /></View>;
+  if (loading) return <View
+    style={[
+      styles.centered,
+      {
+        backgroundColor: theme.background,
+      },
+    ]}
+  ><ActivityIndicator color="#3b82f6" /></View>;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          backgroundColor: theme.background,
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: theme.card,
+            borderBottomColor: theme.border,
+          },
+        ]}
+      >
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ChevronLeft color="#fff" size={26} />
+          <ChevronLeft
+            color={theme.text}
+            size={26}
+          />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Fotos do Chamado #{id}</Text>
+        <Text
+          style={[
+            styles.headerTitle,
+            {
+              color: theme.text,
+            },
+          ]}
+        >Fotos do Chamado #{id}</Text>
         <View style={{ width: 26 }} />
       </View>
 
@@ -97,20 +132,69 @@ export default function FotosChamado() {
               </TouchableOpacity>
             </View>
           ))}
-          
+
           {fotos.length === 0 && (
-            <Text style={styles.emptyText}>Nenhuma foto adicionada ainda.</Text>
+            <Text
+              style={[
+                styles.emptyText,
+                {
+                  color: theme.subText,
+                },
+              ]}
+            >Nenhuma foto adicionada ainda.</Text>
           )}
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => adicionarFoto('galeria')}>
-          <ImageIcon size={20} color="#fff" />
-          <Text style={styles.btnText}>Galeria</Text>
+      <View
+        style={[
+          styles.footer,
+          {
+            backgroundColor: theme.card,
+            borderTopColor: theme.border,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          style={[
+            styles.actionBtn,
+            {
+              backgroundColor: '#fff',
+              borderColor: '#3b82f6',
+              borderWidth: 2,
+            },
+          ]}
+          onPress={() => adicionarFoto('galeria')}
+        >
+          <ImageIcon
+            size={20}
+            color="#3b82f6"
+          />
+
+          <Text
+            style={[
+              styles.btnText,
+              {
+                color: '#3b82f6',
+              },
+            ]}
+          >
+            Galeria
+          </Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity style={[styles.actionBtn, styles.primaryBtn]} onPress={() => adicionarFoto('camera')}>
+
+        <TouchableOpacity style=
+          {[
+            styles.actionBtn,
+
+            {
+              backgroundColor: "#3b82f6",
+              borderTopColor: theme.border,
+            },
+
+          ]
+
+          } onPress={() => adicionarFoto('camera')}>
           <Camera size={20} color="#fff" />
           <Text style={styles.btnText}>Câmera</Text>
         </TouchableOpacity>
@@ -122,12 +206,12 @@ export default function FotosChamado() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    padding: 20, 
-    backgroundColor: '#1e293b' 
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    backgroundColor: '#1e293b'
   },
   headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   backButton: { padding: 5 },
@@ -135,29 +219,29 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'flex-start' },
   imageWrapper: { width: '48%', height: 150, borderRadius: 12, overflow: 'hidden', position: 'relative' },
   thumbnail: { width: '100%', height: '100%' },
-  deleteBtn: { 
-    position: 'absolute', top: 5, right: 5, 
-    backgroundColor: 'rgba(239, 68, 68, 0.8)', 
-    padding: 8, borderRadius: 8 
+  deleteBtn: {
+    position: 'absolute', top: 5, right: 5,
+    backgroundColor: 'rgba(239, 68, 68, 0.8)',
+    padding: 8, borderRadius: 8
   },
   emptyText: { color: '#64748b', textAlign: 'center', width: '100%', marginTop: 50 },
-  footer: { 
-    flexDirection: 'row', 
-    padding: 20, 
-    gap: 15, 
+  footer: {
+    flexDirection: 'row',
+    padding: 20,
+    gap: 15,
     backgroundColor: '#1e293b',
     borderTopWidth: 1,
     borderTopColor: '#334155'
   },
-  actionBtn: { 
-    flex: 1, 
-    flexDirection: 'row', 
-    height: 55, 
-    backgroundColor: '#334155', 
-    borderRadius: 12, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    gap: 8 
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    height: 55,
+    backgroundColor: '#334155',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8
   },
   primaryBtn: { backgroundColor: '#3b82f6' },
   btnText: { color: '#fff', fontWeight: 'bold' }

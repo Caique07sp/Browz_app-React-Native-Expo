@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Check, ChevronLeft, PenTool, Trash2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import * as Location from 'expo-location';
+import { useTheme } from "@/theme/ThemeContext";
 import {
   ActivityIndicator,
   Alert,
@@ -16,6 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function FinalizacaoRelatorio() {
   const router = useRouter();
@@ -35,12 +37,15 @@ export default function FinalizacaoRelatorio() {
   const [sending, setSending] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [loadingDetail, setLoadingDetail] = useState('');
+  const { theme, darkMode } = useTheme();
 
-  useEffect(() => {
+  ;useFocusEffect(
+  React.useCallback(() => {
     checkSignature();
     carregarRascunhoRelatorio();
     buscarChecklist();
-  }, []);
+  }, [])
+);
 
   async function checkSignature() {
     const savedSig = await AsyncStorage.getItem('@assinatura_cliente');
@@ -152,19 +157,19 @@ export default function FinalizacaoRelatorio() {
     }
   } */}
 
-   const comprimirImagem = async (uri: string) => {
-  try {
-    const manipResult = await ImageManipulator.manipulateAsync(
-      uri,
-      [{ resize: { width: 1024 } }], // Redimensiona para largura de 1024px (mantém proporção)
-      //{ compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }  70% de qualidade
-    );
-    return manipResult.uri;
-  } catch (error) {
-    console.log("Erro na compressão:", error);
-    return uri; // Se der erro, retorna a original para não travar o fluxo
-  }
-};
+  const comprimirImagem = async (uri: string) => {
+    try {
+      const manipResult = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 1024 } }], // Redimensiona para largura de 1024px (mantém proporção)
+        //{ compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }  70% de qualidade
+      );
+      return manipResult.uri;
+    } catch (error) {
+      console.log("Erro na compressão:", error);
+      return uri; // Se der erro, retorna a original para não travar o fluxo
+    }
+  };
 
   async function enviarFotosParaApi(setLoadingDetail: any) {
     try {
@@ -389,80 +394,80 @@ text     vira tentry
     }
   }
 
- async function enviarRelatorioCalendarParaApi(relatorioFinal: any) {
-  try {
-    const token = await AsyncStorage.getItem('token');
+  async function enviarRelatorioCalendarParaApi(relatorioFinal: any) {
+    try {
+      const token = await AsyncStorage.getItem('token');
 
-    // PEGA LOCALIZAÇÃO ATUAL
-    const location = await Location.getCurrentPositionAsync({});
+      // PEGA LOCALIZAÇÃO ATUAL
+      const location = await Location.getCurrentPositionAsync({});
 
-    // AJUSTA GMT-3
-    const now = new Date();
+      // AJUSTA GMT-3
+      const now = new Date();
 
-    const brasilDate = new Date(
-      now.getTime() - 3 * 60 * 60 * 1000
-    ).toISOString();
+      const brasilDate = new Date(
+        now.getTime() - 3 * 60 * 60 * 1000
+      ).toISOString();
 
-    const payload = {
-      class: 'CalendarService',
-      method: 'store',
+      const payload = {
+        class: 'CalendarService',
+        method: 'store',
 
-      data: {
-        id: Number(chamadoId),
-        calendar_id: Number(chamadoId),
+        data: {
+          id: Number(chamadoId),
+          calendar_id: Number(chamadoId),
 
-        calendar_report: relatorioFinal.descricao,
+          calendar_report: relatorioFinal.descricao,
 
-        calendar_signatory_name:
-          relatorioFinal.assinante_nome,
+          calendar_signatory_name:
+            relatorioFinal.assinante_nome,
 
-        calendar_signatory_email:
-          relatorioFinal.assinante_contato,
+          calendar_signatory_email:
+            relatorioFinal.assinante_contato,
 
-        calendar_signature:
-          ` file/signatures/${chamadoId}/assinatura.png`,
+          calendar_signature:
+            ` file/signatures/${chamadoId}/assinatura.png`,
 
-        calendar_status: 2,
+          calendar_status: 2,
 
-        // CHECKOUT
-        calendar_last_checkout_date: brasilDate,
+          // CHECKOUT
+          calendar_last_checkout_date: brasilDate,
 
-        calendar_last_checkout_geo:
-          `${location.coords.latitude},${location.coords.longitude}`,
-      },
-    };
-
-    console.log(
-      '🚀 ENVIANDO RELATÓRIO:',
-      JSON.stringify(payload, null, 2)
-    );
-
-    const response = await fetch(
-      'https://browz.com.br/rest.php',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          calendar_last_checkout_geo:
+            `${location.coords.latitude},${location.coords.longitude}`,
         },
-        body: JSON.stringify(payload),
-      }
-    );
+      };
 
-    const data = await response.json();
+      console.log(
+        '🚀 ENVIANDO RELATÓRIO:',
+        JSON.stringify(payload, null, 2)
+      );
 
-    console.log('✅ RETORNO ENVIO RELATÓRIO:', data);
+      const response = await fetch(
+        'https://browz.com.br/rest.php',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
 
-    return data.status === 'success';
-  } catch (error) {
-    console.log(
-      '❌ ERRO AO ENVIAR RELATÓRIO:',
-      error
-    );
+      const data = await response.json();
 
-    return false;
+      console.log('✅ RETORNO ENVIO RELATÓRIO:', data);
+
+      return data.status === 'success';
+    } catch (error) {
+      console.log(
+        '❌ ERRO AO ENVIAR RELATÓRIO:',
+        error
+      );
+
+      return false;
+    }
   }
-}
 
   const handleClearSignature = async () => {
     await AsyncStorage.removeItem('@assinatura_cliente');
@@ -495,87 +500,87 @@ text     vira tentry
       setChecklistResponses(rascunho.checklistResponses || {});
     }
   }
- const handleFinalize = async () => {
-  if (sending) return;
+  const handleFinalize = async () => {
+    if (sending) return;
 
-  if (!description.trim()) {
-    return Alert.alert('Erro', 'Descreva o serviço.');
-  }
-
-  if (!validarChecklistObrigatorio()) {
-    return;
-  }
-
-  if (!signerName.trim() || !signerContact.trim() || !signatureImg) {
-    return Alert.alert('Erro', 'Preencha todos os campos e a assinatura.');
-  }
-
-  try {
-    setSending(true);
-
-    // 1. MONTAR O OBJETO PRIMEIRO
-    const checkin = await AsyncStorage.getItem(`@checkin_${chamadoId}`);
-    const fotoStr = await AsyncStorage.getItem(`foto_chamado_${chamadoId}`);
-    const notasStr = await AsyncStorage.getItem(`notas_chamado_${chamadoId}`);
-
-    const relatorioFinal = {
-      calendar_id: chamadoId,
-      descricao: description.trim(),
-      assinante_nome: signerName.trim(),
-      assinante_contato: signerContact.trim(),
-      assinatura: signatureImg,
-      checklist_response: Object.values(checklistResponses),
-      checkin: checkin ? JSON.parse(checkin) : null,
-      foto: fotoStr ? JSON.parse(fotoStr) : null,
-      notas: notasStr ? JSON.parse(notasStr) : [],
-      finalizado_em: new Date().toISOString(),
-    };
-
-    // 2. ENVIOS SEQUENCIAIS COM FEEDBACK NA TELA
-    setLoadingMessage('Enviando checklist...');
-    setLoadingDetail('Sincronizando respostas técnicas');
-    const enviadoChecklist = await enviarChecklistParaApi(relatorioFinal);
-
-    setLoadingMessage('Enviando relatório...');
-    setLoadingDetail('Salvando descrição do atendimento');
-    const enviadoRelatorio = await enviarRelatorioCalendarParaApi(relatorioFinal);
-
-    setLoadingMessage('Enviando assinatura...');
-    setLoadingDetail('Validando assinatura do cliente');
-    const enviadoAssinatura = await enviarAssinaturaParaApi();
-
-    setLoadingMessage('Enviando imagens...');
-    setLoadingDetail('Sincronizando fotos da galeria');
-    const enviadoFotos = await enviarFotosParaApi(setLoadingDetail);
-
-    // 3. VERIFICAÇÃO FINAL
-    if (enviadoChecklist && enviadoRelatorio && enviadoAssinatura && enviadoFotos) {
-      await AsyncStorage.multiRemove([
-        `@rascunho_relatorio_${chamadoId}`,
-        `@assinatura_cliente`,
-        `@fotos_chamado_${chamadoId}`,
-        `foto_chamado_${chamadoId}`,
-        `notas_chamado_${chamadoId}`,
-      ]);
-
-      await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
-
-      Alert.alert('Sucesso', 'Atendimento finalizado com sucesso!', [
-        { text: 'OK', onPress: () => router.replace('/home-pronta') },
-      ]);
-    } else {
-      Alert.alert(
-        'Atenção',
-        'Alguns dados podem não ter sido enviados. Verifique a conexão e tente novamente.'
-      );
+    if (!description.trim()) {
+      return Alert.alert('Erro', 'Descreva o serviço.');
     }
-  } catch (error) {
-    console.error('ERRO CRÍTICO NO FINALIZE:', error);
-    Alert.alert('Erro', 'Ocorreu um erro inesperado ao finalizar.');
-  } finally {
-    setSending(false);
-  }
-};
+
+    if (!validarChecklistObrigatorio()) {
+      return;
+    }
+
+    if (!signerName.trim() || !signerContact.trim() || !signatureImg) {
+      return Alert.alert('Erro', 'Preencha todos os campos e a assinatura.');
+    }
+
+    try {
+      setSending(true);
+
+      // 1. MONTAR O OBJETO PRIMEIRO
+      const checkin = await AsyncStorage.getItem(`@checkin_${chamadoId}`);
+      const fotoStr = await AsyncStorage.getItem(`foto_chamado_${chamadoId}`);
+      const notasStr = await AsyncStorage.getItem(`notas_chamado_${chamadoId}`);
+
+      const relatorioFinal = {
+        calendar_id: chamadoId,
+        descricao: description.trim(),
+        assinante_nome: signerName.trim(),
+        assinante_contato: signerContact.trim(),
+        assinatura: signatureImg,
+        checklist_response: Object.values(checklistResponses),
+        checkin: checkin ? JSON.parse(checkin) : null,
+        foto: fotoStr ? JSON.parse(fotoStr) : null,
+        notas: notasStr ? JSON.parse(notasStr) : [],
+        finalizado_em: new Date().toISOString(),
+      };
+
+      // 2. ENVIOS SEQUENCIAIS COM FEEDBACK NA TELA
+      setLoadingMessage('Enviando checklist...');
+      setLoadingDetail('Sincronizando respostas técnicas');
+      const enviadoChecklist = await enviarChecklistParaApi(relatorioFinal);
+
+      setLoadingMessage('Enviando relatório...');
+      setLoadingDetail('Salvando descrição do atendimento');
+      const enviadoRelatorio = await enviarRelatorioCalendarParaApi(relatorioFinal);
+
+      setLoadingMessage('Enviando assinatura...');
+      setLoadingDetail('Validando assinatura do cliente');
+      const enviadoAssinatura = await enviarAssinaturaParaApi();
+
+      setLoadingMessage('Enviando imagens...');
+      setLoadingDetail('Sincronizando fotos da galeria');
+      const enviadoFotos = await enviarFotosParaApi(setLoadingDetail);
+
+      // 3. VERIFICAÇÃO FINAL
+      if (enviadoChecklist && enviadoRelatorio && enviadoAssinatura && enviadoFotos) {
+        await AsyncStorage.multiRemove([
+          `@rascunho_relatorio_${chamadoId}`,
+          `@assinatura_cliente`,
+          `@fotos_chamado_${chamadoId}`,
+          `foto_chamado_${chamadoId}`,
+          `notas_chamado_${chamadoId}`,
+        ]);
+
+        await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
+
+        Alert.alert('Sucesso', 'Atendimento finalizado com sucesso!', [
+          { text: 'OK', onPress: () => router.replace('/home-pronta') },
+        ]);
+      } else {
+        Alert.alert(
+          'Atenção',
+          'Alguns dados podem não ter sido enviados. Verifique a conexão e tente novamente.'
+        );
+      }
+    } catch (error) {
+      console.error('ERRO CRÍTICO NO FINALIZE:', error);
+      Alert.alert('Erro', 'Ocorreu um erro inesperado ao finalizar.');
+    } finally {
+      setSending(false);
+    }
+  };
 
   const isFormValid =
     description.trim() &&
@@ -583,35 +588,76 @@ text     vira tentry
     signerContact.trim() &&
     signatureImg;
 
-    if (sending) {
-  return (
-    <SafeAreaView style={styles.loadingContainer}>
-      <View style={styles.loadingCard}>
-        <ActivityIndicator size="large" color="#3b82f6" />
+  if (sending) {
+    return (
+      <SafeAreaView
+        style={[
+          styles.loadingContainer,
+          {
+            backgroundColor: theme.background,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.loadingCard,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          <ActivityIndicator size="large" color="#3b82f6" />
 
-        <Text style={styles.loadingTitle}>
-          {loadingMessage}
-        </Text>
+          <Text
+            style={[
+              styles.loadingTitle,
+              {
+                color: theme.text,
+              },
+            ]}
+          >
+            {loadingMessage}
+          </Text>
 
-        <Text style={styles.loadingSubtitle}>
-          {loadingDetail}
-        </Text>
+          <Text
+            style={[
+              styles.loadingSubtitle,
+              {
+                color: theme.subText,
+              },
+            ]}
+          >
+            {loadingDetail}
+          </Text>
 
-        <View style={styles.loadingBarBackground}>
-          <View style={styles.loadingBarFill} />
+          <View style={styles.loadingBarBackground}>
+            <View style={styles.loadingBarFill} />
+          </View>
         </View>
-      </View>
-    </SafeAreaView>
-  );
-}
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          backgroundColor: theme.background,
+        },
+      ]}
+    >
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
         <View style={styles.topBar}>
           <TouchableOpacity
-            style={styles.backButton}
+            style={[
+              styles.backButton,
+              {
+                backgroundColor: theme.card,
+              },
+            ]}
             onPress={() =>
               router.push({
                 pathname: '/home-pronta',
@@ -621,45 +667,104 @@ text     vira tentry
               })
             }
           >
-            <ChevronLeft color="#fff" size={26} />
+            <ChevronLeft
+              color={theme.text}
+              size={26}
+            />
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.title}>Relatório de Encerramento</Text>
+        <Text
+          style={[
+            styles.title,
+            {
+              color: theme.text,
+            },
+          ]}
+        >Relatório de Encerramento</Text>
         <Text style={styles.subtitle}>Chamado #{chamadoId}</Text>
 
         <View style={styles.section}>
-          <Text style={styles.label}>O QUE FOI REALIZADO?</Text>
+          <Text
+            style={[
+              styles.label,
+              {
+                color: theme.subText,
+              },
+            ]}
+          >O QUE FOI REALIZADO?</Text>
 
           <TextInput
-            style={styles.textArea}
+            style={[
+              styles.textArea,
+              {
+                backgroundColor: theme.card,
+                color: theme.text,
+                borderColor: theme.border,
+              },
+            ]}
             multiline
             numberOfLines={9}
             placeholder="Descreva com detalhes o serviço realizado..."
-            placeholderTextColor="#64748b"
+            placeholderTextColor={theme.subText}
             value={description}
             onChangeText={setDescription}
           />
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>CHECKLIST DO SERVIÇO</Text>
+          <Text
+            style={[
+              styles.label,
+              {
+                color: theme.subText,
+              },
+            ]}
+          >CHECKLIST DO SERVIÇO</Text>
 
           {loadingChecklist ? (
-            <View style={styles.loadingChecklist}>
+            <View
+              style={[
+                styles.loadingChecklist,
+                {
+                  backgroundColor: theme.card,
+                },
+              ]}
+            >
               <ActivityIndicator color="#3b82f6" />
               <Text style={styles.loadingText}>Carregando checklist...</Text>
             </View>
           ) : checklistTemplate.length === 0 ? (
-            <Text style={styles.emptyChecklist}>
+            <Text
+              style={[
+                styles.emptyChecklist,
+                {
+                  backgroundColor: theme.card,
+                  color: theme.subText,
+                },
+              ]}
+            >
               Nenhum checklist encontrado para este serviço.
             </Text>
           ) : (
 
             //Aqui vai mostrar os campos na tela e como vão aparecer
             checklistTemplate.map((field: any, index: number) => (
-              <View key={`${field.id}-${index}`} style={styles.checklistItem}>
-                <Text style={styles.checklistLabel}>
+              <View key={`${field.id}-${index}`} style={[
+                styles.checklistItem,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.border,
+                },
+              ]}>
+                <Text
+                  style={[
+                    styles.checklistLabel,
+                    {
+                      color: theme.text,
+                    },
+                  ]}
+                >
                   {field.label} {Number(field.required) === 1 ? '*' : ''}
                 </Text>
 
@@ -667,9 +772,16 @@ text     vira tentry
                 {/*Se for texto*/}
                 {field.type === 'text' && (
                   <TextInput
-                    style={styles.input}
+                    style={[
+                      styles.input,
+                      {
+                        backgroundColor: theme.card,
+                        color: theme.text,
+                        borderColor: theme.border,
+                      },
+                    ]}
                     placeholder="Digite aqui..."
-                    placeholderTextColor="#64748b"
+                    placeholderTextColor={theme.subText}
                     value={checklistResponses[field.id]?.field_value || ''}
                     onChangeText={(text) => handleChecklistChange(field, text)}
                   />
@@ -682,7 +794,7 @@ text     vira tentry
                     style={styles.textAreaSmall}
                     multiline
                     placeholder="Digite aqui..."
-                    placeholderTextColor="#64748b"
+                    placeholderTextColor={theme.subText}
                     value={checklistResponses[field.id]?.field_value || ''}
                     onChangeText={(text) => handleChecklistChange(field, text)}
                   />
@@ -704,12 +816,25 @@ text     vira tentry
                       key={index}
                       style={[
                         styles.optionButton,
+
+                        {
+                          backgroundColor: theme.background,
+                          borderColor: theme.border,
+                        },
+
                         checklistResponses[field.id]?.field_value === index &&
                         styles.optionButtonSelected,
                       ]}
                       onPress={() => handleChecklistChange(field, index)}
                     >
-                      <Text style={styles.optionText}>{option}</Text>
+                      <Text
+                        style={[
+                          styles.optionText,
+                          {
+                            color: theme.text,
+                          },
+                        ]}
+                      >{option}</Text>
                     </TouchableOpacity>
                   ))}
 
@@ -730,7 +855,14 @@ text     vira tentry
                         ]}
                       />
 
-                      <Text style={styles.optionText}>{option}</Text>
+                      <Text
+                        style={[
+                          styles.optionText,
+                          {
+                            color: theme.text,
+                          },
+                        ]}
+                      >{option}</Text>
                     </TouchableOpacity>
                   ))}
 
@@ -779,7 +911,14 @@ text     vira tentry
                           ]}
                         />
 
-                        <Text style={styles.optionText}>{option}</Text>
+                        <Text
+                          style={[
+                            styles.optionText,
+                            {
+                              color: theme.text,
+                            },
+                          ]}
+                        >{option}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -789,20 +928,41 @@ text     vira tentry
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>DADOS DE QUEM ASSINOU</Text>
+          <Text
+            style={[
+              styles.label,
+              {
+                color: theme.subText,
+              },
+            ]}
+          >DADOS DE QUEM ASSINOU</Text>
 
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              {
+                backgroundColor: theme.card,
+                color: theme.text,
+                borderColor: theme.border,
+              },
+            ]}
             placeholder="Nome completo"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={theme.subText}
             value={signerName}
             onChangeText={setSignerName}
           />
 
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              {
+                backgroundColor: theme.card,
+                color: theme.text,
+                borderColor: theme.border,
+              },
+            ]}
             placeholder="E-mail"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={theme.subText}
             value={signerContact}
             onChangeText={setSignerContact}
             keyboardType="email-address"
@@ -811,7 +971,14 @@ text     vira tentry
 
         <View style={styles.section}>
           <View style={styles.signatureHeader}>
-            <Text style={styles.label}>ASSINATURA DO CLIENTE</Text>
+            <Text
+              style={[
+                styles.label,
+                {
+                  color: theme.subText,
+                },
+              ]}
+            >ASSINATURA DO CLIENTE</Text>
 
             {signatureImg && (
               <TouchableOpacity onPress={handleClearSignature} style={styles.clearBtn}>
@@ -827,7 +994,12 @@ text     vira tentry
             </View>
           ) : (
             <TouchableOpacity
-              style={styles.signatureTrigger}
+              style={[
+                styles.signatureTrigger,
+                {
+                  backgroundColor: theme.card,
+                },
+              ]}
               onPress={async () => {
                 await salvarRascunhoRelatorio();
                 router.push('/assinatura-cliente');
@@ -1080,51 +1252,51 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingContainer: {
-  flex: 1,
-  backgroundColor: '#0f172a',
-  justifyContent: 'center',
-  alignItems: 'center',
-  padding: 25,
-},
+    flex: 1,
+    backgroundColor: '#0f172a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 25,
+  },
 
-loadingCard: {
-  width: '100%',
-  backgroundColor: '#1e293b',
-  borderRadius: 30,
-  padding: 30,
-  alignItems: 'center',
-  borderWidth: 1,
-  borderColor: '#334155',
-},
+  loadingCard: {
+    width: '100%',
+    backgroundColor: '#1e293b',
+    borderRadius: 30,
+    padding: 30,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
 
-loadingTitle: {
-  color: '#fff',
-  fontSize: 22,
-  fontWeight: 'bold',
-  marginTop: 25,
-  textAlign: 'center',
-},
+  loadingTitle: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginTop: 25,
+    textAlign: 'center',
+  },
 
-loadingSubtitle: {
-  color: '#94a3b8',
-  fontSize: 15,
-  marginTop: 10,
-  textAlign: 'center',
-},
+  loadingSubtitle: {
+    color: '#94a3b8',
+    fontSize: 15,
+    marginTop: 10,
+    textAlign: 'center',
+  },
 
-loadingBarBackground: {
-  width: '100%',
-  height: 10,
-  backgroundColor: '#0f172a',
-  borderRadius: 999,
-  marginTop: 30,
-  overflow: 'hidden',
-},
+  loadingBarBackground: {
+    width: '100%',
+    height: 10,
+    backgroundColor: '#0f172a',
+    borderRadius: 999,
+    marginTop: 30,
+    overflow: 'hidden',
+  },
 
-loadingBarFill: {
-  width: '70%',
-  height: '100%',
-  backgroundColor: '#3b82f6',
-  borderRadius: 999,
-},
+  loadingBarFill: {
+    width: '70%',
+    height: '100%',
+    backgroundColor: '#3b82f6',
+    borderRadius: 999,
+  },
 });

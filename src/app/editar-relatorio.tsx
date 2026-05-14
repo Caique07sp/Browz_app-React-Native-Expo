@@ -1,4 +1,4 @@
- import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Check, ChevronLeft, PenTool, Trash2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
@@ -14,6 +14,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from "@/theme/ThemeContext";
+import { useFocusEffect } from '@react-navigation/native';
+import * as FileSystem from 'expo-file-system';
+
+
 
 export default function EditarRelatorio() {
   const router = useRouter();
@@ -33,7 +38,13 @@ export default function EditarRelatorio() {
   const [hasChanges, setHasChanges] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [loadingDetail, setLoadingDetail] = useState('');
+  const { theme, darkMode } = useTheme();
 
+  useFocusEffect(
+    React.useCallback(() => {
+      checkSignature();
+    }, [])
+  );
   useEffect(() => {
     carregarDados();
   }, []);
@@ -135,7 +146,7 @@ export default function EditarRelatorio() {
           const responsesArray = JSON.parse(itemChecklist.calendar_checklist_response);
 
           const responsesObject: any = {};
-          
+
           responsesArray.forEach((resp: any) => {
             responsesObject[resp.field_id] = resp;
           });
@@ -151,7 +162,7 @@ export default function EditarRelatorio() {
   async function marcarAlteracao() {
     setHasChanges(true);
     setSignatureImg(null);
-    await AsyncStorage.removeItem('@assinatura_cliente');
+    //await AsyncStorage.removeItem('@assinatura_cliente');
   }
 
   function getFieldType(type: string) {
@@ -235,7 +246,7 @@ export default function EditarRelatorio() {
     }
   }
 
-  async function enviarRelatorioCalendarParaApi(relatorioFinal: any) {
+  async function enviarRelatorioCalendarParaApi(relatorioFinal: any, caminhoAssinatura: string) {
 
     try {
       const token = await AsyncStorage.getItem('token');
@@ -249,7 +260,7 @@ export default function EditarRelatorio() {
           calendar_report: relatorioFinal.descricao,
           calendar_signatory_name: relatorioFinal.assinante_nome,
           calendar_signatory_email: relatorioFinal.assinante_contato,
-          calendar_signature: `file/signatures/${chamadoId}/assinatura.png`,
+          calendar_signature: caminhoAssinatura,
           calendar_status: 2,
         },
       };
@@ -260,7 +271,7 @@ export default function EditarRelatorio() {
 
         headers: {
           'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });
@@ -275,23 +286,36 @@ export default function EditarRelatorio() {
   }
 
   async function enviarAssinaturaParaApi() {
-
     try {
-      if (!signatureImg) return true;
+      if (!signatureImg) {
+        return {
+          success: true,
+          caminhoBanco: null,
+        };
+      }
 
       const token = await AsyncStorage.getItem('token');
 
-      const nomeArquivo = 'assinatura.png';
+      // AGORA GERA NOME ÚNICO
+      const nomeArquivo = `assinatura_${Date.now()}.png`;
 
       const caminhoBanco = `file/signatures/${chamadoId}/${nomeArquivo}`;
 
       const formData = new FormData();
+
       formData.append('class', 'CalendarService');
       formData.append('method', 'store');
-      formData.append('data[id]', String(chamadoId));
-      formData.append('data[calendar_id]', String(chamadoId));
-      formData.append('data[calendar_signature]', caminhoBanco);
-      formData.append('path', `file/signatures/${chamadoId}`);
+      formData.append('data[id]', chamadoId);
+
+      formData.append(
+        'data[calendar_signature]',
+        caminhoBanco
+      );
+
+      formData.append(
+        'path',
+        `file/signatures/${chamadoId}`
+      );
 
       formData.append('file', {
         uri: signatureImg,
@@ -299,20 +323,32 @@ export default function EditarRelatorio() {
         type: 'image/png',
       } as any);
 
-      const response = await fetch('https://browz.com.br/rest.php', {
+      const res = await fetch(
+        'https://browz.com.br/rest.php',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        }
+      );
 
-        method: 'POST',
-        headers: {
-        Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
+      const resultado = await res.json();
 
-      const data = await response.json();
-      return data.status === 'success';
-    } catch (error) {
-      console.log('ERRO AO ENVIAR ASSINATURA:', error);
-      return false;
+      console.log('UPLOAD ASSINATURA:', resultado);
+
+      return {
+        success: resultado.status === 'success',
+        caminhoBanco,
+      };
+    } catch (e) {
+      console.log(e);
+
+      return {
+        success: false,
+        caminhoBanco: null,
+      };
     }
   }
 
@@ -375,12 +411,28 @@ export default function EditarRelatorio() {
       const enviadoChecklist = await enviarChecklistParaApi(relatorioFinal);
       setLoadingMessage('Atualizando relatório...');
       setLoadingDetail('Salvando dados do atendimento');
-      const enviadoRelatorio = await enviarRelatorioCalendarParaApi(relatorioFinal);
       setLoadingMessage('Enviando nova assinatura...');
       setLoadingDetail('Validando assinatura do cliente');
-      const enviadoAssinatura = await enviarAssinaturaParaApi();
+
+      const assinaturaResult = await enviarAssinaturaParaApi();
+
+      setLoadingMessage('Atualizando relatório...');
+      setLoadingDetail('Salvando dados do atendimento');
+
+      const caminhoAssinatura =
+        assinaturaResult.caminhoBanco ||
+        `file / signatures / ${ chamadoId }/assinatura.png`;
+
+      const enviadoRelatorio =
+        await enviarRelatorioCalendarParaApi(
+          relatorioFinal,
+          caminhoAssinatura
+        );
+
+      const enviadoAssinatura = assinaturaResult.success;
+
+
       if (enviadoChecklist && enviadoRelatorio && enviadoAssinatura) {
-        await AsyncStorage.removeItem('@assinatura_cliente');
         await AsyncStorage.removeItem(`@rascunho_relatorio_${chamadoId}`);
         Alert.alert('Sucesso', 'Relatório atualizado com sucesso!', [
           {
@@ -407,28 +459,76 @@ export default function EditarRelatorio() {
   }
 
   const isFormValid =
-    description.trim() &&
-    signerName.trim() &&
-    signerContact.trim() &&
+    !!description.trim() &&
+    !!signerName.trim() &&
+    !!signerContact.trim() &&
     (!hasChanges || signatureImg);
-    
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
+      <SafeAreaView
+        style={[
+          styles.loadingContainer,
+          {
+            backgroundColor: theme.background,
+          },
+        ]}
+      >
         <ActivityIndicator size="large" color="#3b82f6" />
-        <Text style={styles.loadingText}>Carregando dados do relatório...</Text>
+        <Text
+          style={[
+            styles.loadingText,
+            {
+              color: theme.subText,
+            },
+          ]}
+        >Carregando dados do relatório...</Text>
       </SafeAreaView>
     );
   }
 
   if (sending) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <View style={styles.loadingCard}>
+      <SafeAreaView
+        style={[
+          styles.loadingContainer,
+          {
+            backgroundColor: theme.background,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.loadingCard,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            },
+          ]}
+        >
           <ActivityIndicator size="large" color="#3b82f6" />
-          <Text style={styles.loadingTitle}>{loadingMessage}</Text>
-          <Text style={styles.loadingSubtitle}>{loadingDetail}</Text>
-          <View style={styles.loadingBarBackground}>
+          <Text
+            style={[
+              styles.loadingTitle,
+              {
+                color: theme.text,
+              },
+            ]}
+          >{loadingMessage}</Text>
+          <Text
+            style={[
+              styles.loadingSubtitle,
+              {
+                color: theme.subText,
+              },
+            ]}
+          >{loadingDetail}</Text>
+          <View style={[
+            styles.loadingBarBackground,
+            {
+              backgroundColor: theme.background,
+            },
+          ]}>
             <View style={styles.loadingBarFill} />
           </View>
         </View>
@@ -437,15 +537,37 @@ export default function EditarRelatorio() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          backgroundColor: theme.background,
+        },
+      ]}
+    >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={[
+            styles.backButton,
+            {
+              backgroundColor: theme.card,
+            },
+          ]}
           onPress={() => router.back()}
         >
-          <ChevronLeft color="#fff" size={26} />
+          <ChevronLeft
+            color={theme.text}
+            size={26}
+          />
         </TouchableOpacity>
-        <Text style={styles.title}>Editar Relatório</Text>
+        <Text
+          style={[
+            styles.title,
+            {
+              color: theme.text,
+            },
+          ]}
+        >Editar Relatório</Text>
         <Text style={styles.subtitle}>Chamado #{chamadoId}</Text>
         {hasChanges && (
           <View style={styles.warningBox}>
@@ -456,13 +578,27 @@ export default function EditarRelatorio() {
         )}
         <View style={styles.section}>
 
-          <Text style={styles.label}>O QUE FOI REALIZADO?</Text>
+          <Text
+            style={[
+              styles.label,
+              {
+                color: theme.subText,
+              },
+            ]}
+          >O QUE FOI REALIZADO?</Text>
           <TextInput
-            style={styles.textArea}
+            style={[
+              styles.textArea,
+              {
+                backgroundColor: theme.card,
+                color: theme.text,
+                borderColor: theme.border,
+              },
+            ]}
             multiline
             numberOfLines={9}
             placeholder="Descreva com detalhes o serviço realizado..."
-            placeholderTextColor="#64748b"
+            placeholderTextColor={theme.subText}
             value={description}
             onChangeText={(text) => {
               setDescription(text);
@@ -472,9 +608,24 @@ export default function EditarRelatorio() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>CHECKLIST DO SERVIÇO</Text>
+          <Text
+            style={[
+              styles.label,
+              {
+                color: theme.subText,
+              },
+            ]}
+          >CHECKLIST DO SERVIÇO</Text>
           {checklistTemplate.length === 0 ? (
-            <Text style={styles.emptyChecklist}>
+            <Text
+              style={[
+                styles.emptyChecklist,
+                {
+                  backgroundColor: theme.card,
+                  color: theme.subText,
+                },
+              ]}
+            >
               Nenhum checklist encontrado para este serviço.
             </Text>
           ) : (
@@ -482,17 +633,37 @@ export default function EditarRelatorio() {
 
             checklistTemplate.map((field: any, index: number) => (
 
-              <View key={`${field.id}-${index}`} style={styles.checklistItem}>
-                <Text style={styles.checklistLabel}>
+              <View key={`${field.id}-${index}`} style={[
+                styles.checklistItem,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.border,
+                },
+              ]}>
+                <Text
+                  style={[
+                    styles.checklistLabel,
+                    {
+                      color: theme.text,
+                    },
+                  ]}
+                >
                   {field.label} {Number(field.required) === 1 ? '*' : ''}
                 </Text>
 
 
                 {field.type === 'text' && (
                   <TextInput
-                    style={styles.input}
+                    style={[
+                      styles.input,
+                      {
+                        backgroundColor: theme.card,
+                        color: theme.text,
+                        borderColor: theme.border,
+                      },
+                    ]}
                     placeholder="Digite aqui..."
-                    placeholderTextColor="#64748b"
+                    placeholderTextColor={theme.subText}
                     value={checklistResponses[field.id]?.field_value || ''}
                     onChangeText={(text) => handleChecklistChange(field, text)}
                   />
@@ -503,10 +674,17 @@ export default function EditarRelatorio() {
                 {field.type === 'textarea' && (
 
                   <TextInput
-                    style={styles.textAreaSmall}
+                    style={[
+                      styles.textAreaSmall,
+                      {
+                        backgroundColor: theme.background,
+                        color: theme.text,
+                        borderColor: theme.border,
+                      },
+                    ]}
                     multiline
                     placeholder="Digite aqui..."
-                    placeholderTextColor="#64748b"
+                    placeholderTextColor={theme.subText}
                     value={checklistResponses[field.id]?.field_value || ''}
                     onChangeText={(text) => handleChecklistChange(field, text)}
                   />
@@ -520,12 +698,23 @@ export default function EditarRelatorio() {
                       key={optionIndex}
                       style={[
                         styles.optionButton,
+                        {
+                          backgroundColor: theme.background,
+                          borderColor: theme.border,
+                        },
                         checklistResponses[field.id]?.field_value === optionIndex &&
-                          styles.optionButtonSelected,
+                        styles.optionButtonSelected,
                       ]}
                       onPress={() => handleChecklistChange(field, optionIndex)}
                     >
-                      <Text style={styles.optionText}>{option}</Text>
+                      <Text
+                        style={[
+                          styles.optionText,
+                          {
+                            color: theme.text,
+                          },
+                        ]}
+                      >{option}</Text>
                     </TouchableOpacity>
                   ))}
 
@@ -542,10 +731,17 @@ export default function EditarRelatorio() {
                         style={[
                           styles.radioCircle,
                           checklistResponses[field.id]?.field_value === optionIndex &&
-                            styles.radioCircleSelected,
+                          styles.radioCircleSelected,
                         ]}
                       />
-                      <Text style={styles.optionText}>{option}</Text>
+                      <Text
+                        style={[
+                          styles.optionText,
+                          {
+                            color: theme.text,
+                          },
+                        ]}
+                      >{option}</Text>
 
                     </TouchableOpacity>
                   ))}
@@ -588,7 +784,14 @@ export default function EditarRelatorio() {
                             selected && styles.checkboxBoxSelected,
                           ]}
                         />
-                        <Text style={styles.optionText}>{option}</Text>
+                        <Text
+                          style={[
+                            styles.optionText,
+                            {
+                              color: theme.text,
+                            },
+                          ]}
+                        >{option}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -598,23 +801,44 @@ export default function EditarRelatorio() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>DADOS DE QUEM ASSINOU</Text>
+          <Text
+            style={[
+              styles.label,
+              {
+                color: theme.subText,
+              },
+            ]}
+          >DADOS DE QUEM ASSINOU</Text>
 
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              {
+                backgroundColor: theme.card,
+                color: theme.text,
+                borderColor: theme.border,
+              },
+            ]}
             placeholder="Nome completo"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={theme.subText}
             value={signerName}
             onChangeText={(text) => {
               setSignerName(text);
-            marcarAlteracao();
+              marcarAlteracao();
             }}
           />
 
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              {
+                backgroundColor: theme.card,
+                color: theme.text,
+                borderColor: theme.border,
+              },
+            ]}
             placeholder="E-mail"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={theme.subText}
             value={signerContact}
             onChangeText={(text) => {
               setSignerContact(text);
@@ -628,7 +852,14 @@ export default function EditarRelatorio() {
 
           <View style={styles.signatureHeader}>
 
-            <Text style={styles.label}>NOVA ASSINATURA</Text>
+            <Text
+              style={[
+                styles.label,
+                {
+                  color: theme.subText,
+                },
+              ]}
+            >NOVA ASSINATURA</Text>
 
             {signatureImg && (
 
@@ -647,11 +878,20 @@ export default function EditarRelatorio() {
           ) : (
 
             <TouchableOpacity
-              style={styles.signatureTrigger}
+              style={[
+                styles.signatureTrigger,
+                {
+                  backgroundColor: theme.card,
+                },
+              ]}
               onPress={async () => {
                 await salvarRascunhoRelatorio();
 
-                router.push('/assinatura-cliente');
+                router.push({
+                  pathname: '/assinatura-cliente',
+                  params: { ticketId: chamadoId },
+                });
+
               }}
             >
               <PenTool color="#3b82f6" size={28} />
@@ -661,7 +901,7 @@ export default function EditarRelatorio() {
                 {hasChanges ? 'Coletar nova assinatura' : 'Coletar assinatura'}
 
               </Text>
-          </TouchableOpacity>
+            </TouchableOpacity>
 
           )}
         </View>
@@ -933,7 +1173,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 8,
   },
-  
+
   previewContainer: {
     height: 140,
     backgroundColor: '#fff',

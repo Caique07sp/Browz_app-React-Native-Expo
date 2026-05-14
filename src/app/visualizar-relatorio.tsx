@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, ClipboardList, FileText, ImageIcon, PenTool, User } from 'lucide-react-native';
 
 import React, { useEffect, useState } from 'react';
+import { useTheme } from "@/theme/ThemeContext";
 
 import {
 
@@ -44,6 +45,8 @@ export default function VisualizarRelatorio() {
     const [checklistTemplate, setChecklistTemplate] = useState<any[]>([]);
 
     const [checklistResponses, setChecklistResponses] = useState<any[]>([]);
+
+    const { theme, darkMode } = useTheme();
 
 
     useEffect(() => {
@@ -259,13 +262,27 @@ export default function VisualizarRelatorio() {
 
         return (
 
-            <SafeAreaView style={styles.container}>
+            <SafeAreaView
+                style={[
+                    styles.container,
+                    {
+                        backgroundColor: theme.background,
+                    },
+                ]}
+            >
 
                 <View style={styles.loadingBox}>
 
                     <ActivityIndicator size="large" color="#3b82f6" />
 
-                    <Text style={styles.loadingText}>Carregando relatório...</Text>
+                    <Text
+                        style={[
+                            styles.loadingText,
+                            {
+                                color: theme.subText,
+                            },
+                        ]}
+                    >Carregando relatório...</Text>
 
                 </View>
 
@@ -280,11 +297,25 @@ export default function VisualizarRelatorio() {
 
         return (
 
-            <SafeAreaView style={styles.container}>
+            <SafeAreaView
+                style={[
+                    styles.container,
+                    {
+                        backgroundColor: theme.background,
+                    },
+                ]}
+            >
 
                 <View style={styles.loadingBox}>
 
-                    <Text style={styles.loadingText}>Relatório não encontrado.</Text>
+                    <Text
+                        style={[
+                            styles.loadingText,
+                            {
+                                color: theme.subText,
+                            },
+                        ]}
+                    >Relatório não encontrado.</Text>
 
                 </View>
 
@@ -300,34 +331,80 @@ export default function VisualizarRelatorio() {
 
     return (
 
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView
+            style={[
+                styles.container,
+                {
+                    backgroundColor: theme.background,
+                },
+            ]}
+        >
 
             <ScrollView contentContainerStyle={styles.scrollContent}>
 
-                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                <TouchableOpacity
+                    style={[
+                        styles.backButton,
+                        {
+                            backgroundColor: theme.card,
+                        },
+                    ]}
+                    onPress={() => router.back()}>
 
-                    <ChevronLeft color="#fff" size={26} />
+                    <ChevronLeft
+                        color={theme.text}
+                        size={26}
+                    />
 
                 </TouchableOpacity>
 
 
-                <Text style={styles.title}>Relatório Finalizado</Text>
+                <Text
+                    style={[
+                        styles.title,
+                        {
+                            color: theme.text,
+                        },
+                    ]}
+                >Relatório Finalizado</Text>
 
                 <Text style={styles.subtitle}>Chamado #{chamadoId}</Text>
 
 
-                <View style={styles.card}>
+                <View
+                    style={[
+                        styles.card,
+                        {
+                            backgroundColor: theme.card,
+                            borderColor: theme.border,
+                        },
+                    ]}
+                >
 
                     <View style={styles.cardHeader}>
 
                         <FileText size={20} color="#3b82f6" />
 
-                        <Text style={styles.cardTitle}>Descrição do serviço</Text>
+                        <Text
+                            style={[
+                                styles.cardTitle,
+                                {
+                                    color: theme.text,
+                                },
+                            ]}
+                        >Descrição do serviço</Text>
 
                     </View>
 
 
-                    <Text style={styles.text}>
+                    <Text
+                        style={[
+                            styles.text,
+                            {
+                                color: theme.subText,
+                            },
+                        ]}
+                    >
 
                         {calendar.calendar_report || 'Nenhuma descrição informada.'}
 
@@ -336,25 +413,54 @@ export default function VisualizarRelatorio() {
                 </View>
 
 
-                <View style={styles.card}>
+               <View
+  style={[
+    styles.card,
+    {
+      backgroundColor: theme.card,
+      borderColor: theme.border,
+    },
+  ]}
+>
 
                     <View style={styles.cardHeader}>
 
                         <User size={20} color="#22c55e" />
 
-                        <Text style={styles.cardTitle}>Dados de quem assinou</Text>
+                        <Text
+                            style={[
+                                styles.cardTitle,
+                                {
+                                    color: theme.text,
+                                },
+                            ]}
+                        >Dados de quem assinou</Text>
 
                     </View>
 
 
-                    <Text style={styles.infoText}>
+                    <Text
+                        style={[
+                            styles.infoText,
+                            {
+                                color: theme.text,
+                            },
+                        ]}
+                    >
 
                         Nome: {calendar.calendar_signatory_name || 'Não informado'}
 
                     </Text>
 
 
-                    <Text style={styles.infoText}>
+                    <Text
+                        style={[
+                            styles.infoText,
+                            {
+                                color: theme.text,
+                            },
+                        ]}
+                    >
 
                         E-mail: {calendar.calendar_signatory_email || 'Não informado'}
 
@@ -363,30 +469,72 @@ export default function VisualizarRelatorio() {
                 </View>
 
 
-                <View style={styles.card}>
+               <View
+  style={[
+    styles.card,
+    {
+      backgroundColor: theme.card,
+      borderColor: theme.border,
+    },
+  ]}
+>
 
                     <View style={styles.cardHeader}>
 
                         <ClipboardList size={20} color="#f59e0b" />
 
-                        <Text style={styles.cardTitle}>Checklist respondido</Text>
+                        <Text
+                            style={[
+                                styles.cardTitle,
+                                {
+                                    color: theme.text,
+                                },
+                            ]}
+                        >Checklist respondido</Text>
 
                     </View>
 
 
                     {checklistTemplate.length === 0 ? (
 
-                        <Text style={styles.text}>Nenhum checklist encontrado.</Text>
+                        <Text
+                            style={[
+                                styles.text,
+                                {
+                                    color: theme.subText,
+                                },
+                            ]}
+                        >Nenhum checklist encontrado.</Text>
 
                     ) : (
 
                         checklistTemplate.map((field: any, index: number) => (
 
-                            <View key={`${field.id}-${index}`} style={styles.answerBox}>
+                            <View key={`${field.id}-${index}`} style={[
+                                styles.answerBox,
+                                {
+                                    backgroundColor: theme.background,
+                                },
+                            ]}
+                            >
 
-                                <Text style={styles.question}>{field.label}</Text>
+                                <Text
+                                    style={[
+                                        styles.question,
+                                        {
+                                            color: theme.subText,
+                                        },
+                                    ]}
+                                >{field.label}</Text>
 
-                                <Text style={styles.answer}>{formatarResposta(field)}</Text>
+                                <Text
+                                    style={[
+                                        styles.answer,
+                                        {
+                                            color: theme.text,
+                                        },
+                                    ]}
+                                >{formatarResposta(field)}</Text>
 
                             </View>
 
@@ -397,20 +545,42 @@ export default function VisualizarRelatorio() {
                 </View>
 
 
-                <View style={styles.card}>
+                <View
+                    style={[
+                        styles.card,
+                        {
+                            backgroundColor: theme.card,
+                            borderColor: theme.border,
+                        },
+                    ]}
+                >
 
                     <View style={styles.cardHeader}>
 
                         <ImageIcon size={20} color="#38bdf8" />
 
-                        <Text style={styles.cardTitle}>Fotos</Text>
+                        <Text
+                            style={[
+                                styles.cardTitle,
+                                {
+                                    color: theme.text,
+                                },
+                            ]}
+                        >Fotos</Text>
 
                     </View>
 
 
                     {fotos.length === 0 ? (
 
-                        <Text style={styles.text}>Nenhuma foto enviada.</Text>
+                        <Text
+                            style={[
+                                styles.text,
+                                {
+                                    color: theme.subText,
+                                },
+                            ]}
+                        >Nenhuma foto enviada.</Text>
 
                     ) : (
 
@@ -433,13 +603,28 @@ export default function VisualizarRelatorio() {
                 </View>
 
 
-                <View style={styles.card}>
+               <View
+  style={[
+    styles.card,
+    {
+      backgroundColor: theme.card,
+      borderColor: theme.border,
+    },
+  ]}
+>
 
                     <View style={styles.cardHeader}>
 
                         <PenTool size={20} color="#a855f7" />
 
-                        <Text style={styles.cardTitle}>Assinatura</Text>
+                        <Text
+                            style={[
+                                styles.cardTitle,
+                                {
+                                    color: theme.text,
+                                },
+                            ]}
+                        >Assinatura</Text>
 
                     </View>
 
@@ -464,7 +649,14 @@ export default function VisualizarRelatorio() {
 
                     ) : (
 
-                        <Text style={styles.text}>Nenhuma assinatura encontrada.</Text>
+                        <Text
+                            style={[
+                                styles.text,
+                                {
+                                    color: theme.subText,
+                                },
+                            ]}
+                        >Nenhuma assinatura encontrada.</Text>
 
                     )}
 
@@ -490,7 +682,7 @@ export default function VisualizarRelatorio() {
                     }
 
                 >
-            
+
                     <Text style={styles.editButtonText}>Editar relatório</Text>
 
                 </TouchableOpacity>
@@ -740,5 +932,5 @@ const styles = StyleSheet.create({
         fontSize: 16,
 
     },
-    
+
 }); 
