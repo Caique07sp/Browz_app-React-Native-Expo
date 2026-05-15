@@ -1,9 +1,11 @@
+import { useTheme } from "@/theme/ThemeContext";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+import * as ImageManipulator from 'expo-image-manipulator';
+import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Check, ChevronLeft, PenTool, Trash2 } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
-import * as Location from 'expo-location';
-import { useTheme } from "@/theme/ThemeContext";
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,8 +18,6 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as ImageManipulator from 'expo-image-manipulator';
-import { useFocusEffect } from '@react-navigation/native';
 
 export default function FinalizacaoRelatorio() {
   const router = useRouter();
@@ -48,7 +48,8 @@ export default function FinalizacaoRelatorio() {
 );
 
   async function checkSignature() {
-    const savedSig = await AsyncStorage.getItem('@assinatura_cliente');
+    const savedSig = await AsyncStorage.getItem(
+      `@assinatura_cliente_${chamadoId}`);
 
     if (savedSig) {
       setSignatureImg(savedSig);
@@ -470,7 +471,7 @@ text     vira tentry
   }
 
   const handleClearSignature = async () => {
-    await AsyncStorage.removeItem('@assinatura_cliente');
+    await AsyncStorage.removeItem(`@assinatura_cliente_${chamadoId}`);
     setSignatureImg(null);
   };
 
@@ -557,7 +558,7 @@ text     vira tentry
       if (enviadoChecklist && enviadoRelatorio && enviadoAssinatura && enviadoFotos) {
         await AsyncStorage.multiRemove([
           `@rascunho_relatorio_${chamadoId}`,
-          `@assinatura_cliente`,
+          `@assinatura_cliente_${chamadoId}`,
           `@fotos_chamado_${chamadoId}`,
           `foto_chamado_${chamadoId}`,
           `notas_chamado_${chamadoId}`,
@@ -566,7 +567,7 @@ text     vira tentry
         await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
 
         Alert.alert('Sucesso', 'Atendimento finalizado com sucesso!', [
-          { text: 'OK', onPress: () => router.replace('/home-pronta') },
+          { text: 'OK', onPress: () => router.replace('/home') },
         ]);
       } else {
         Alert.alert(
@@ -660,7 +661,7 @@ text     vira tentry
             ]}
             onPress={() =>
               router.push({
-                pathname: '/home-pronta',
+                pathname: '/home',
                 params: {
                   id: chamadoId,
                 },
@@ -1002,7 +1003,15 @@ text     vira tentry
               ]}
               onPress={async () => {
                 await salvarRascunhoRelatorio();
-                router.push('/assinatura-cliente');
+
+                router.push({
+                  pathname: '/assinatura-cliente',
+                  params:{
+                    ticketId: chamadoId
+                  }
+
+                })
+
               }}
             >
               <PenTool color="#3b82f6" size={28} />

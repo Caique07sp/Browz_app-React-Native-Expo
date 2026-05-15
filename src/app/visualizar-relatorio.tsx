@@ -15,6 +15,8 @@ import {
 
     SafeAreaView,
 
+    Platform,
+
     ScrollView,
 
     StyleSheet,
@@ -703,6 +705,9 @@ const styles = StyleSheet.create({
         flex: 1,
 
         backgroundColor: '#0f172a',
+
+        paddingTop: Platform.OS === 'android' ? 25 : 0,
+        
 
     },
 

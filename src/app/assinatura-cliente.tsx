@@ -33,7 +33,7 @@ export default function AssinaturaCliente() {
 
   const handleOK = async (signature: string) => {
     await AsyncStorage.setItem(
-     ` @assinatura_cliente_${ chamadoId }`,
+     `@assinatura_cliente_${chamadoId}`,
       signature
     );
     router.back();

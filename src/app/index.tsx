@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { Input } from "@/components/input";
 import { Button } from "@/components/Button";
+import { isOnline } from '@/services/network';
 
 export default function App() {
   const [login, setLogin] = useState("");
@@ -21,7 +22,7 @@ export default function App() {
 
   const router = useRouter();
 
-  async function fazerLogin() {
+  {/*async function fazerLogin() {
     try {
       const response = await fetch("https://browz.com.br/rest.php", {
         method: "POST",
@@ -65,6 +66,110 @@ export default function App() {
     } catch (error: any) {
       console.log("ERRO:", error.message);
       Alert.alert("Erro", "Não foi possível conectar ao servidor");
+    }
+  } */}
+
+
+  async function fazerLogin() {
+    try {
+
+      const online = await isOnline();
+
+      // LOGIN OFFLINE
+      if (!online) {
+
+        const loginSalvo = await AsyncStorage.getItem("login");
+        const senhaSalva = await AsyncStorage.getItem("senha");
+
+        if (
+          loginSalvo === login &&
+          senhaSalva === senha
+        ) {
+
+          Alert.alert(
+            "Modo Offline",
+            "Entrando sem internet"
+          );
+
+          router.push("/home");
+          return;
+        }
+
+        return Alert.alert(
+          "Sem internet",
+          "Não foi possível fazer login offline"
+        );
+      }
+
+
+
+      // LOGIN ONLINE
+      const response = await fetch("https://browz.com.br/rest.php", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Basic 94ru30984rvnh4r2rjo",
+        },
+        body: JSON.stringify({
+          class: "ApplicationAuthenticationRestService",
+          method: "getToken",
+          login: login,
+          password: senha,
+        }),
+      });
+
+      const data = await response.json();
+
+      console.log("RESPOSTA LOGIN:", data);
+
+      if (data.status === "success") {
+
+        const token = data.data;
+
+        const payload = JSON.parse(
+          atob(token.split(".")[1])
+        );
+
+        console.log("PAYLOAD TOKEN:", payload);
+
+        const nome = payload.username || login;
+        const perfil = "Técnico";
+        const representativeId = payload.userid;
+
+        // SALVA LOGIN OFFLINE
+        await AsyncStorage.setItem("login", login);
+        await AsyncStorage.setItem("senha", senha);
+
+        // SALVA TOKEN
+        await AsyncStorage.setItem("token", token);
+
+        await AsyncStorage.setItem("nome", nome);
+
+        await AsyncStorage.setItem("perfil", perfil);
+
+        await AsyncStorage.setItem(
+          "representative_id",
+          String(representativeId)
+        );
+
+        router.push("/home");
+
+      } else {
+
+        Alert.alert(
+          "Erro",
+          "Login ou senha inválidos"
+        );
+      }
+
+    } catch (error: any) {
+
+      console.log("ERRO:", error.message);
+
+      Alert.alert(
+        "Erro",
+        "Não foi possível conectar ao servidor"
+      );
     }
   }
 

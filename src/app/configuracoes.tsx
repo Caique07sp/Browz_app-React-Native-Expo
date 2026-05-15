@@ -3,6 +3,7 @@ import {
   SafeAreaView,
   StatusBar,
   StyleSheet,
+  Platform,
   Text,
   TouchableOpacity,
   View,
@@ -386,6 +387,7 @@ export default function Configuracoes() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingTop: Platform.OS === 'android' ? 25 : 0,
   },
 
   header: {

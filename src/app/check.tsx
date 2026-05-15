@@ -1,7 +1,7 @@
+import { useTheme } from "@/theme/ThemeContext";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
-import { useTheme } from "@/theme/ThemeContext";
 import {
   Camera as CameraIcon,
   CheckCircle,
@@ -331,7 +331,7 @@ export default function CheckInScreen() {
           },
         ]}
       >
-        <Link href="/home-pronta" asChild>
+        <Link href="/home" asChild>
           <TouchableOpacity
             style={[
               styles.closeButton,
@@ -642,7 +642,7 @@ export default function CheckInScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: '#0f172a', paddingTop: Platform.OS === 'android' ? 25 : 0, },
 
   header: {
     flexDirection: 'row',

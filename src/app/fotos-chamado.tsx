@@ -4,6 +4,7 @@ import {
   View,
   Text,
   ScrollView,
+  Platform,
   TouchableOpacity,
   SafeAreaView,
   Image,
@@ -204,7 +205,13 @@ export default function FotosChamado() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { 
+    
+    flex: 1,
+   backgroundColor: '#0f172a' ,
+  paddingTop: Platform.OS === 'android' ? 25 : 0,
+  
+  },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a' },
   header: {
     flexDirection: 'row',

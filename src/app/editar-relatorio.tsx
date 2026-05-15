@@ -7,6 +7,7 @@ import {
   Alert,
   Image,
   ScrollView,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -63,7 +64,8 @@ export default function EditarRelatorio() {
   }
 
   async function checkSignature() {
-    const savedSig = await AsyncStorage.getItem('@assinatura_cliente');
+    const savedSig = await AsyncStorage.getItem(
+      `@assinatura_cliente_${chamadoId}`);
 
     if (savedSig) {
       setSignatureImg(savedSig);
@@ -162,7 +164,7 @@ export default function EditarRelatorio() {
   async function marcarAlteracao() {
     setHasChanges(true);
     setSignatureImg(null);
-    //await AsyncStorage.removeItem('@assinatura_cliente');
+    await AsyncStorage.removeItem(`@assinatura_cliente_${chamadoId}`);
   }
 
   function getFieldType(type: string) {
@@ -369,7 +371,7 @@ export default function EditarRelatorio() {
 
   const handleClearSignature = async () => {
 
-    await AsyncStorage.removeItem('@assinatura_cliente');
+    await AsyncStorage.removeItem(`@assinatura_cliente_${chamadoId}`);
 
     setSignatureImg(null);
     setHasChanges(true);
@@ -421,7 +423,7 @@ export default function EditarRelatorio() {
 
       const caminhoAssinatura =
         assinaturaResult.caminhoBanco ||
-        `file / signatures / ${ chamadoId }/assinatura.png`;
+        `file / signatures / ${chamadoId}/assinatura.png`;
 
       const enviadoRelatorio =
         await enviarRelatorioCalendarParaApi(
@@ -433,7 +435,15 @@ export default function EditarRelatorio() {
 
 
       if (enviadoChecklist && enviadoRelatorio && enviadoAssinatura) {
-        await AsyncStorage.removeItem(`@rascunho_relatorio_${chamadoId}`);
+
+        await AsyncStorage.removeItem(
+          `@assinatura_cliente_${chamadoId}`
+        );
+
+        await AsyncStorage.removeItem(
+          `@rascunho_relatorio_${chamadoId}`
+        );
+
         Alert.alert('Sucesso', 'Relatório atualizado com sucesso!', [
           {
             text: 'OK',
@@ -931,7 +941,7 @@ export default function EditarRelatorio() {
 
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: '#0f172a', paddingTop: Platform.OS === 'android' ? 25 : 0, },
 
   scrollContent: {
     padding: 20,

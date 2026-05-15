@@ -1,42 +1,35 @@
-import React, { useState, useEffect } from 'react';
+import { useTheme } from "@/theme/ThemeContext";
 import { FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  StatusBar,
-  Alert,
-  Linking,
-  ActivityIndicator,
-  Image,
-} from 'react-native';
-import {
+  CheckCircle,
   ChevronLeft,
-  Send,
-  MapPin,
-  User,
-  HardDrive,
-  PlayCircle,
-  Map,
-  Phone,
-  Camera,
+  Clock,
   Copy,
   Inbox,
-  Wrench,
-  Clock,
-  CheckCircle,
+  MapPin,
+  Phone,
+  User,
+  Wrench
 } from 'lucide-react-native';
-import { Link, useLocalSearchParams, useRouter } from 'expo-router';
-import * as Clipboard from 'expo-clipboard';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme } from "@/theme/ThemeContext";
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { isOnline } from '@/services/network';
 
 type DetailRowProps = {
   icon: React.ReactNode;
@@ -84,6 +77,7 @@ export default function DetalhesChamado() {
   const [notas, setNotas] = useState<string[]>([]);
   const router = useRouter();
   const { theme, darkMode } = useTheme();
+ 
 
   useEffect(() => {
     buscarDetalhesChamado();
@@ -99,11 +93,41 @@ export default function DetalhesChamado() {
   }, [calendar]);
 
   async function buscarDetalhesChamado() {
-    try {
-      setLoading(true);
-      const token = await AsyncStorage.getItem('token');
+  try {
+    setLoading(true);
 
-      const response = await fetch('https://browz.com.br/rest.php', {
+    const online = await isOnline();
+
+    // OFFLINE
+    if (!online) {
+      console.log("📴 Offline - carregando cache");
+
+      const cache = await AsyncStorage.getItem("@cache_chamados");
+
+      if (cache) {
+        const chamados = JSON.parse(cache);
+
+        const encontrado = chamados.find(
+          (item: any) =>
+            String(item.calendar_id) === String(id)
+        );
+
+        if (encontrado) {
+          setCalendar(encontrado);
+        } else {
+          setCalendar(null);
+        }
+      }
+
+      return;
+    }
+
+    // ONLINE
+    const token = await AsyncStorage.getItem('token');
+
+    const response = await fetch(
+      'https://browz.com.br/rest.php',
+      {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -111,39 +135,52 @@ export default function DetalhesChamado() {
         },
         body: JSON.stringify({
           class: 'CalendarService',
-          method: 'loadAll', // 
+          method: 'loadAll',
         }),
-      });
-
-
-      const text = await response.text();
-
-      try {
-        const result = JSON.parse(text);
-        if (result.status === 'success' && Array.isArray(result.data)) {
-
-          const encontrado = result.data.find(
-            (item: any) => String(item.calendar_id) === String(id)
-          );
-
-          if (encontrado) {
-            setCalendar(encontrado);
-          } else {
-            //console.log('ID não encontrado na lista. ID buscado:', id);
-            setCalendar(null);
-          }
-        }
-      } catch (parseError) {
-        // console.log('Erro ao converter JSON. Resposta do servidor:', text);
-        Alert.alert('Erro', 'O servidor enviou uma resposta inválida.');
       }
-    } catch (error) {
-      //console.log('ERRO NA REQUISIÇÃO:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
+    );
 
+    const result = await response.json();
+
+    if (
+      result.status === 'success' &&
+      Array.isArray(result.data)
+    ) {
+      const encontrado = result.data.find(
+        (item: any) =>
+          String(item.calendar_id) === String(id)
+      );
+
+      if (encontrado) {
+        setCalendar(encontrado);
+      } else {
+        setCalendar(null);
+      }
+    }
+  } catch (error) {
+    console.log("ERRO DETALHES:", error);
+
+    // FALLBACK CACHE
+    const cache = await AsyncStorage.getItem("@cache_chamados");
+
+    if (cache) {
+      const chamados = JSON.parse(cache);
+
+      const encontrado = chamados.find(
+        (item: any) =>
+          String(item.calendar_id) === String(id)
+      );
+
+      if (encontrado) {
+        setCalendar(encontrado);
+      }
+    }
+  } finally {
+    setLoading(false);
+  }
+}
+
+  
   async function buscarTecnicos() {
     try {
       const token = await AsyncStorage.getItem("token");
@@ -347,6 +384,13 @@ export default function DetalhesChamado() {
     calendar?.calendar_contact_landline_phone ||
     '';
 
+  const nomeCliente =
+    
+    calendar?.calendar_contact_name || 
+    '';
+
+    console.log(nomeCliente);
+
   const mobileCliente =
     calendar?.calendar_contact_mobile_phone ||
     '';
@@ -490,7 +534,7 @@ export default function DetalhesChamado() {
           <Inbox size={50} color="#64748b" />
           <Text style={styles.loadingText}>Chamado não encontrado.</Text>
 
-          <Link href="/home-pronta" asChild>
+          <Link href="/home" asChild>
             <TouchableOpacity style={styles.backHomeButton}>
               <Text style={styles.buttonText}>Voltar</Text>
             </TouchableOpacity>
@@ -526,7 +570,7 @@ export default function DetalhesChamado() {
           },
         ]}
       >
-        <Link href="/home-pronta" asChild>
+        <Link href="/home" asChild>
           <TouchableOpacity style={styles.backButton}>
             <ChevronLeft
               color={theme.text}
@@ -759,23 +803,32 @@ export default function DetalhesChamado() {
                 color: theme.text,
               },
             ]}
-          >CONTATO DO CLIENTE</Text>
+          >
+            CONTATO DO CLIENTE
+          </Text>
 
           <DetailRow
-            icon={<FontAwesome5 name="phone" size={18} color="#22c55e" />}
+            icon={<User size={18} color="#f59e0b" />}
+            label="Cliente"
+            value={getClienteText(calendar.customer_id)}
+          />
+
+
+          <DetailRow
+            icon={ <Phone size={15} color="#22c55e" />}
             label="Telefone"
             value={telefoneCliente || 'Não informado'}
           />
 
           <DetailRow
-            icon={<FontAwesome5 name="mobile-alt" size={18} color="#3b82f6" />}
+            icon={<Phone size={15} color="#3b82f6" />}
             label="Celular"
             value={mobileCliente || 'Não informado'}
           />
 
-          <View style={styles.actionRow}>
+          <View style={styles.mapRow}>
             <TouchableOpacity style={styles.callButton} onPress={callClient}>
-              <Phone size={14} color="#fff" />
+              <Phone size={20} color="#fff" />
               <Text style={styles.buttonText}>Telefone</Text>
             </TouchableOpacity>
 
@@ -852,7 +905,11 @@ export default function DetalhesChamado() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: {
+    flex: 1,
+    backgroundColor: '#0f172a',
+    paddingTop: Platform.OS === 'android' ? 25 : 0,
+  },
 
   loadingContainer: {
     flex: 1,
