@@ -18,6 +18,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { isOnline } from '@/services/network';
 
 export default function FinalizacaoRelatorio() {
   const router = useRouter();
@@ -39,13 +40,13 @@ export default function FinalizacaoRelatorio() {
   const [loadingDetail, setLoadingDetail] = useState('');
   const { theme, darkMode } = useTheme();
 
-  ;useFocusEffect(
-  React.useCallback(() => {
-    checkSignature();
-    carregarRascunhoRelatorio();
-    buscarChecklist();
-  }, [])
-);
+  ; useFocusEffect(
+    React.useCallback(() => {
+      checkSignature();
+      carregarRascunhoRelatorio();
+      buscarChecklist();
+    }, [])
+  );
 
   async function checkSignature() {
     const savedSig = await AsyncStorage.getItem(
@@ -62,56 +63,101 @@ export default function FinalizacaoRelatorio() {
     try {
       setLoadingChecklist(true);
 
+      // CACHE PRIMEIRO
+      const cache =
+        await AsyncStorage.getItem(
+          `@checklist_${chamadoId}`
+        );
+
+      if (cache) {
+        const checklist = JSON.parse(cache);
+
+        setChecklistTemplate(checklist.template || []);
+
+        setCalendarChecklistId(
+          checklist.calendar_checklist_id
+        );
+      }
+
+      const online = await isOnline();
+
+      // OFFLINE
+      if (!online) {
+        console.log("📴 Offline checklist");
+        return;
+      }
+
+      // ONLINE
       const token = await AsyncStorage.getItem('token');
 
-      const response = await fetch('https://browz.com.br/rest.php', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          class: 'CalendarChecklistService',
-          method: 'loadAll',
-        }),
-      });
+      const response = await fetch(
+        'https://browz.com.br/rest.php',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            class: 'CalendarChecklistService',
+            method: 'loadAll',
+          }),
+        }
+      );
 
       const data = await response.json();
-      console.log('CHAMADO ID DA TELA:', chamadoId);
-      console.log('RETORNO CHECKLIST:', data.data);
 
-      if (data.status === 'success' && Array.isArray(data.data)) {
+      if (
+        data.status === 'success' &&
+        Array.isArray(data.data)
+      ) {
         const itemChecklist = data.data.find(
-          (item: any) => String(item.calendar_id) === String(chamadoId)
+          (item: any) =>
+            String(item.calendar_id) ===
+            String(chamadoId)
         );
 
         if (!itemChecklist) {
-          setChecklistTemplate([]);
+
+          if (!cache) {
+            setChecklistTemplate([]);
+
+          }
+
           return;
         }
 
-        if (!itemChecklist) {
-          setChecklistTemplate([]);
-          return;
-        }
+        setCalendarChecklistId(
+          itemChecklist.calendar_checklist_id
+        );
 
-        setCalendarChecklistId(itemChecklist.calendar_checklist_id);
-
-        if (itemChecklist?.calendar_checklist_template) {
+        if (
+          itemChecklist?.calendar_checklist_template
+        ) {
           const template = JSON.parse(
             itemChecklist.calendar_checklist_template
           );
 
           const ordenado = template.sort(
-            (a: any, b: any) => Number(a.order) - Number(b.order)
+            (a: any, b: any) =>
+              Number(a.order) - Number(b.order)
           );
 
           setChecklistTemplate(ordenado);
+
+          // SALVA CACHE
+          await AsyncStorage.setItem(
+            `@checklist_${chamadoId}`,
+            JSON.stringify({
+              calendar_checklist_id:
+                itemChecklist.calendar_checklist_id,
+              template: ordenado,
+            })
+          );
         }
       }
     } catch (error) {
       console.log('ERRO CHECKLIST:', error);
-      Alert.alert('Erro', 'Não foi possível carregar o checklist.');
     } finally {
       setLoadingChecklist(false);
     }
@@ -366,9 +412,11 @@ text     vira tentry
 
         data: {
           id: Number(calendarChecklistId),
-          calendar_id: chamadoId,
+          calendar_checklist_id: Number(calendarChecklistId),
+          calendar_id: Number(chamadoId),
           calendar_checklist_template: JSON.stringify(checklistTemplate),
           calendar_checklist_response: JSON.stringify(relatorioFinal.checklist_response),
+
         },
       };
 
@@ -400,7 +448,28 @@ text     vira tentry
       const token = await AsyncStorage.getItem('token');
 
       // PEGA LOCALIZAÇÃO ATUAL
-      const location = await Location.getCurrentPositionAsync({});
+      let location;
+
+      try {
+        location =
+          await Location.getCurrentPositionAsync({});
+
+        await AsyncStorage.setItem(
+          "@ultima_localizacao",
+          JSON.stringify(location)
+        );
+
+      } catch {
+
+        const ultima =
+          await AsyncStorage.getItem(
+            "@ultima_localizacao"
+          );
+
+        if (ultima) {
+          location = JSON.parse(ultima);
+        }
+      }
 
       // AJUSTA GMT-3
       const now = new Date();
@@ -426,7 +495,7 @@ text     vira tentry
             relatorioFinal.assinante_contato,
 
           calendar_signature:
-            ` file/signatures/${chamadoId}/assinatura.png`,
+            `file/signatures/${chamadoId}/assinatura.png`,
 
           calendar_status: 2,
 
@@ -434,7 +503,9 @@ text     vira tentry
           calendar_last_checkout_date: brasilDate,
 
           calendar_last_checkout_geo:
-            `${location.coords.latitude},${location.coords.longitude}`,
+            location
+              ? `${location.coords.latitude}, ${location.coords.longitude}`
+              : '',
         },
       };
 
@@ -501,6 +572,116 @@ text     vira tentry
       setChecklistResponses(rascunho.checklistResponses || {});
     }
   }
+
+  async function atualizarCacheFinalizado() {
+
+    const cache =
+      await AsyncStorage.getItem("@cache_chamados");
+
+    if (!cache) return;
+
+    const chamados = JSON.parse(cache);
+
+    const atualizados = chamados.map((item: any) => {
+
+      if (
+        String(item.calendar_id) ===
+        String(chamadoId)
+      ) {
+
+        return {
+          ...item,
+          calendar_status: 2,
+          agenda_pause: 0,
+        };
+      }
+
+      return item;
+    });
+
+    await AsyncStorage.setItem(
+      "@cache_chamados",
+      JSON.stringify(atualizados)
+    );
+  }
+
+  async function salvarEventoCheckin(tipo: 1 | 2 | 3) {
+    const agora = new Date();
+
+    let location;
+
+    try {
+      location = await Location.getCurrentPositionAsync({});
+
+      await AsyncStorage.setItem(
+        "@ultima_localizacao",
+        JSON.stringify(location)
+      );
+    } catch {
+      const ultima = await AsyncStorage.getItem("@ultima_localizacao");
+
+      if (ultima) {
+        location = JSON.parse(ultima);
+      }
+    }
+
+    const latitude = location?.coords?.latitude || null;
+    const longitude = location?.coords?.longitude || null;
+
+    const evento = {
+      calendar_id: Number(chamadoId),
+      representative_id: Number(await AsyncStorage.getItem("representative_id")),
+      calendar_checkin_type: tipo,
+      calendar_checkin_geo:
+        latitude && longitude ? `${latitude}, ${longitude}` : '',
+      calendar_checkin_latlng:
+        latitude && longitude ? `{lat: ${latitude},lng: ${longitude}}` : '',
+      calendar_checkin_datetime: agora
+        .toLocaleString('sv-SE', {
+          timeZone: 'America/Sao_Paulo',
+        })
+        .replace(' ', 'T'),
+    };
+
+    const online = await isOnline();
+
+    if (!online) {
+      const pendentes = await AsyncStorage.getItem("@sync_pendente");
+      const lista = pendentes ? JSON.parse(pendentes) : [];
+
+      lista.push({
+        tipo: "evento_checkin",
+        data: evento,
+        criado_em: new Date().toISOString(),
+      });
+
+      await AsyncStorage.setItem("@sync_pendente", JSON.stringify(lista));
+
+      return true;
+    }
+
+    const token = await AsyncStorage.getItem("token");
+
+    const response = await fetch("https://browz.com.br/rest.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        class: "CalendarCheckinService",
+        method: "store",
+        data: evento,
+      }),
+    });
+
+    const result = await response.json();
+
+    console.log("EVENTO CHECKOUT:", result);
+
+    return result.status === "success";
+  }
+
   const handleFinalize = async () => {
     if (sending) return;
 
@@ -516,28 +697,69 @@ text     vira tentry
       return Alert.alert('Erro', 'Preencha todos os campos e a assinatura.');
     }
 
+    // DENTRO DE: const handleFinalize = async () => { ...
+    // ... (validações iniciais permanecem iguais)
+
     try {
       setSending(true);
 
-      // 1. MONTAR O OBJETO PRIMEIRO
       const checkin = await AsyncStorage.getItem(`@checkin_${chamadoId}`);
-      const fotoStr = await AsyncStorage.getItem(`foto_chamado_${chamadoId}`);
+      // CORREÇÃO: Buscando a chave correta no plural que guarda a lista de fotos
+      const fotosStr = await AsyncStorage.getItem(`@fotos_chamado_${chamadoId}`);
       const notasStr = await AsyncStorage.getItem(`notas_chamado_${chamadoId}`);
+      const online = await isOnline();
 
       const relatorioFinal = {
         calendar_id: chamadoId,
+        calendar_checklist_id: calendarChecklistId, // IMPORTANTE: salvar para o sync saber qual ID atualizar
         descricao: description.trim(),
         assinante_nome: signerName.trim(),
         assinante_contato: signerContact.trim(),
-        assinatura: signatureImg,
+        assinatura: signatureImg, // Base64 ou URI persistente
+        checklist_template: checklistTemplate, // Guarda o template usado
         checklist_response: Object.values(checklistResponses),
         checkin: checkin ? JSON.parse(checkin) : null,
-        foto: fotoStr ? JSON.parse(fotoStr) : null,
+        fotos: fotosStr ? JSON.parse(fotosStr) : [], // Nome corrigido para bater com sua lista
         notas: notasStr ? JSON.parse(notasStr) : [],
         finalizado_em: new Date().toISOString(),
       };
 
+      // FLUXO OFFLINE
+      if (!online) {
+        const pendentes = await AsyncStorage.getItem("@sync_pendente");
+        let lista = pendentes ? JSON.parse(pendentes) : [];
+
+        // Evita duplicar o mesmo chamado na fila de sincronização
+        lista = lista.filter((item: any) => item.chamadoId !== chamadoId);
+
+        lista.push({
+          tipo: "finalizacao",
+          chamadoId,
+          relatorioFinal,
+          data: new Date().toISOString(),
+        });
+
+        await AsyncStorage.setItem("@sync_pendente", JSON.stringify(lista));
+        await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
+        await atualizarCacheFinalizado();
+
+        Alert.alert(
+          'Finalizado offline',
+          'O relatório e as fotos foram salvos localmente e serão sincronizados automaticamente assim que detectar conexão.'
+        );
+
+        router.replace('/home');
+        return;
+      }
+
+
       // 2. ENVIOS SEQUENCIAIS COM FEEDBACK NA TELA
+
+      setLoadingMessage('Registrando check-out...');
+      setLoadingDetail('Salvando evento de saída');
+
+      const enviadoCheckout = await salvarEventoCheckin(2);
+
       setLoadingMessage('Enviando checklist...');
       setLoadingDetail('Sincronizando respostas técnicas');
       const enviadoChecklist = await enviarChecklistParaApi(relatorioFinal);
@@ -554,8 +776,13 @@ text     vira tentry
       setLoadingDetail('Sincronizando fotos da galeria');
       const enviadoFotos = await enviarFotosParaApi(setLoadingDetail);
 
+
+
       // 3. VERIFICAÇÃO FINAL
-      if (enviadoChecklist && enviadoRelatorio && enviadoAssinatura && enviadoFotos) {
+      if (enviadoCheckout && enviadoChecklist && enviadoRelatorio && enviadoAssinatura && enviadoFotos) {
+
+        await atualizarCacheFinalizado();  
+
         await AsyncStorage.multiRemove([
           `@rascunho_relatorio_${chamadoId}`,
           `@assinatura_cliente_${chamadoId}`,
@@ -565,6 +792,8 @@ text     vira tentry
         ]);
 
         await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
+
+
 
         Alert.alert('Sucesso', 'Atendimento finalizado com sucesso!', [
           { text: 'OK', onPress: () => router.replace('/home') },
@@ -1006,7 +1235,7 @@ text     vira tentry
 
                 router.push({
                   pathname: '/assinatura-cliente',
-                  params:{
+                  params: {
                     ticketId: chamadoId
                   }
 

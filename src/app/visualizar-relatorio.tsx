@@ -7,6 +7,8 @@ import { ChevronLeft, ClipboardList, FileText, ImageIcon, PenTool, User } from '
 import React, { useEffect, useState } from 'react';
 import { useTheme } from "@/theme/ThemeContext";
 
+import { isOnline } from '@/services/network';
+
 import {
 
     ActivityIndicator,
@@ -80,120 +82,182 @@ export default function VisualizarRelatorio() {
 
     async function buscarChamado() {
 
-        const token = await AsyncStorage.getItem('token');
+        try {
 
+            // CACHE PRIMEIRO
+            const cache =
+                await AsyncStorage.getItem(
+                    `@relatorio_final_${chamadoId}`
+                );
 
-        const response = await fetch('https://browz.com.br/rest.php', {
+            if (cache) {
 
-            method: 'POST',
+                const relatorio = JSON.parse(cache);
 
-            headers: {
+                setCalendar(relatorio.calendar || relatorio);
+            }
 
-                'Content-Type': 'application/json',
+            const online = await isOnline();
 
-                Authorization: `Bearer ${token}`,
+            // OFFLINE
+            if (!online) {
+                console.log("📴 Offline relatório");
+                return;
+            }
 
-            },
+            // ONLINE
+            const token = await AsyncStorage.getItem('token');
 
-            body: JSON.stringify({
-
-                class: 'CalendarService',
-
-                method: 'loadAll',
-
-            }),
-
-        });
-
-
-        const data = await response.json();
-
-
-        if (data.status === 'success' && Array.isArray(data.data)) {
-
-            const encontrado = data.data.find(
-
-                (item: any) => String(item.calendar_id) === String(chamadoId)
-
+            const response = await fetch(
+                'https://browz.com.br/rest.php',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                        class: 'CalendarService',
+                        method: 'loadAll',
+                    }),
+                }
             );
 
+            const data = await response.json();
 
-            setCalendar(encontrado || null);
+            if (
+                data.status === 'success' &&
+                Array.isArray(data.data)
+            ) {
 
+                const encontrado = data.data.find(
+                    (item: any) =>
+                        String(item.calendar_id) ===
+                        String(chamadoId)
+                );
+
+                setCalendar(encontrado || null);
+
+                // SALVA CACHE
+                if (encontrado) {
+
+                    await AsyncStorage.setItem(
+                        `@relatorio_final_${chamadoId}`,
+                        JSON.stringify(encontrado)
+                    );
+                }
+            }
+
+        } catch (error) {
+
+            console.log(error);
         }
-
     }
-
 
     async function buscarChecklist() {
 
-        const token = await AsyncStorage.getItem('token');
+        try {
 
-
-        const response = await fetch('https://browz.com.br/rest.php', {
-
-            method: 'POST',
-
-            headers: {
-
-                'Content-Type': 'application/json',
-
-                Authorization: `Bearer ${token}`,
-
-            },
-
-            body: JSON.stringify({
-
-                class: 'CalendarChecklistService',
-
-                method: 'loadAll',
-
-            }),
-
-        });
-
-
-        const data = await response.json();
-
-
-        if (data.status === 'success' && Array.isArray(data.data)) {
-
-            const itemChecklist = data.data.find(
-
-                (item: any) => String(item.calendar_id) === String(chamadoId)
-
-            );
-
-
-            if (itemChecklist) {
-
-                const template = itemChecklist.calendar_checklist_template
-
-                    ? JSON.parse(itemChecklist.calendar_checklist_template)
-
-                    : [];
-
-
-                const responses = itemChecklist.calendar_checklist_response
-
-                    ? JSON.parse(itemChecklist.calendar_checklist_response)
-
-                    : [];
-
-
-                setChecklistTemplate(
-
-                    template.sort((a: any, b: any) => Number(a.order) - Number(b.order))
-
+            // CACHE PRIMEIRO
+            const cache =
+                await AsyncStorage.getItem(
+                    `@checklist_${chamadoId}`
                 );
 
+            if (cache) {
 
-                setChecklistResponses(responses);
+                const checklist = JSON.parse(cache);
 
+                setChecklistTemplate(
+                    checklist.template || []
+                );
+
+                setChecklistResponses(
+                    checklist.responses || []
+                );
             }
 
-        }
+            const online = await isOnline();
 
+            // OFFLINE
+            if (!online) {
+                console.log("📴 Offline checklist");
+                return;
+            }
+
+            // ONLINE
+            const token = await AsyncStorage.getItem('token');
+
+            const response = await fetch(
+                'https://browz.com.br/rest.php',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                        class: 'CalendarChecklistService',
+                        method: 'loadAll',
+                    }),
+                }
+            );
+
+            const data = await response.json();
+
+            if (
+                data.status === 'success' &&
+                Array.isArray(data.data)
+            ) {
+
+                const itemChecklist = data.data.find(
+                    (item: any) =>
+                        String(item.calendar_id) ===
+                        String(chamadoId)
+                );
+
+                if (itemChecklist) {
+
+                    const template =
+                        itemChecklist.calendar_checklist_template
+                            ? JSON.parse(
+                                itemChecklist.calendar_checklist_template
+                            )
+                            : [];
+
+                    const responses =
+                        itemChecklist.calendar_checklist_response
+                            ? JSON.parse(
+                                itemChecklist.calendar_checklist_response
+                            )
+                            : [];
+
+                    const ordenado =
+                        template.sort(
+                            (a: any, b: any) =>
+                                Number(a.order) -
+                                Number(b.order)
+                        );
+
+                    setChecklistTemplate(ordenado);
+
+                    setChecklistResponses(responses);
+
+                    // SALVA CACHE
+                    await AsyncStorage.setItem(
+                        `@checklist_${chamadoId}`,
+                        JSON.stringify({
+                            template: ordenado,
+                            responses,
+                        })
+                    );
+                }
+            }
+
+        } catch (error) {
+
+            console.log(error);
+        }
     }
 
 
@@ -415,15 +479,15 @@ export default function VisualizarRelatorio() {
                 </View>
 
 
-               <View
-  style={[
-    styles.card,
-    {
-      backgroundColor: theme.card,
-      borderColor: theme.border,
-    },
-  ]}
->
+                <View
+                    style={[
+                        styles.card,
+                        {
+                            backgroundColor: theme.card,
+                            borderColor: theme.border,
+                        },
+                    ]}
+                >
 
                     <View style={styles.cardHeader}>
 
@@ -471,15 +535,15 @@ export default function VisualizarRelatorio() {
                 </View>
 
 
-               <View
-  style={[
-    styles.card,
-    {
-      backgroundColor: theme.card,
-      borderColor: theme.border,
-    },
-  ]}
->
+                <View
+                    style={[
+                        styles.card,
+                        {
+                            backgroundColor: theme.card,
+                            borderColor: theme.border,
+                        },
+                    ]}
+                >
 
                     <View style={styles.cardHeader}>
 
@@ -592,7 +656,11 @@ export default function VisualizarRelatorio() {
 
                                 key={index}
 
-                                source={{ uri: `https://browz.com.br/${foto}` }}
+                                source={{
+                                    uri: foto.startsWith('file')
+                                        ? foto
+                                        : `https://browz.com.br/${foto}`
+                                }}
 
                                 style={styles.image}
 
@@ -605,15 +673,15 @@ export default function VisualizarRelatorio() {
                 </View>
 
 
-               <View
-  style={[
-    styles.card,
-    {
-      backgroundColor: theme.card,
-      borderColor: theme.border,
-    },
-  ]}
->
+                <View
+                    style={[
+                        styles.card,
+                        {
+                            backgroundColor: theme.card,
+                            borderColor: theme.border,
+                        },
+                    ]}
+                >
 
                     <View style={styles.cardHeader}>
 
@@ -639,7 +707,10 @@ export default function VisualizarRelatorio() {
 
                                 source={{
 
-                                    uri: `https://browz.com.br/${calendar.calendar_signature}`,
+                                    uri:
+                                        String(calendar.calendar_signature).startsWith('file')
+                                            ? calendar.calendar_signature
+                                            : `https://browz.com.br/${calendar.calendar_signature}`
 
                                 }}
 
@@ -707,7 +778,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#0f172a',
 
         paddingTop: Platform.OS === 'android' ? 25 : 0,
-        
+
 
     },
 

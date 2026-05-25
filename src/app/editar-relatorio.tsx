@@ -17,7 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from "@/theme/ThemeContext";
 import { useFocusEffect } from '@react-navigation/native';
-import * as FileSystem from 'expo-file-system';
+import { isOnline } from '@/services/network';
 
 
 
@@ -73,37 +73,140 @@ export default function EditarRelatorio() {
   }
 
   async function buscarDadosRelatorio() {
-    const token = await AsyncStorage.getItem('token');
+    try {
 
-    const response = await fetch('https://browz.com.br/rest.php', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        class: 'CalendarService',
-        method: 'loadAll',
-      }),
-    });
-
-    const data = await response.json();
-    if (data.status === 'success' && Array.isArray(data.data)) {
-      const chamado = data.data.find(
-        (item: any) => String(item.calendar_id) === String(chamadoId)
+      // CACHE PRIMEIRO
+      const cache = await AsyncStorage.getItem(
+        `@relatorio_final_${chamadoId}`
       );
 
-      if (chamado) {
+      if (cache) {
+
+        const chamado = JSON.parse(cache);
+
         setDescription(chamado.calendar_report || '');
-        setSignerName(chamado.calendar_signatory_name || '');
-        setSignerContact(chamado.calendar_signatory_email || '');
+
+        setSignerName(
+          chamado.calendar_signatory_name || ''
+        );
+
+        setSignerContact(
+          chamado.calendar_signatory_email || ''
+        );
+
+        if (chamado.calendar_signature) {
+          setSignatureImg(
+            chamado.calendar_signature
+          );
+        }
       }
+
+      const online = await isOnline();
+
+      // OFFLINE
+      if (!online) {
+        console.log("📴 Offline relatório");
+        return;
+      }
+
+      // ONLINE
+      const token = await AsyncStorage.getItem('token');
+
+      const response = await fetch(
+        'https://browz.com.br/rest.php',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            class: 'CalendarService',
+            method: 'loadAll',
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (
+        data.status === 'success' &&
+        Array.isArray(data.data)
+      ) {
+
+        const chamado = data.data.find(
+          (item: any) =>
+            String(item.calendar_id) ===
+            String(chamadoId)
+        );
+
+        if (chamado) {
+
+          setDescription(
+            chamado.calendar_report || ''
+          );
+
+          setSignerName(
+            chamado.calendar_signatory_name || ''
+          );
+
+          setSignerContact(
+            chamado.calendar_signatory_email || ''
+          );
+
+          // SALVA CACHE
+          await AsyncStorage.setItem(
+            `@relatorio_final_${chamadoId}`,
+            JSON.stringify(chamado)
+          );
+        }
+      }
+
+    } catch (error) {
+
+      console.log(
+        'ERRO RELATÓRIO:',
+        error
+      );
     }
   }
 
   async function buscarChecklist() {
     try {
+
+      // CACHE PRIMEIRO
+      const cache = await AsyncStorage.getItem(
+        `@checklist_${chamadoId}`
+      );
+
+      if (cache) {
+
+        const checklist = JSON.parse(cache);
+
+        setChecklistTemplate(
+          checklist.template || []
+        );
+
+        const responsesObject: any = {};
+
+        (checklist.responses || []).forEach(
+          (resp: any) => {
+            responsesObject[resp.field_id] = resp;
+          }
+        );
+
+        setChecklistResponses(
+          responsesObject
+        );
+      }
       const token = await AsyncStorage.getItem('token');
+
+      const online = await isOnline();
+
+      if (!online) {
+        console.log("📴 Offline checklist");
+        return;
+      }
 
       const response = await fetch('https://browz.com.br/rest.php', {
 
@@ -132,27 +235,45 @@ export default function EditarRelatorio() {
         }
 
         setCalendarChecklistId(itemChecklist.calendar_checklist_id);
+        setCalendarChecklistId(itemChecklist.calendar_checklist_id);
+
+        let ordenado: any[] = [];
 
         if (itemChecklist.calendar_checklist_template) {
 
-          const template = JSON.parse(itemChecklist.calendar_checklist_template);
-
-          const ordenado = template.sort(
-            (a: any, b: any) => Number(a.order) - Number(b.order)
+          const template = JSON.parse(
+            itemChecklist.calendar_checklist_template
           );
+
+          ordenado = template.sort(
+            (a: any, b: any) =>
+              Number(a.order) - Number(b.order)
+          );
+
           setChecklistTemplate(ordenado);
         }
 
         if (itemChecklist.calendar_checklist_response) {
 
-          const responsesArray = JSON.parse(itemChecklist.calendar_checklist_response);
+          const responsesArray = JSON.parse(
+            itemChecklist.calendar_checklist_response
+          );
 
           const responsesObject: any = {};
 
           responsesArray.forEach((resp: any) => {
             responsesObject[resp.field_id] = resp;
           });
+
           setChecklistResponses(responsesObject);
+
+          await AsyncStorage.setItem(
+            `@checklist_${chamadoId}`,
+            JSON.stringify({
+              template: ordenado,
+              responses: responsesArray,
+            })
+          );
         }
       }
     } catch (error) {
@@ -423,7 +544,7 @@ export default function EditarRelatorio() {
 
       const caminhoAssinatura =
         assinaturaResult.caminhoBanco ||
-        `file / signatures / ${chamadoId}/assinatura.png`;
+        `file/signatures/${chamadoId}/assinatura.png`;
 
       const enviadoRelatorio =
         await enviarRelatorioCalendarParaApi(

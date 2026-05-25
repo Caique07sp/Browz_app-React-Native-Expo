@@ -77,9 +77,38 @@ export default function DetalhesChamado() {
   const [notas, setNotas] = useState<string[]>([]);
   const router = useRouter();
   const { theme, darkMode } = useTheme();
+
+  async function atualizarCacheChamado(chamadoAtualizado: any) {
+
+  const cache =
+    await AsyncStorage.getItem("@cache_chamados");
+
+  if (!cache) return;
+
+  const chamados = JSON.parse(cache);
+
+  const atualizados = chamados.map((item: any) => {
+
+    if (
+      String(item.calendar_id) ===
+      String(chamadoAtualizado.calendar_id)
+    ) {
+      return chamadoAtualizado;
+    }
+
+    return item;
+  });
+
+  await AsyncStorage.setItem(
+    "@cache_chamados",
+    JSON.stringify(atualizados)
+  );
+}
  
 
   useEffect(() => {
+    carregarCachesOffline();
+
     buscarDetalhesChamado();
     buscarTecnicos();
     buscarCategorias();
@@ -91,6 +120,29 @@ export default function DetalhesChamado() {
       carregarFotoLocal();
     }
   }, [calendar]);
+
+  async function carregarCachesOffline() {
+  const tecnicosCache =
+    await AsyncStorage.getItem("@cache_tecnicos");
+
+  const categoriasCache =
+    await AsyncStorage.getItem("@cache_categorias");
+
+  const clientesCache =
+    await AsyncStorage.getItem("@cache_clientes");
+
+  if (tecnicosCache) {
+    setTecnicos(JSON.parse(tecnicosCache));
+  }
+
+  if (categoriasCache) {
+    setCategorias(JSON.parse(categoriasCache));
+  }
+
+  if (clientesCache) {
+    setClientes(JSON.parse(clientesCache));
+  }
+}
 
   async function buscarDetalhesChamado() {
   try {
@@ -113,6 +165,7 @@ export default function DetalhesChamado() {
         );
 
         if (encontrado) {
+          await atualizarCacheChamado(encontrado);
           setCalendar(encontrado);
         } else {
           setCalendar(null);
@@ -211,6 +264,11 @@ export default function DetalhesChamado() {
         });
 
         setTecnicos(mapa);
+
+        await AsyncStorage.setItem(
+          "@cache_tecnicos",
+          JSON.stringify(mapa)
+        )
       }
     } catch (error) {
       //console.log("ERRO TECNICOS:", error);
@@ -248,6 +306,11 @@ export default function DetalhesChamado() {
         //console.log(" MAPA CATEGORIAS:", mapa);
 
         setCategorias(mapa);
+
+         await AsyncStorage.setItem(
+          "@cache_categorias",
+          JSON.stringify(mapa)
+        )
       }
     } catch (error) {
       // console.log(" ERRO CATEGORIAS:", error);
@@ -284,6 +347,11 @@ export default function DetalhesChamado() {
         //console.log("🗺️ MAPA CLIENTES:", mapa);
 
         setClientes(mapa);
+
+         await AsyncStorage.setItem(
+          "@cache_clientes",
+          JSON.stringify(mapa)
+        )
       }
     } catch (error) {
       //console.log("🔥 ERRO CLIENTES:", error);
@@ -810,7 +878,7 @@ export default function DetalhesChamado() {
           <DetailRow
             icon={<User size={18} color="#f59e0b" />}
             label="Cliente"
-            value={getClienteText(calendar.customer_id)}
+            value={nomeCliente || "Não informado"}
           />
 
 

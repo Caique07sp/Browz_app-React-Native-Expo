@@ -32,6 +32,8 @@ import {
   View,
 } from "react-native";
 
+import { sincronizarPendentes } from "@/services/sync";
+
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
@@ -69,13 +71,26 @@ export default function Browz() {
 
   useFocusEffect(
     React.useCallback(() => {
-      carregarUsuario();
-      buscarChamados();
-      buscarTecnicos();
-      buscarCategorias();
-      buscarClientes();
 
-      carregarQuantidadeNotificacoes();
+      async function carregarTudo() {
+
+        await sincronizarPendentes();
+
+        await carregarUsuario();
+
+        await buscarChamados();
+
+        await buscarTecnicos();
+
+        await buscarCategorias();
+
+        await buscarClientes();
+
+        await carregarQuantidadeNotificacoes();
+      }
+
+      carregarTudo();
+
     }, [])
   );
 
@@ -247,6 +262,7 @@ export default function Browz() {
 
         return dataChamado >= inicio && dataChamado <= fim;
       });
+      
     } else {
       const hoje = new Date();
 
@@ -267,9 +283,22 @@ export default function Browz() {
       });
     }
 
+    
+    lista.sort((a, b) => {
+    
+      if (!a.calendar_start) return 1;
+      if (!b.calendar_start) return -1;
+
+      const dataA = new Date(a.calendar_start).getTime();
+      const dataB = new Date(b.calendar_start).getTime();
+
+      
+      return dataB - dataA;
+    });
+
+
     setFilteredChamados(lista);
   }
-
 
 
   //Offline
@@ -723,8 +752,8 @@ export default function Browz() {
           <Image
             source={
               darkMode
-                ? require("@/assets/logo-white.png")
-                : require("@/assets/browz.png")
+                ? require("../assets/logo-white.png")
+                : require("../assets/browz.png")
             }
             style={styles.logoImage}
           />
@@ -767,7 +796,12 @@ export default function Browz() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => buscarChamados(true)}
+            onRefresh={async () => {
+
+              await sincronizarPendentes();
+
+              await buscarChamados(true);
+            }}
             tintColor="#3b82f6"
             colors={["#3b82f6"]}
           />
