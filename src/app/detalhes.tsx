@@ -368,7 +368,7 @@ export default function DetalhesChamado() {
 
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
-      quality: 0.7,
+      quality: 0.2,
     });
 
     if (!result.canceled) {
@@ -666,7 +666,9 @@ export default function DetalhesChamado() {
           <View
             style={[
               styles.statusBadge,
-              { borderColor: getStatusColor(calendar.calendar_status) },
+              { borderColor: getStatusColor(
+                calendar.calendar_status,
+              ) },
             ]}
           >
             <Text
@@ -842,13 +844,13 @@ export default function DetalhesChamado() {
 
             <View style={styles.mapRow}>
               <TouchableOpacity style={styles.mapButton} onPress={openMaps}>
-                <FontAwesome5 name="google" size={20} color="#fff" />
-                <Text style={styles.buttonTextSmall}>Google Maps</Text>
+                <FontAwesome5 name="google" size={20} color="#28bb0bff" />
+                <Text style={styles.buttonTextSmall}>Maps</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.wazeButton} onPress={openWaze}>
-                <MaterialCommunityIcons name="waze" size={25} color="#fff" />
-                <Text style={styles.buttonTextSmall}>Waze</Text>
+                <MaterialCommunityIcons name="waze" size={29} color="#3b82f6" />
+                <Text style={styles.buttonSmall}>Waze</Text>
               </TouchableOpacity>
             </View>
 
@@ -896,13 +898,13 @@ export default function DetalhesChamado() {
 
           <View style={styles.mapRow}>
             <TouchableOpacity style={styles.callButton} onPress={callClient}>
-              <Phone size={20} color="#fff" />
-              <Text style={styles.buttonText}>Telefone</Text>
+              <Phone size={20} color="#22c55e" />
+              <Text style={styles.buttonTextTel}>Telefone</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.callButton2} onPress={callMobile}>
-              <FontAwesome5 name="mobile-alt" size={20} color="#fff" />
-              <Text style={styles.buttonText}>Celular</Text>
+              <FontAwesome5 name="mobile-alt" size={20} color="#3b82f6" />
+              <Text style={styles.buttonTextCel}>Celular</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1128,17 +1130,28 @@ const styles = StyleSheet.create({
 
   callButton: {
     flex: 1,
-    backgroundColor: '#16a34a',
+    borderWidth: 2,        
+    borderColor: '#28bb0bff',
+    borderStyle: 'solid',  
+    color: "#28bb0bff",
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    height: 50,
-    borderRadius: 14,
+    gap: 6,
+    height: 45,
+    borderRadius: 12,
   },
   buttonText: {
     color: '#fff',
     fontSize: 14,
+  },
+  buttonTextTel:{
+    color: '#28bb0bff',
+    fontSize: 14,
+  },
+  buttonTextCel:{
+     fontSize: 12,
+      color: "#3b82f6",
   },
 
   footerInput: {
@@ -1172,13 +1185,15 @@ const styles = StyleSheet.create({
   },
   callButton2: {
     flex: 1,
-    backgroundColor: '#51a6f5',
+    borderWidth: 2,        
+    borderColor: '#3b82f6',
+    borderStyle: 'solid',  
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    height: 50,
-    borderRadius: 14,
+    gap: 6,
+    height: 45,
+    borderRadius: 12,
   },
   actionContainer: {
     gap: 10,
@@ -1190,7 +1205,9 @@ const styles = StyleSheet.create({
   },
   wazeButton: {
     flex: 1,
-    backgroundColor: '#0ea5e9',
+    borderWidth: 2,        
+    borderColor: '#3b82f6',
+    borderStyle: 'solid',  
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1201,13 +1218,21 @@ const styles = StyleSheet.create({
 
 
   buttonTextSmall: {
-    color: '#fff',
     fontWeight: 'bold',
     fontSize: 12,
+    color: "#28bb0bff",
+    
+  },
+  buttonSmall:{
+    fontSize: 12,
+    color: "#3b82f6",
   },
   mapButton: {
     flex: 1,
-    backgroundColor: '#16a34a',
+    borderWidth: 2,        
+    borderColor: '#28bb0bff',
+    borderStyle: 'solid',  
+    color: "#28bb0bff",
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

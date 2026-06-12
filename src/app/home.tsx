@@ -1,5 +1,7 @@
+import { contarPendencias } from "@/services/syncStatus";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import NetInfo from "@react-native-community/netinfo";
 
 import { useTheme } from "@/theme/ThemeContext";
 import { Link, useFocusEffect } from "expo-router";
@@ -34,10 +36,12 @@ import {
 
 import { sincronizarPendentes } from "@/services/sync";
 
+import { isOnline } from '@/services/network';
+import { logout } from "@/services/session";
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
-import { isOnline } from '@/services/network';
+import { router } from "expo-router";
 
 
 export default function Browz() {
@@ -67,7 +71,11 @@ export default function Browz() {
   const [quantidadeNotificacoes, setQuantidadeNotificacoes] = useState(0);
   const { theme, darkMode } = useTheme();
 
+  const [online, setOnline] = useState(true);
+  const [pendencias, setPendencias] = useState(0);
 
+  const logoLight = require("../assets/browz.png");
+  const logoDark = require("../assets/logo-white.png");
 
   useFocusEffect(
     React.useCallback(() => {
@@ -76,9 +84,22 @@ export default function Browz() {
 
         await sincronizarPendentes();
 
+        const qtd = await contarPendencias();
+        setPendencias(qtd);
+
         await carregarUsuario();
 
-        await buscarChamados();
+        if (qtd === 0) {
+          await buscarChamados();
+        } else {
+          const cacheChamados = await AsyncStorage.getItem("@cache_chamados");
+
+          if (cacheChamados) {
+            const chamadosSalvos = JSON.parse(cacheChamados);
+            setTodosChamados(chamadosSalvos);
+            aplicarFiltros(chamadosSalvos);
+          }
+        }
 
         await buscarTecnicos();
 
@@ -97,6 +118,33 @@ export default function Browz() {
   useEffect(() => {
     aplicarFiltros();
   }, [searchText, selectedStatus, startDate, endDate, todosChamados, clientes]);
+
+  useEffect(() => {
+    async function carregarStatus() {
+      const qtd = await contarPendencias();
+      setPendencias(qtd);
+    }
+
+    carregarStatus();
+
+    const unsubscribe = NetInfo.addEventListener(async (state) => {
+      setOnline(
+        state.isConnected === true &&
+        state.isInternetReachable !== false
+      );
+
+      const qtd = await contarPendencias();
+      setPendencias(qtd);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  async function fazerLogout() {
+    await logout();
+    setMenuVisible(false);
+    router.replace("/");
+  }
 
 
   //Testando aqui o modo offline |
@@ -160,19 +208,38 @@ export default function Browz() {
             Number(representativeId)
         );
 
+        // Antes de gravar o cache, sobrepõe o estado local de chamados
+        // que ainda estão pausados offline mas a API ainda não refletiu.
+        // O flag @ticket_X_pausado só é removido pelo sync.ts após
+        // confirmação da API, então aqui ele ainda pode existir.
+        const chamadosComEstadoLocal = await Promise.all(
+          chamadosDoTecnico.map(async (item: any) => {
+            const pausadoLocal = await AsyncStorage.getItem(
+              `@ticket_${item.calendar_id}_pausado`
+            );
+            if (pausadoLocal === "1") {
+              return { ...item, calendar_status: 1, agenda_pause: 1 };
+            }
+            return item;
+          })
+        );
+
         // SALVA CACHE
         await AsyncStorage.setItem(
           "@cache_chamados",
-          JSON.stringify(chamadosDoTecnico)
+          JSON.stringify(chamadosComEstadoLocal)
         );
 
-        await verificarAlteracoes(chamadosDoTecnico);
+        await verificarAlteracoes(chamadosComEstadoLocal);
 
-        setUltimosChamados(chamadosDoTecnico);
+        // Cacheia checklists apenas dos chamados ainda sem cache
+        if (token) cachearChecklistsNovos(token, chamadosComEstadoLocal).catch(() => { });
 
-        setTodosChamados(chamadosDoTecnico);
+        setUltimosChamados(chamadosComEstadoLocal);
 
-        aplicarFiltros(chamadosDoTecnico);
+        setTodosChamados(chamadosComEstadoLocal);
+
+        aplicarFiltros(chamadosComEstadoLocal);
       }
     } catch (error) {
       console.log("ERRO:", error);
@@ -262,7 +329,7 @@ export default function Browz() {
 
         return dataChamado >= inicio && dataChamado <= fim;
       });
-      
+
     } else {
       const hoje = new Date();
 
@@ -283,16 +350,16 @@ export default function Browz() {
       });
     }
 
-    
+
     lista.sort((a, b) => {
-    
+
       if (!a.calendar_start) return 1;
       if (!b.calendar_start) return -1;
 
       const dataA = new Date(a.calendar_start).getTime();
       const dataB = new Date(b.calendar_start).getTime();
 
-      
+
       return dataB - dataA;
     });
 
@@ -672,6 +739,82 @@ export default function Browz() {
     await AsyncStorage.setItem("@ultimos_chamados_sync", JSON.stringify(novosChamados));
   }
 
+  async function cachearChecklistsNovos(token: string, chamados: any[]) {
+    try {
+      console.log(`🔍 [CHECKLIST] Verificando ${chamados.length} chamado(s)...`);
+
+      // Filtra apenas chamados que ainda não têm checklist cacheado
+      const semCache: any[] = [];
+      for (const chamado of chamados) {
+        const cached = await AsyncStorage.getItem(`@checklist_${chamado.calendar_id}`);
+        console.log(`   Chamado ${chamado.calendar_id}: ${cached ? '✅ já cacheado' : '❌ sem cache'}`);
+        if (!cached) semCache.push(chamado);
+      }
+
+      if (semCache.length === 0) {
+        console.log("🔍 [CHECKLIST] Todos já cacheados, nada a fazer.");
+        return;
+      }
+
+      console.log(`🔍 [CHECKLIST] Buscando checklists para ${semCache.length} chamado(s) sem cache...`);
+
+      const response = await fetch("https://browz.com.br/rest.php", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          class: "CalendarChecklistService",
+          method: "loadAll",
+        }),
+      });
+
+      const data = await response.json();
+      console.log(`🔍 [CHECKLIST] Resposta API: status=${data.status}, total=${Array.isArray(data.data) ? data.data.length : 'N/A'}`);
+
+      if (data.status !== "success" || !Array.isArray(data.data)) {
+        console.log("🔍 [CHECKLIST] API não retornou dados válidos:", JSON.stringify(data).substring(0, 200));
+        return;
+      }
+
+      for (const chamado of semCache) {
+        const id = chamado.calendar_id;
+        const item = data.data.find(
+          (c: any) => String(c.calendar_id) === String(id)
+        );
+
+        if (!item) {
+          console.log(`   Chamado ${id}: ⚠️ não encontrado na resposta da API`);
+          continue;
+        }
+        if (!item.calendar_checklist_template) {
+          console.log(`   Chamado ${id}: ⚠️ sem template de checklist`);
+          continue;
+        }
+
+        try {
+          const template = JSON.parse(item.calendar_checklist_template);
+          const ordenado = template.sort(
+            (a: any, b: any) => Number(a.order) - Number(b.order)
+          );
+          await AsyncStorage.setItem(
+            `@checklist_${id}`,
+            JSON.stringify({
+              calendar_checklist_id: item.calendar_checklist_id,
+              template: ordenado,
+            })
+          );
+          console.log(`   Chamado ${id}: 📋 checklist salvo (${ordenado.length} itens)`);
+        } catch (e) {
+          console.log(`   Chamado ${id}: ❌ erro ao salvar:`, e);
+        }
+      }
+    } catch (error) {
+      console.log("❌ [CHECKLIST] Erro geral:", error);
+    }
+  }
+
   async function carregarQuantidadeNotificacoes() {
     const saved = await AsyncStorage.getItem("@notificacoes");
 
@@ -750,11 +893,7 @@ export default function Browz() {
       >
         <View style={styles.logoContainer}>
           <Image
-            source={
-              darkMode
-                ? require("../assets/logo-white.png")
-                : require("../assets/browz.png")
-            }
+            source={darkMode ? logoDark : logoLight}
             style={styles.logoImage}
           />
         </View>
@@ -776,6 +915,23 @@ export default function Browz() {
               </View>*/}
             </TouchableOpacity>
           </Link>
+          <View
+            style={{
+              backgroundColor: darkMode ? "#1E293B" : "#F1F5F9",
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 8,
+            }}
+          >
+            <Text
+              style={{
+                color: darkMode ? "#FFFFFF" : "#000000",
+                fontWeight: "600",
+              }}
+            >
+              {online ? "🟢 Sincronizado" : "🔴 Offline"}
+            </Text>
+          </View>
 
           <TouchableOpacity
             style={styles.iconButton}
@@ -786,6 +942,8 @@ export default function Browz() {
               color={theme.text}
             />
           </TouchableOpacity>
+
+
         </View>
       </View>
 
@@ -800,7 +958,20 @@ export default function Browz() {
 
               await sincronizarPendentes();
 
-              await buscarChamados(true);
+              const qtd = await contarPendencias();
+              setPendencias(qtd);
+
+              if (qtd === 0) {
+                await buscarChamados(true);
+              } else {
+                const cacheChamados = await AsyncStorage.getItem("@cache_chamados");
+
+                if (cacheChamados) {
+                  const chamadosSalvos = JSON.parse(cacheChamados);
+                  setTodosChamados(chamadosSalvos);
+                  aplicarFiltros(chamadosSalvos);
+                }
+              }
             }}
             tintColor="#3b82f6"
             colors={["#3b82f6"]}
@@ -832,6 +1003,7 @@ export default function Browz() {
             />
           </View>
 
+
           <TouchableOpacity
             style={styles.filterButton}
             onPress={() => setFilterVisible(true)}
@@ -841,8 +1013,8 @@ export default function Browz() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.sectionHeader}>
-          <Text
+        {/*<View style={styles.sectionHeader}>
+         <Text
             style={[
               styles.sectionTitle,
               {
@@ -853,7 +1025,17 @@ export default function Browz() {
           <TouchableOpacity>
             <Text style={{ color: "#3b82f6" }}>Ver todos</Text>
           </TouchableOpacity>
-        </View>
+        </View>*/}
+
+
+
+
+        {/*<View style={styles.syncBadge}>
+          <Text style={styles.syncText}>
+            {online ? "🟢 Online" : "🔴 Offline"}
+            {pendencias > 0 ? ` • ${pendencias} pendência(s)` : " • Sincronizado"}
+          </Text>
+        </View>*/}
 
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -1033,7 +1215,7 @@ export default function Browz() {
                     },
                   ]}
                 >
-                  {calendar.calendar_observation || "Sem descrição"}
+                  {calendar.calendar_address || "Sem descrição"}
                 </Text>
 
 
@@ -1315,17 +1497,22 @@ export default function Browz() {
       </Modal>
 
       {/* MODAL MENU HAMBÚRGUER */}
-      <Modal
+     <Modal
         transparent
-        animationType="fade"
         visible={menuVisible}
+        animationType="fade"
         onRequestClose={() => setMenuVisible(false)}
       >
-        <TouchableOpacity
-          style={styles.menuOverlay}
-          activeOpacity={1}
-          onPress={() => setMenuVisible(false)}
-        >
+        <View style={styles.menuOverlay}>
+
+          {/* Área escura */}
+          <TouchableOpacity
+            style={styles.overlay}
+            activeOpacity={1}
+            onPress={() => setMenuVisible(false)}
+          />
+
+          {/* Menu lateral */}
           <View
             style={[
               styles.menuBox,
@@ -1342,8 +1529,13 @@ export default function Browz() {
                     color: theme.text,
                   },
                 ]}
-              >Menu</Text>
-              <TouchableOpacity onPress={() => setMenuVisible(false)}>
+              >
+                Menu
+              </Text>
+
+              <TouchableOpacity
+                onPress={() => setMenuVisible(false)}
+              >
                 <X
                   size={24}
                   color={theme.text}
@@ -1355,6 +1547,7 @@ export default function Browz() {
               <View style={styles.avatar}>
                 <User size={22} color="#fff" />
               </View>
+
               <View>
                 <Text
                   style={[
@@ -1366,6 +1559,7 @@ export default function Browz() {
                 >
                   {nome || "Usuário"}
                 </Text>
+
                 <Text
                   style={[
                     styles.userSub,
@@ -1379,35 +1573,49 @@ export default function Browz() {
               </View>
             </View>
 
-            <Link href="/home" asChild>
-              <TouchableOpacity style={styles.menuItem}>
-                <LayoutDashboard size={20} color="#3b82f6" />
-                <Text
-                  style={[
-                    styles.menuText,
-                    {
-                      color: theme.text,
-                    },
-                  ]}
-                >Home</Text>
-              </TouchableOpacity>
-            </Link>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setMenuVisible(false);
+                router.push("/home");
+              }}
+            >
+              <LayoutDashboard size={20} color="#3b82f6" />
+              <Text
+                style={[
+                  styles.menuText,
+                  {
+                    color: theme.text,
+                  },
+                ]}
+              >
+                Home
+              </Text>
+            </TouchableOpacity>
 
-            <Link href="/configuracoes" asChild>
-              <TouchableOpacity style={styles.menuItem}>
-                <Settings size={20} color="#3b82f6" />
-                <Text
-                  style={[
-                    styles.menuText,
-                    {
-                      color: theme.text,
-                    },
-                  ]}
-                >Configurações</Text>
-              </TouchableOpacity>
-            </Link>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setMenuVisible(false);
+                router.push("/configuracoes");
+              }}
+            >
+              <Settings size={20} color="#3b82f6" />
+              <Text
+                style={[
+                  styles.menuText,
+                  {
+                    color: theme.text,
+                  },
+                ]}
+              >
+                Configurações
+              </Text>
+            </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem}>
+            <TouchableOpacity
+              style={styles.menuItem}
+            >
               <Info size={20} color="#3b82f6" />
               <Text
                 style={[
@@ -1416,17 +1624,23 @@ export default function Browz() {
                     color: theme.text,
                   },
                 ]}
-              >Sobre</Text>
+              >
+                Sobre
+              </Text>
             </TouchableOpacity>
 
-            <Link href="/" asChild>
-              <TouchableOpacity style={styles.logoutBtn}>
-                <LogOut size={18} color="#fff" />
-                <Text style={styles.logoutText}>Sair</Text>
-              </TouchableOpacity>
-            </Link>
+            <TouchableOpacity
+              style={styles.logoutBtn}
+              onPress={fazerLogout}
+            >
+              <LogOut size={18} color="#fff" />
+              <Text style={styles.logoutText}>
+                Sair
+              </Text>
+            </TouchableOpacity>
+
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -1788,6 +2002,20 @@ const styles = StyleSheet.create({
   clearDateText: {
     color: "#ef4444",
     fontWeight: "600",
+  },
+  syncBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#e0f2fe",
+    alignSelf: "flex-start",
+    marginBottom: 10,
+  },
+
+  syncText: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#0369a1",
   },
 
 });

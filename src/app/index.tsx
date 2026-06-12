@@ -1,26 +1,32 @@
-import { useState } from "react";
+import { salvarSessaoOnline, verificarSessao } from "@/services/session";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from "expo-router";
+import { useState, useEffect  } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   View,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
 } from "react-native";
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { Input } from "@/components/input";
 import { Button } from "@/components/Button";
+import { Input } from "@/components/input";
 import { isOnline } from '@/services/network';
+
+
 
 export default function App() {
   const [login, setLogin] = useState("");
   const [senha, setSenha] = useState("");
+  const [verificando, setVerificando] = useState(false);
 
   const router = useRouter();
+  // Aguarda o _layout verificar a sessão antes de mostrar o formulário
 
   {/*async function fazerLogin() {
     try {
@@ -69,6 +75,36 @@ export default function App() {
     }
   } */}
 
+  async function carregarChamadosInicial(token: string, representativeId: any) {
+    const response = await fetch("https://browz.com.br/rest.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        class: "CalendarService",
+        method: "loadAll",
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.status === "success") {
+      const chamadosDoTecnico = data.data.filter(
+        (calendar: any) =>
+          Number(calendar.representative_id) === Number(representativeId)
+      );
+
+      await AsyncStorage.setItem(
+        "@cache_chamados",
+        JSON.stringify(chamadosDoTecnico)
+      );
+    }
+  }
+
+
+
 
   async function fazerLogin() {
     try {
@@ -81,11 +117,13 @@ export default function App() {
         const loginSalvo = await AsyncStorage.getItem("login");
         const senhaSalva = await AsyncStorage.getItem("senha");
 
+        const sessaoValida = await verificarSessao();
+
         if (
           loginSalvo === login &&
-          senhaSalva === senha
+          senhaSalva === senha &&
+          sessaoValida
         ) {
-
           Alert.alert(
             "Modo Offline",
             "Entrando sem internet"
@@ -95,9 +133,9 @@ export default function App() {
           return;
         }
 
-        return Alert.alert(
+        Alert.alert(
           "Sem internet",
-          "Não foi possível fazer login offline"
+          "A sessão expirou ou as credenciais estão incorretas."
         );
       }
 
@@ -137,11 +175,7 @@ export default function App() {
         const representativeId = payload.userid;
 
         // SALVA LOGIN OFFLINE
-        await AsyncStorage.setItem("login", login);
-        await AsyncStorage.setItem("senha", senha);
-
-        // SALVA TOKEN
-        await AsyncStorage.setItem("token", token);
+        await salvarSessaoOnline(token, login, senha);
 
         await AsyncStorage.setItem("nome", nome);
 
@@ -151,6 +185,36 @@ export default function App() {
           "representative_id",
           String(representativeId)
         );
+
+        await carregarChamadosInicial(token, representativeId);
+
+        async function carregarChamadosInicial(token: string, representativeId: any) {
+          const response = await fetch("https://browz.com.br/rest.php", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              class: "CalendarService",
+              method: "loadAll",
+            }),
+          });
+
+          const data = await response.json();
+
+          if (data.status === "success") {
+            const chamadosDoTecnico = data.data.filter(
+              (calendar: any) =>
+                Number(calendar.representative_id) === Number(representativeId)
+            );
+
+            await AsyncStorage.setItem(
+              "@cache_chamados",
+              JSON.stringify(chamadosDoTecnico)
+            );
+          }
+        }
 
         router.push("/home");
 
@@ -171,6 +235,14 @@ export default function App() {
         "Não foi possível conectar ao servidor"
       );
     }
+  }
+
+  if (verificando) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#0D0D0D", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+      </View>
+    );
   }
 
   return (

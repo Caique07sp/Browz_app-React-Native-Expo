@@ -1,6 +1,9 @@
+import { isOnline } from '@/services/network';
+import { adicionarNaFila } from '@/services/offlineQueue';
 import { useTheme } from "@/theme/ThemeContext";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -18,7 +21,6 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { isOnline } from '@/services/network';
 
 export default function FinalizacaoRelatorio() {
   const router = useRouter();
@@ -313,6 +315,7 @@ export default function FinalizacaoRelatorio() {
         name: nomeArquivo,
         type: 'image/png'
       } as any);
+
 
       const res = await fetch('https://browz.com.br/rest.php', {
         method: 'POST',
@@ -646,17 +649,12 @@ text     vira tentry
     const online = await isOnline();
 
     if (!online) {
-      const pendentes = await AsyncStorage.getItem("@sync_pendente");
-      const lista = pendentes ? JSON.parse(pendentes) : [];
-
-      lista.push({
+      await adicionarNaFila({
         tipo: "evento_checkin",
         data: evento,
-        criado_em: new Date().toISOString(),
+        criadoEm: new Date().toISOString(),
+        tentativas: 0,
       });
-
-      await AsyncStorage.setItem("@sync_pendente", JSON.stringify(lista));
-
       return true;
     }
 
@@ -678,6 +676,59 @@ text     vira tentry
     const result = await response.json();
 
     console.log("EVENTO CHECKOUT:", result);
+
+    return result.status === "success";
+  }
+
+  async function salvarEventoLinhaTempo(
+    titulo: string,
+    descricao: string,
+    icon: string
+  ) {
+    const agora = new Date();
+
+    const evento = {
+      calendar_id: Number(chamadoId),
+      event_title: titulo,
+      event_description: descricao,
+      event_datetime: agora
+        .toLocaleString("sv-SE", {
+          timeZone: "America/Sao_Paulo",
+        })
+        .replace(" ", "T"),
+      event_icon: icon,
+    };
+
+    const online = await isOnline();
+
+    if (!online) {
+      await adicionarNaFila({
+        tipo: "evento_linha_tempo",
+        data: evento,
+        criadoEm: new Date().toISOString(),
+        tentativas: 0,
+      });
+      return true;
+    }
+
+    const token = await AsyncStorage.getItem("token");
+
+    const response = await fetch("https://browz.com.br/rest.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        class: "CalendarEventService",
+        method: "store",
+        data: evento,
+      }),
+    });
+
+    const result = await response.json();
+
+    console.log("EVENTO LINHA DO TEMPO CHECKOUT:", result);
 
     return result.status === "success";
   }
@@ -709,6 +760,9 @@ text     vira tentry
       const notasStr = await AsyncStorage.getItem(`notas_chamado_${chamadoId}`);
       const online = await isOnline();
 
+      const nomeTecnico =
+        (await AsyncStorage.getItem('nome')) || "tecnico";
+
       const relatorioFinal = {
         calendar_id: chamadoId,
         calendar_checklist_id: calendarChecklistId, // IMPORTANTE: salvar para o sync saber qual ID atualizar
@@ -726,26 +780,98 @@ text     vira tentry
 
       // FLUXO OFFLINE
       if (!online) {
-        const pendentes = await AsyncStorage.getItem("@sync_pendente");
-        let lista = pendentes ? JSON.parse(pendentes) : [];
+        setLoadingMessage('Salvando dados offline...');
+        setLoadingDetail('Copiando arquivos para armazenamento permanente');
 
-        // Evita duplicar o mesmo chamado na fila de sincronização
-        lista = lista.filter((item: any) => item.chamadoId !== chamadoId);
+        // Helper para garantir que o diretório existe sem usar makeDirectoryAsync
+        const garantirDiretorio = async (dir: string) => {
+          const info = await FileSystem.getInfoAsync(dir);
+          if (!info.exists) {
+            await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+          }
+        };
 
-        lista.push({
-          tipo: "finalizacao",
-          chamadoId,
-          relatorioFinal,
-          data: new Date().toISOString(),
-        });
+        // --- Persiste assinatura em caminho permanente ---
+        let assinaturaPath: string | null = null;
+        if (signatureImg) {
+          const dirAssinatura = `${FileSystem.documentDirectory}browz/assinaturas/${chamadoId}`;
+          await garantirDiretorio(dirAssinatura);
+          const destAssinatura = `${dirAssinatura}/assinatura.png`;
 
-        await AsyncStorage.setItem("@sync_pendente", JSON.stringify(lista));
+          if (signatureImg.startsWith('data:')) {
+            const base64 = signatureImg.split(',')[1];
+            await FileSystem.writeAsStringAsync(destAssinatura, base64, {
+              encoding: 'base64' as any,
+            });
+          } else {
+            await FileSystem.copyAsync({ from: signatureImg, to: destAssinatura });
+          }
+          assinaturaPath = destAssinatura;
+          console.log('📝 Assinatura persistida:', assinaturaPath);
+        }
+
+        // --- Persiste fotos em caminho permanente ---
+        const fotosPermanentes: string[] = [];
+        if (relatorioFinal.fotos?.length > 0) {
+          const dirFotos = `${FileSystem.documentDirectory}browz/fotos/${chamadoId}`;
+          await garantirDiretorio(dirFotos);
+
+          for (const [i, uri] of relatorioFinal.fotos.entries()) {
+            const dest = `${dirFotos}/foto_${i + 1}.jpg`;
+            try {
+              const info = await FileSystem.getInfoAsync(uri);
+              if (info.exists) {
+                await FileSystem.copyAsync({ from: uri, to: dest });
+                fotosPermanentes.push(dest);
+                console.log(`📸 Foto ${i + 1} persistida:`, dest);
+              } else {
+                console.log(`⚠️ Foto ${i + 1} não encontrada, pulando:`, uri);
+              }
+            } catch (e) {
+              console.log(`⚠️ Erro ao copiar foto ${i + 1}:`, e);
+            }
+          }
+        }
+
+        const relatorioParaFila = {
+          ...relatorioFinal,
+          assinatura: assinaturaPath,
+          fotos: fotosPermanentes,
+        };
+
+        // Usa a chave correta — deve bater com QUEUE_KEY em offlineQueue.ts
+        const filaAtual = await AsyncStorage.getItem("@offline_queue");
+        const listaAtual = filaAtual ? JSON.parse(filaAtual) : [];
+        const jaTemFinalizacao = listaAtual.some(
+          (item: any) => item.tipo === "finalizacao" && item.ticketId === chamadoId
+        );
+
+        if (!jaTemFinalizacao) {
+          await adicionarNaFila({
+            tipo: "finalizacao",
+            ticketId: chamadoId,
+            relatorioFinal: relatorioParaFila,
+            criadoEm: new Date().toISOString(),
+            tentativas: 0,
+          });
+          console.log('📥 Finalização adicionada à fila offline para ticket:', chamadoId);
+        }
+
         await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
+
+        await salvarEventoCheckin(2);
+
+        await salvarEventoLinhaTempo(
+          "Conclusão",
+          `Atendimento concluído por ${nomeTecnico}`,
+          "fa:calendar-check bg-success"
+        );
+
         await atualizarCacheFinalizado();
 
         Alert.alert(
           'Finalizado offline',
-          'O relatório e as fotos foram salvos localmente e serão sincronizados automaticamente assim que detectar conexão.'
+          'Relatório, fotos e assinatura foram salvos localmente e serão sincronizados automaticamente quando a internet voltar.'
         );
 
         router.replace('/home');
@@ -758,7 +884,14 @@ text     vira tentry
       setLoadingMessage('Registrando check-out...');
       setLoadingDetail('Salvando evento de saída');
 
+
       const enviadoCheckout = await salvarEventoCheckin(2);
+
+      const enviadoEventoCheckout = await salvarEventoLinhaTempo(
+        "Conclusão",
+        `Atendimento concluído por ${nomeTecnico}`,
+        "fa:calendar-check bg-success"
+      );
 
       setLoadingMessage('Enviando checklist...');
       setLoadingDetail('Sincronizando respostas técnicas');
@@ -779,9 +912,9 @@ text     vira tentry
 
 
       // 3. VERIFICAÇÃO FINAL
-      if (enviadoCheckout && enviadoChecklist && enviadoRelatorio && enviadoAssinatura && enviadoFotos) {
+      if (enviadoCheckout && enviadoEventoCheckout && enviadoChecklist && enviadoRelatorio && enviadoAssinatura && enviadoFotos) {
 
-        await atualizarCacheFinalizado();  
+        await atualizarCacheFinalizado();
 
         await AsyncStorage.multiRemove([
           `@rascunho_relatorio_${chamadoId}`,
@@ -1021,7 +1154,14 @@ text     vira tentry
                 {/*Se for texto area*/}
                 {field.type === 'textarea' && (
                   <TextInput
-                    style={styles.textAreaSmall}
+                    style={[
+                      styles.textAreaSmall,
+                      {
+                        backgroundColor: theme.card,
+                        color: theme.text,
+                        borderColor: theme.border,
+                      },
+                    ]}
                     multiline
                     placeholder="Digite aqui..."
                     placeholderTextColor={theme.subText}
@@ -1332,14 +1472,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-  textAreaSmall: {
-    backgroundColor: '#0f172a',
-    borderRadius: 12,
-    color: '#fff',
-    padding: 15,
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
+ textAreaSmall: {
+  borderRadius: 12,
+  padding: 15,
+  minHeight: 100,
+  textAlignVertical: 'top',
+  borderWidth: 1,
+},
 
   optionButton: {
     backgroundColor: '#0f172a',

@@ -23,6 +23,7 @@ import {
   View,
 } from 'react-native';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
+import { adicionarNaFila } from "@/services/offlineQueue";
 
 import { isOnline } from '@/services/network';
 
@@ -49,7 +50,7 @@ export default function CheckInScreen() {
   const serviceTypeId = String(service_type_id);
   const { theme, darkMode } = useTheme();
 
-  
+
 
   async function atualizarCacheChamado(
     status: number,
@@ -114,6 +115,15 @@ export default function CheckInScreen() {
   async function carregarCheckInSalvo() {
     const savedCheckIn = await AsyncStorage.getItem(`@checkin_${ticketId}`);
     const ticketStatus = await AsyncStorage.getItem(`@ticket_${ticketId}_status`);
+
+    const ticketPausado = await AsyncStorage.getItem(`@ticket_${ticketId}_pausado`);
+
+    if (ticketPausado === "1") {
+      setStarted(false);
+      setIsActive(false);
+      setCheckInTime(null);
+      return;
+    }
 
     if (ticketStatus === 'concluido' || ticketStatus === 'finalizado') {
       setStarted(false);
@@ -240,25 +250,14 @@ export default function CheckInScreen() {
 
         console.log("📴 Offline - salvando sync pendente");
 
-        const pendentes =
-          await AsyncStorage.getItem("@sync_pendente");
-
-        let lista = pendentes
-          ? JSON.parse(pendentes)
-          : [];
-
-        lista.push({
+        await adicionarNaFila({
           tipo: "status_chamado",
           ticketId,
           status,
           extraData,
-          data: new Date().toISOString(),
+          criadoEm: new Date().toISOString(),
+          tentativas: 0,
         });
-
-        await AsyncStorage.setItem(
-          "@sync_pendente",
-          JSON.stringify(lista)
-        );
 
         // ATUALIZA CACHE LOCAL
         await atualizarCacheChamado(
@@ -332,16 +331,66 @@ export default function CheckInScreen() {
     const online = await isOnline();
 
     if (!online) {
-      const pendentes = await AsyncStorage.getItem("@sync_pendente");
-      const lista = pendentes ? JSON.parse(pendentes) : [];
-
-      lista.push({
+      await adicionarNaFila({
         tipo: "evento_linha_tempo",
         data: evento,
-        criado_em: new Date().toISOString(),
+        criadoEm: new Date().toISOString(),
+        tentativas: 0,
       });
 
-      await AsyncStorage.setItem("@sync_pendente", JSON.stringify(lista));
+      return true;
+    }
+    const token = await AsyncStorage.getItem("token");
+
+    const response = await fetch("https://browz.com.br/rest.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        class: "CalendarEventService",
+        method: "store",
+        data: evento,
+      }),
+    });
+
+    const result = await response.json();
+
+    console.log("EVENTO LINHA DO TEMPO:", result);
+
+    return result.status === "success";
+  }
+
+  async function salvarEventoCheckin(tipo: 1 | 2 | 3) {
+    const agora = new Date();
+
+    const latitude = location?.coords.latitude || null;
+    const longitude = location?.coords.longitude || null;
+
+    const evento = {
+      calendar_id: Number(ticketId),
+      representative_id: Number(await AsyncStorage.getItem("representative_id")),
+      calendar_checkin_type: tipo,
+      calendar_checkin_geo:
+        latitude && longitude ? `${latitude}, ${longitude}` : '',
+      calendar_checkin_latlng:
+        latitude && longitude ? `{lat: ${latitude},lng: ${longitude}}` : '',
+      calendar_checkin_datetime:
+        agora.toLocaleString('sv-SE', {
+          timeZone: 'America/Sao_Paulo',
+        }).replace(' ', 'T'),
+    };
+
+    const online = await isOnline();
+
+    if (!online) {
+      await adicionarNaFila({
+        tipo: "evento_checkin",
+        data: evento,
+        criadoEm: new Date().toISOString(),
+        tentativas: 0,
+      });
 
       return true;
     }
@@ -353,495 +402,309 @@ export default function CheckInScreen() {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
-    },
-  body: JSON.stringify({
-    class: "CalendarEventService",
-    method: "store",
-    data: evento,
-  }),
-  });
-
-const result = await response.json();
-
-console.log("EVENTO LINHA DO TEMPO:", result);
-
-return result.status === "success";
-}
-
-async function salvarEventoCheckin(tipo: 1 | 2 | 3) {
-  const agora = new Date();
-
-  const latitude = location?.coords.latitude || null;
-  const longitude = location?.coords.longitude || null;
-
-  const evento = {
-    calendar_id: Number(ticketId),
-    representative_id: Number(await AsyncStorage.getItem("representative_id")),
-    calendar_checkin_type: tipo,
-    calendar_checkin_geo:
-      latitude && longitude ? `${latitude}, ${longitude}` : '',
-    calendar_checkin_latlng:
-      latitude && longitude ? `{lat: ${latitude},lng: ${longitude}}` : '',
-    calendar_checkin_datetime:
-      agora.toLocaleString('sv-SE', {
-        timeZone: 'America/Sao_Paulo',
-      }).replace(' ', 'T'),
-  };
-
-  const online = await isOnline();
-
-  if (!online) {
-    const pendentes = await AsyncStorage.getItem("@sync_pendente");
-
-    const lista = pendentes ? JSON.parse(pendentes) : [];
-
-    lista.push({
-      tipo: "evento_checkin",
-      data: evento,
-      criado_em: new Date().toISOString(),
+      },
+      body: JSON.stringify({
+        class: "CalendarCheckinService",
+        method: "store",
+        data: evento,
+      }),
     });
 
-    await AsyncStorage.setItem(
-      "@sync_pendente",
-      JSON.stringify(lista)
-    );
+    const result = await response.json();
 
-    return true;
+    console.log("EVENTO CHECKIN:", result);
+
+    return result.status === "success";
   }
 
-  const token = await AsyncStorage.getItem("token");
+  async function handleStart() {
+    const now = new Date();
 
-  const response = await fetch("https://browz.com.br/rest.php", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      class: "CalendarCheckinService",
-      method: "store",
-      data: evento,
-    }),
-  });
-
-  const result = await response.json();
-
-  console.log("EVENTO CHECKIN:", result);
-
-  return result.status === "success";
-}
-
-async function handleStart() {
-  const now = new Date();
-
-  const checkinData = {
-    calendar_id: ticketId,
-    horario: now.toISOString(),
-    horario_formatado: now.toLocaleTimeString('PT-br', {
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'America/Sao_Paulo',
-    }),
-    latitude: location?.coords.latitude || null,
-    longitude: location?.coords.longitude || null,
-    status: 'checkin_realizado',
-    ativo: true,
-    pausas: [],
-    enviado_api: false,
-  };
-
-  await AsyncStorage.setItem(
-    `@checkin_${ticketId}`,
-    JSON.stringify(checkinData)
-  );
-
-  await salvarEventoLinhaTempo(
-  "Check-In",
-  "Check-In realizado.",
-  "fa:arrow-right bg-primary"
-);
-
-  await salvarEventoCheckin(1); //Check-in
-
-  await atualizarStatusChamado(1, {
-    agenda_pause: 0,
-
-    calendar_last_checkin_date:
-      now.toLocaleString('sv-SE', {
+    const checkinData = {
+      calendar_id: ticketId,
+      horario: now.toISOString(),
+      horario_formatado: now.toLocaleTimeString('PT-br', {
+        hour: '2-digit',
+        minute: '2-digit',
         timeZone: 'America/Sao_Paulo',
-      }).replace(' ', 'T'),
+      }),
+      latitude: location?.coords.latitude || null,
+      longitude: location?.coords.longitude || null,
+      status: 'checkin_realizado',
+      ativo: true,
+      pausas: [],
+      enviado_api: false,
+    };
 
-    calendar_last_checkin_geo: `${location?.coords.latitude},${location?.coords.longitude}`,
-  });
-
-
-
-  setCheckInTime(checkinData.horario_formatado);
-  setStarted(true);
-  setIsActive(true);
-
-  Alert.alert('Check-in realizado', 'O check-in foi salvo no celular.');
-}
-
-async function handleConfirmAction() {
-  if (!reason.trim()) {
-    return Alert.alert(
-      'Atenção',
-      'Informe o motivo da pausa.'
+    await AsyncStorage.setItem(
+      `@checkin_${ticketId}`,
+      JSON.stringify(checkinData)
     );
+
+    await salvarEventoLinhaTempo(
+      "Check-In",
+      "Check-In realizado.",
+      "fa:arrow-right bg-primary"
+    );
+
+    await salvarEventoCheckin(1); //Check-in
+
+    await atualizarStatusChamado(1, {
+      agenda_pause: 0,
+
+      calendar_last_checkin_date:
+        now.toLocaleString('sv-SE', {
+          timeZone: 'America/Sao_Paulo',
+        }).replace(' ', 'T'),
+
+      calendar_last_checkin_geo: `${location?.coords.latitude},${location?.coords.longitude}`,
+    });
+
+    await AsyncStorage.removeItem(`@ticket_${ticketId}_pausado`);
+
+
+
+    setCheckInTime(checkinData.horario_formatado);
+    setStarted(true);
+    setIsActive(true);
+
+    Alert.alert('Check-in realizado', 'O check-in foi salvo no celular.');
   }
 
-  const savedCheckIn = await AsyncStorage.getItem(`@checkin_${ticketId}`);
+  async function handleConfirmAction() {
+    if (!reason.trim()) {
+      return Alert.alert(
+        'Atenção',
+        'Informe o motivo da pausa.'
+      );
+    }
 
-  if (!savedCheckIn) {
-    return Alert.alert(
-      'Atenção',
-      'Nenhum check-in encontrado.'
+    const savedCheckIn = await AsyncStorage.getItem(`@checkin_${ticketId}`);
+
+    if (!savedCheckIn) {
+      return Alert.alert(
+        'Atenção',
+        'Nenhum check-in encontrado.'
+      );
+    }
+
+    const nomeTecnico =
+      (await AsyncStorage.getItem('nome')) || "tecnico";
+
+    const data = JSON.parse(savedCheckIn);
+
+    const agora = getBrazilDateTime();
+
+    const pausado = {
+      ...data,
+
+      ativo: false,
+
+      status: 'pausado',
+
+      pausa_motivo: reason.trim(),
+
+      pausa_data: agora.toISOString(),
+      pausa_horario_formatado: agora.toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    };
+
+    await AsyncStorage.setItem(
+      `@checkin_${ticketId}`,
+      JSON.stringify(pausado)
     );
-  }
 
-  const nomeTecnico =
-    (await AsyncStorage.getItem('nome')) || "tecnico";
-
-  const data = JSON.parse(savedCheckIn);
-
-  const agora = getBrazilDateTime();
-
-  const pausado = {
-    ...data,
-
-    ativo: false,
-
-    status: 'pausado',
-
-    pausa_motivo: reason.trim(),
-
-    pausa_data: agora.toISOString(),
-    pausa_horario_formatado: agora.toLocaleTimeString('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    }),
-  };
-
-  await AsyncStorage.setItem(
-    `@checkin_${ticketId}`,
-    JSON.stringify(pausado)
-  );
-
-  await salvarEventoLinhaTempo(
-  "Pausa",
-  `Atendimento colocado em modo de espera por ${nomeTecnico}. 
+    await salvarEventoLinhaTempo(
+      "Pausa",
+      `Atendimento colocado em modo de espera por ${nomeTecnico}. 
   <br/>Motivo: <br/>
    ${reason.trim()}`,
-  "fa:arrow-right bg-calendar-pause"
-);
+      "fa:arrow-right bg-calendar-pause"
+    );
 
-  await salvarEventoCheckin(3); //Pausa
+    await salvarEventoCheckin(3); //Pausa
 
-  await atualizarStatusChamado(1, {
-    agenda_pause: 1,
-  });
-  await AsyncStorage.removeItem(`@checkin_${ticketId}`);
+    const online = await isOnline();
 
-  // AQUI ENCERRA O CHECK-IN ATUAL
-  setStarted(false);
+    if (!online) {
+      await adicionarNaFila({
+        tipo: "pausar_chamado",
+        ticketId,
+        data: {
+          pausa_motivo: reason.trim(),
+          pausa_data: agora.toISOString(),
+        },
+        criadoEm: new Date().toISOString(),
+        tentativas: 0,
+      });
 
-  setIsActive(false);
+      await atualizarCacheChamado(1, 1);
+    } else {
+      await atualizarStatusChamado(1, {
+        agenda_pause: 1,
+        calendar_status: 1,
+        pausa_motivo: reason.trim(),
+        pausa_data: agora.toISOString(),
+      });
+    }
 
-  setCheckInTime(null);
+    await AsyncStorage.setItem(
+      `@ticket_${ticketId}_pausado`,
+      "1"
+    );
 
-  setReason('');
-  setModalType(null);
+    await AsyncStorage.removeItem(`@checkin_${ticketId}`);
 
-  Alert.alert(
-    'Atendimento pausado',
-    'Será necessário realizar novo check-in para continuar.'
-  );
-}
+    // AQUI ENCERRA O CHECK-IN ATUAL
+    setStarted(false);
 
-async function handleFinish() {
-  router.push({
-    pathname: '/finalizacao-relatorio',
-    params: { ticketId },
-  });
-}
+    setIsActive(false);
 
-function getCategoriaText(serviceTypeId: any) {
+    setCheckInTime(null);
+
+    setReason('');
+    setModalType(null);
+
+    Alert.alert(
+      'Atendimento pausado',
+      'Será necessário realizar novo check-in para continuar.'
+    );
+  }
+
+  async function handleFinish() {
+    router.push({
+      pathname: '/finalizacao-relatorio',
+      params: { ticketId },
+    });
+  }
+
+  function getCategoriaText(serviceTypeId: any) {
+    return (
+      categorias[serviceTypeId] ||
+      'Categoria não encontrada'
+    );
+  }
+
   return (
-    categorias[serviceTypeId] ||
-    'Categoria não encontrada'
-  );
-}
-
-return (
-  <SafeAreaView
-    style={[
-      styles.container,
-      {
-        backgroundColor: theme.background,
-      },
-    ]}
-  >
-    <StatusBar
-      barStyle={
-        darkMode
-          ? "light-content"
-          : "dark-content"
-      }
-    />
-
-    <View
+    <SafeAreaView
       style={[
-        styles.header,
+        styles.container,
         {
-          backgroundColor: theme.card,
-          borderBottomColor: theme.border,
+          backgroundColor: theme.background,
         },
       ]}
     >
-      <Link href="/home" asChild>
-        <TouchableOpacity
-          style={[
-            styles.closeButton,
-            {
-              backgroundColor: theme.background,
-            },
-          ]}
-        >
-          <X
-            color={theme.subText}
-            size={24}
-          />
-        </TouchableOpacity>
-      </Link>
-
-      <Text
-        style={[
-          styles.headerTitle,
-          {
-            color: theme.text,
-          },
-        ]}
-      >
-        {started ? 'Atendimento em Curso' : 'Check-in'}
-      </Text>
-
-      <View style={{ width: 24 }} />
-    </View>
-
-    <View style={styles.content}>
-      <View
-        style={[
-          styles.mapContainer,
-          {
-            borderColor: theme.border,
-          },
-        ]}
-      >
-        {location ? (
-          <MapView
-            style={styles.map}
-            provider={PROVIDER_GOOGLE}
-            userInterfaceStyle={
-              darkMode ? "dark" : "light"
-            }
-            region={{
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-              latitudeDelta: 0.005,
-              longitudeDelta: 0.005,
-            }}
-            showsUserLocation
-          />
-        ) : (
-          <View
-            style={[
-              styles.mapLoading,
-              {
-                backgroundColor: theme.card,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.mapText,
-                {
-                  color: theme.subText,
-                },
-              ]}
-            >Localizando...</Text>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.ticketBrief}>
-        <Text style={styles.ticketId}>#{ticketId}</Text>
-        <Text
-          style={[
-            styles.ticketTitle,
-            {
-              color: theme.text,
-            },
-          ]}
-        >
-          {categorias[serviceTypeId] || 'Carregando categoria...'}
-        </Text>
-      </View>
+      <StatusBar
+        barStyle={
+          darkMode
+            ? "light-content"
+            : "dark-content"
+        }
+      />
 
       <View
         style={[
-          styles.timeCard,
+          styles.header,
           {
             backgroundColor: theme.card,
-            borderColor: theme.border,
+            borderBottomColor: theme.border,
           },
         ]}
       >
-        <Text
-          style={[
-            styles.timeLabel,
-            {
-              color: theme.subText,
-            },
-          ]}
-        >HORA ATUAL</Text>
+        <Link href="/home" asChild>
+          <TouchableOpacity
+            style={[
+              styles.closeButton,
+              {
+                backgroundColor: theme.background,
+              },
+            ]}
+          >
+            <X
+              color={theme.subText}
+              size={24}
+            />
+          </TouchableOpacity>
+        </Link>
 
         <Text
           style={[
-            styles.timeValue,
+            styles.headerTitle,
             {
               color: theme.text,
             },
           ]}
         >
-          {currentTime.toLocaleTimeString('pt-BR', {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-          })}
+          {started ? 'Atendimento em Curso' : 'Check-in'}
         </Text>
 
-        {checkInTime && (
-          <View style={[
-            styles.checkInBadge,
-            {
-              backgroundColor: theme.background,
-            },
-
-          ]}>
-            <Text style={styles.checkInText}>
-              Check-in realizado às {checkInTime}
-            </Text>
-          </View>
-        )}
-
-        {started && (
-          <View
-            style={[
-              styles.statusWorkBadge,
-              {
-                backgroundColor: '#fff',
-              },
-
-            ]}
-          >
-            <Text
-              style={[
-                styles.statusWorkText,
-                {
-                  color: isActive ? '#22c55e' : '#f59e0b',
-
-                },
-              ]}
-            >
-              {isActive ? 'Em atendimento' : 'Pausado'}
-            </Text>
-          </View>
-        )}
+        <View style={{ width: 24 }} />
       </View>
 
-      {!started ? (
-        <TouchableOpacity style={styles.startBtn} onPress={handleStart}>
-          <Play color="#fff" size={24} fill="#fff" />
-          <Text style={styles.btnMainText}>Realizar Check-in</Text>
-        </TouchableOpacity>
-      ) : (
-        <>
-          <View style={styles.actionGrid}>
-            <TouchableOpacity
-              style={[
-                styles.secondaryBtn,
-                {
-                  flex: 1,
-                  backgroundColor: theme.card,
-                  borderColor: theme.border,
-                },
-              ]}
-              onPress={() =>
-                router.push({
-                  pathname: '/fotos-chamado',
-                  params: { id: ticketId },
-                })
-              }
-            >
-              <CameraIcon
-                color={theme.text}
-                size={20}
-              />
-
-              <Text
-                style={[
-                  styles.btnText,
-                  {
-                    color: theme.text,
-                  },
-                ]}
-              >
-                Tirar Foto
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.secondaryBtn,
-                {
-                  flex: 1,
-                  backgroundColor: theme.card,
-                  borderColor: '#f59e0b',
-                },
-              ]}
-              onPress={() => setModalType('pause')}
-            >
-              <Pause
-                color="#f59e0b"
-                size={20}
-                fill="#f59e0b"
-              />
-
-              <Text
-                style={[
-                  styles.btnText,
-                  { color: '#f59e0b' },
-                ]}
-              >
-                Pausar
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity style={styles.finishBtn} onPress={handleFinish}>
-            <CheckCircle color="#fff" size={24} />
-            <Text style={styles.btnMainText}>Finalizar Chamado</Text>
-          </TouchableOpacity>
-        </>
-      )}
-    </View>
-
-    <Modal visible={!!modalType} transparent animationType="fade">
-      <View style={styles.modalOverlay}>
+      <View style={styles.content}>
         <View
           style={[
-            styles.modalContent,
+            styles.mapContainer,
+            {
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          {location ? (
+            <MapView
+              style={styles.map}
+              provider={PROVIDER_GOOGLE}
+              userInterfaceStyle={
+                darkMode ? "dark" : "light"
+              }
+              region={{
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+                latitudeDelta: 0.005,
+                longitudeDelta: 0.005,
+              }}
+              showsUserLocation
+            />
+          ) : (
+            <View
+              style={[
+                styles.mapLoading,
+                {
+                  backgroundColor: theme.card,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.mapText,
+                  {
+                    color: theme.subText,
+                  },
+                ]}
+              >Localizando...</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.ticketBrief}>
+          <Text style={styles.ticketId}>#{ticketId}</Text>
+          <Text
+            style={[
+              styles.ticketTitle,
+              {
+                color: theme.text,
+              },
+            ]}
+          >
+            {categorias[serviceTypeId] || 'Carregando categoria...'}
+          </Text>
+        </View>
+
+        <View
+          style={[
+            styles.timeCard,
             {
               backgroundColor: theme.card,
               borderColor: theme.border,
@@ -850,63 +713,214 @@ return (
         >
           <Text
             style={[
-              styles.modalTitle,
+              styles.timeLabel,
+              {
+                color: theme.subText,
+              },
+            ]}
+          >HORA ATUAL</Text>
+
+          <Text
+            style={[
+              styles.timeValue,
               {
                 color: theme.text,
               },
             ]}
           >
-            {isActive ? 'Motivo da Pausa' : 'Motivo do Retorno'}
+            {currentTime.toLocaleTimeString('pt-BR', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+            })}
           </Text>
 
-          <TextInput
-            style={[
-              styles.reasonInput,
+          {checkInTime && (
+            <View style={[
+              styles.checkInBadge,
               {
                 backgroundColor: theme.background,
-                color: theme.text,
-                borderColor: theme.border,
               },
-            ]}
-            placeholder="Digite aqui..."
-            placeholderTextColor={theme.subText}
-            multiline
-            value={reason}
-            onChangeText={setReason}
-          />
 
-          <View style={styles.modalButtons}>
-            <TouchableOpacity
-              style={styles.cancelBtn}
-              onPress={() => {
-                setReason('');
-                setModalType(null);
-              }}
+            ]}>
+              <Text style={styles.checkInText}>
+                Check-in realizado às {checkInTime}
+              </Text>
+            </View>
+          )}
+
+          {started && (
+            <View
+              style={[
+                styles.statusWorkBadge,
+                {
+                  backgroundColor: '#fff',
+                },
+
+              ]}
             >
               <Text
                 style={[
-                  styles.btnText,
+                  styles.statusWorkText,
                   {
-                    color: theme.text,
+                    color: isActive ? '#22c55e' : '#f59e0b',
+
                   },
                 ]}
               >
-                Cancelar
+                {isActive ? 'Em atendimento' : 'Pausado'}
               </Text>
-            </TouchableOpacity>
+            </View>
+          )}
+        </View>
 
-            <TouchableOpacity
-              style={styles.confirmBtn}
-              onPress={handleConfirmAction}
-            >
-              <Text style={styles.btnMainText}>Confirmar</Text>
+        {!started ? (
+          <TouchableOpacity style={styles.startBtn} onPress={handleStart}>
+            <Play color="#fff" size={24} fill="#fff" />
+            <Text style={styles.btnMainText}>Realizar Check-in</Text>
+          </TouchableOpacity>
+        ) : (
+          <>
+            <View style={styles.actionGrid}>
+              <TouchableOpacity
+                style={[
+                  styles.secondaryBtn,
+                  {
+                    flex: 1,
+                    backgroundColor: theme.card,
+                    borderColor: theme.border,
+                  },
+                ]}
+                onPress={() =>
+                  router.push({
+                    pathname: '/fotos-chamado',
+                    params: { id: ticketId },
+                  })
+                }
+              >
+                <CameraIcon
+                  color={theme.text}
+                  size={20}
+                />
+
+                <Text
+                  style={[
+                    styles.btnText,
+                    {
+                      color: theme.text,
+                    },
+                  ]}
+                >
+                  Tirar Foto
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.secondaryBtn,
+                  {
+                    flex: 1,
+                    backgroundColor: theme.card,
+                    borderColor: '#f59e0b',
+                  },
+                ]}
+                onPress={() => setModalType('pause')}
+              >
+                <Pause
+                  color="#f59e0b"
+                  size={20}
+                  fill="#f59e0b"
+                />
+
+                <Text
+                  style={[
+                    styles.btnText,
+                    { color: '#f59e0b' },
+                  ]}
+                >
+                  Pausar
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.finishBtn} onPress={handleFinish}>
+              <CheckCircle color="#fff" size={24} />
+              <Text style={styles.btnMainText}>Finalizar Chamado</Text>
             </TouchableOpacity>
+          </>
+        )}
+      </View>
+
+      <Modal visible={!!modalType} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalContent,
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.modalTitle,
+                {
+                  color: theme.text,
+                },
+              ]}
+            >
+              {isActive ? 'Motivo da Pausa' : 'Motivo do Retorno'}
+            </Text>
+
+            <TextInput
+              style={[
+                styles.reasonInput,
+                {
+                  backgroundColor: theme.background,
+                  color: theme.text,
+                  borderColor: theme.border,
+                },
+              ]}
+              placeholder="Digite aqui..."
+              placeholderTextColor={theme.subText}
+              multiline
+              value={reason}
+              onChangeText={setReason}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => {
+                  setReason('');
+                  setModalType(null);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.btnText,
+                    {
+                      color: theme.text,
+                    },
+                  ]}
+                >
+                  Cancelar
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.confirmBtn}
+                onPress={handleConfirmAction}
+              >
+                <Text style={styles.btnMainText}>Confirmar</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
-    </Modal>
-  </SafeAreaView>
-);
+      </Modal>
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
