@@ -1,23 +1,44 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { ArrowLeft, Calendar as CalendarIcon, MapPinOff, Navigation, Sparkles } from "lucide-react-native";
+import {
+    AlertTriangle,
+    ArrowLeft,
+    Calendar as CalendarIcon,
+    MapPin,
+    MapPinOff,
+    Navigation,
+    Route,
+    Sparkles,
+} from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
+    Alert,
+    Dimensions,
+    FlatList,
     Platform,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
-    Alert
 } from "react-native";
 import MapView, { Callout, Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { useTheme } from "@/theme/ThemeContext";
+
+const { width: LARGURA_TELA } = Dimensions.get("window");
+const LARGURA_CARD = LARGURA_TELA * 0.8;
+
+// 🔑 Obtém a API Key do Google Maps configurada no app.json (Android e iOS)
+const GOOGLE_DIRECTIONS_API_KEY =
+    Constants.expoConfig?.android?.config?.googleMaps?.apiKey ||
+    Constants.expoConfig?.ios?.config?.googleMapsApiKey ||
+    "";
 
 interface ChamadoMapa {
     id: string;
@@ -31,13 +52,14 @@ interface ChamadoMapa {
     statusTexto: string;
     calendar_status: number;
     agenda_pause: number;
-    ordemRota?: number; // Para mostrar visualmente a ordem (1º, 2º, 3º...)
+    ordemRota?: number;
 }
 
 export default function MapaChamadosScreen() {
     const router = useRouter();
     const { theme, darkMode } = useTheme();
     const mapRef = useRef<MapView | null>(null);
+    const flatListRef = useRef<FlatList | null>(null);
 
     const [dataSelecionada, setDataSelecionada] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
@@ -46,6 +68,10 @@ export default function MapaChamadosScreen() {
 
     const [todosChamados, setTodosChamados] = useState<ChamadoMapa[]>([]);
     const [chamadosFiltrados, setChamadosFiltrados] = useState<ChamadoMapa[]>([]);
+    const [chamadoAtivoId, setChamadoAtivoId] = useState<string | null>(null);
+    const [qtdSemEndereco, setQtdSemEndereco] = useState<number>(0);
+    const [distanciaTotalKm, setDistanciaTotalKm] = useState<number | null>(null);
+    const [coordenadasRotaReal, setCoordenadasRotaReal] = useState<{ latitude: number; longitude: number }[]>([]);
 
     useEffect(() => {
         carregarDadosIniciais();
@@ -70,7 +96,7 @@ export default function MapaChamadosScreen() {
 
             const mapeados: ChamadoMapa[] = chamadosBrutos.map((c: any) => ({
                 id: String(c.calendar_id),
-                protocolo: `CH-${c.calendar_id}`,
+                protocolo: `OS-${c.calendar_id}`,
                 cliente: clientesDict[c.customer_id] || `Cliente #${c.customer_id}`,
                 endereco: c.calendar_address || "",
                 dataOriginal: c.calendar_start,
@@ -90,37 +116,76 @@ export default function MapaChamadosScreen() {
         }
     }
 
+    async function obterCoordenadasComCache(endereco: string) {
+        if (!endereco || endereco.trim().length === 0) return null;
+
+        const chaveCache = `@geocode_${endereco.toLowerCase().trim()}`;
+        try {
+            const local = await AsyncStorage.getItem(chaveCache);
+            if (local) return JSON.parse(local);
+
+            // Timeout de segurança para evitar travamentos infinitos do CLGeocoder no iOS (3 segundos max)
+            const promessaTimeout = new Promise<null>((resolve) =>
+                setTimeout(() => resolve(null), 3000)
+            );
+
+            const promessaGeocode = Location.geocodeAsync(endereco);
+
+            const geocode = await Promise.race([promessaGeocode, promessaTimeout]);
+
+            if (geocode && geocode.length > 0) {
+                const coordenadas = { latitude: geocode[0].latitude, longitude: geocode[0].longitude };
+                await AsyncStorage.setItem(chaveCache, JSON.stringify(coordenadas));
+                return coordenadas;
+            }
+        } catch (e) {
+            console.log(`Erro geocode no endereço: ${endereco}`, e);
+        }
+        return null;
+    }
+
     async function aplicarFiltroPorData(listaGeral: ChamadoMapa[], dataFiltro: Date) {
         setLoading(true);
-        const dataFiltroStr = dataFiltro.toLocaleDateString("pt-BR");
+        setDistanciaTotalKm(null);
+        setCoordenadasRotaReal([]);
 
+        const dataFiltroStr = dataFiltro.toLocaleDateString("pt-BR");
         const chamadosDoDia = listaGeral.filter((item) => item.dataStr === dataFiltroStr);
 
-        const chamadosComCoordenadas = await Promise.all(
-            chamadosDoDia.map(async (item) => {
-                if (!item.endereco || item.endereco.trim().length === 0) return item;
-
-                try {
-                    const geocode = await Location.geocodeAsync(item.endereco);
-                    if (geocode.length > 0) {
-                        return {
-                            ...item,
-                            latitude: geocode[0].latitude,
-                            longitude: geocode[0].longitude,
-                        };
-                    }
-                } catch (e) {
-                    console.log(`Erro ao buscar coordenada do chamado #${item.id}`);
-                }
-                return item;
-            })
-        );
+        // Geocoding sequencial para evitar enfileiramento e rate-limit do CLGeocoder (iOS)
+        const chamadosComCoordenadas: ChamadoMapa[] = [];
+        for (const item of chamadosDoDia) {
+            const coordenadas = await obterCoordenadasComCache(item.endereco);
+            if (coordenadas) {
+                chamadosComCoordenadas.push({
+                    ...item,
+                    latitude: coordenadas.latitude,
+                    longitude: coordenadas.longitude,
+                });
+            } else {
+                chamadosComCoordenadas.push(item);
+            }
+        }
 
         const validos = chamadosComCoordenadas.filter((c) => c.latitude && c.longitude) as ChamadoMapa[];
-        setChamadosFiltrados(validos);
-        setLoading(false);
+        const invalidosCount = chamadosDoDia.length - validos.length;
 
+        setChamadosFiltrados(validos);
+        setQtdSemEndereco(invalidosCount);
+
+        if (validos.length > 0) {
+            setChamadoAtivoId(validos[0].id);
+        }
+
+        setLoading(false);
         enquadrarChamadosNoMapa(validos);
+
+        // 🛣️ Desenha o trajeto pelas ruas se houver múltiplos pontos válidos
+        if (validos.length > 1) {
+            buscarRotaPorPontos(validos.map((c) => ({ latitude: c.latitude!, longitude: c.longitude! })));
+        } else {
+            setCoordenadasRotaReal([]);
+        }
     }
 
     function enquadrarChamadosNoMapa(chamados: ChamadoMapa[]) {
@@ -133,35 +198,149 @@ export default function MapaChamadosScreen() {
 
         setTimeout(() => {
             mapRef.current?.fitToCoordinates(coordenadas, {
-                edgePadding: { top: 80, right: 80, bottom: 220, left: 80 }, // Aumentado o bottom para não sumir atrás do botão de otimizar
+                edgePadding: { top: 120, right: 60, bottom: 260, left: 60 },
                 animated: true,
             });
         }, 400);
     }
 
-    // 📐 Fórmula matemática para calcular distância entre duas coordenadas (Haversine)
+    function focarNoChamado(latitude: number, longitude: number) {
+        mapRef.current?.animateToRegion(
+            {
+                latitude,
+                longitude,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+            },
+            600
+        );
+    }
+
+    function selecionarChamadoPeloCarrossel(item: ChamadoMapa) {
+        setChamadoAtivoId(item.id);
+        if (item.latitude && item.longitude) {
+            focarNoChamado(item.latitude, item.longitude);
+        }
+
+        const index = chamadosFiltrados.findIndex((c) => c.id === item.id);
+        if (index !== -1 && flatListRef.current) {
+            flatListRef.current.scrollToIndex({ index, animated: true });
+        }
+    }
+
+    const MAX_WAYPOINTS_POR_REQUISICAO = 23;
+
+    async function buscarRotaPorPontos(pontos: { latitude: number; longitude: number }[]) {
+        if (pontos.length < 2 || !GOOGLE_DIRECTIONS_API_KEY) {
+            setCoordenadasRotaReal([]);
+            return;
+        }
+
+        try {
+            const blocos: { latitude: number; longitude: number }[][] = [];
+            let inicioBloco = 0;
+            while (inicioBloco < pontos.length - 1) {
+                const fimBloco = Math.min(inicioBloco + MAX_WAYPOINTS_POR_REQUISICAO + 1, pontos.length - 1);
+                blocos.push(pontos.slice(inicioBloco, fimBloco + 1));
+                inicioBloco = fimBloco;
+            }
+
+            let trajetoCompleto: { latitude: number; longitude: number }[] = [];
+
+            for (const bloco of blocos) {
+                const origem = `${bloco[0].latitude},${bloco[0].longitude}`;
+                const destino = `${bloco[bloco.length - 1].latitude},${bloco[bloco.length - 1].longitude}`;
+                const intermediarios = bloco
+                    .slice(1, -1)
+                    .map((p) => `${p.latitude},${p.longitude}`)
+                    .join("|");
+
+                const params = new URLSearchParams({
+                    origin: origem,
+                    destination: destino,
+                    mode: "driving",
+                    key: GOOGLE_DIRECTIONS_API_KEY,
+                });
+
+                if (intermediarios) {
+                    params.append("waypoints", `optimize:false|${intermediarios}`);
+                }
+
+                const resposta = await fetch(
+                    `https://maps.googleapis.com/maps/api/directions/json?${params.toString()}`
+                );
+                const json = await resposta.json();
+
+                if (json.status === "OK" && json.routes?.length > 0) {
+                    const pontosPolyline = decodificarPolyline(json.routes[0].overview_polyline.points);
+                    trajetoCompleto = trajetoCompleto.concat(pontosPolyline);
+                } else {
+                    console.log("Directions API retornou erro:", json.status, json.error_message);
+                }
+            }
+
+            setCoordenadasRotaReal(trajetoCompleto);
+        } catch (error) {
+            console.log("Erro ao buscar rota real do Google:", error);
+            setCoordenadasRotaReal([]);
+        }
+    }
+
+    function decodificarPolyline(encoded: string) {
+        let points = [];
+        let index = 0, len = encoded.length;
+        let lat = 0, lng = 0;
+
+        while (index < len) {
+            let b, shift = 0, result = 0;
+            do {
+                b = encoded.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            let dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+            lat += dlat;
+
+            shift = 0;
+            result = 0;
+            do {
+                b = encoded.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            let dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+            lng += dlng;
+
+            points.push({
+                latitude: lat / 1e5,
+                longitude: lng / 1e5,
+            });
+        }
+        return points;
+    }
+
     function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: number) {
-        const R = 6371; // Raio da Terra em KM
+        const R = 6371;
         const dLat = (lat2 - lat1) * (Math.PI / 180);
         const dLon = (lon2 - lon1) * (Math.PI / 180);
         const a =
             Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            Math.cos(lat1 * (Math.PI / 180)) *
+            Math.cos(lat2 * (Math.PI / 180)) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
     }
 
-    // ⚡ ALGORITMO DE OTIMIZAÇÃO DE ROTA
     async function otimizarRota() {
         if (chamadosFiltrados.length === 0) return;
         setOtimizando(true);
 
         try {
-            // 1. Pede permissão e pega a localização exata atual do técnico
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== "granted") {
-                Alert.alert("Permissão negada", "Precisamos do GPS para calcular a rota a partir de onde você está.");
+                Alert.alert("Permissão negada", "Precisamos do GPS para calcular a rota.");
                 setOtimizando(false);
                 return;
             }
@@ -172,16 +351,15 @@ export default function MapaChamadosScreen() {
                 longitude: localizacaoAtual.coords.longitude,
             };
 
-            // 2. Clona a lista de chamados para começar a triagem do mais próximo
             let naoVisitados = [...chamadosFiltrados];
             let rotaOrdenada: ChamadoMapa[] = [];
             let contadorOrdem = 1;
+            let kmTotal = 0;
 
             while (naoVisitados.length > 0) {
                 let indiceMaisProximo = 0;
                 let menorDistancia = Infinity;
 
-                // Varre a lista procurando quem está mais perto do pontoAtual
                 for (let i = 0; i < naoVisitados.length; i++) {
                     const dist = calcularDistancia(
                         pontoAtual.latitude,
@@ -196,12 +374,15 @@ export default function MapaChamadosScreen() {
                     }
                 }
 
-                // Remove o mais próximo da lista antiga, seta a ordem de parada e joga na rota final
-                let proximoChamado = { ...naoVisitados[indiceMaisProximo], ordemRota: contadorOrdem };
+                kmTotal += menorDistancia;
+
+                let proximoChamado = {
+                    ...naoVisitados[indiceMaisProximo],
+                    ordemRota: contadorOrdem,
+                };
                 rotaOrdenada.push(proximoChamado);
                 contadorOrdem++;
 
-                // O ponto atual passa a ser esse chamado encontrado para o próximo cálculo da fila
                 pontoAtual = {
                     latitude: proximoChamado.latitude!,
                     longitude: proximoChamado.longitude!,
@@ -210,12 +391,19 @@ export default function MapaChamadosScreen() {
                 naoVisitados.splice(indiceMaisProximo, 1);
             }
 
-            // 3. Atualiza o estado com a sequência perfeita
             setChamadosFiltrados(rotaOrdenada);
+            setDistanciaTotalKm(parseFloat(kmTotal.toFixed(1)));
+            setChamadoAtivoId(rotaOrdenada[0].id);
+
+            const pontosDaRota = [
+                { latitude: localizacaoAtual.coords.latitude, longitude: localizacaoAtual.coords.longitude },
+                ...rotaOrdenada.map((c) => ({ latitude: c.latitude!, longitude: c.longitude! })),
+            ];
+            await buscarRotaPorPontos(pontosDaRota);
+
             enquadrarChamadosNoMapa(rotaOrdenada);
 
-            Alert.alert("Rota Otimizada! 🚀", "Calculamos o melhor trajeto saindo da sua localização atual.");
-
+            Alert.alert("Rota Otimizada! 🚀", `Calculamos o melhor trajeto. Distância est.: ${kmTotal.toFixed(1)} km`);
         } catch (error) {
             console.log("Erro ao otimizar trajeto:", error);
         } finally {
@@ -250,10 +438,9 @@ export default function MapaChamadosScreen() {
         if (url) Linking.openURL(url);
     }
 
-    // Cria os pontos geométricos ordenados para desenhar a linha do trajeto
-    const coordenadasLinha = chamadosFiltrados.map(c => ({
+    const coordenadasLinhaReta = chamadosFiltrados.map((c) => ({
         latitude: c.latitude!,
-        longitude: c.longitude!
+        longitude: c.longitude!,
     }));
 
     return (
@@ -277,7 +464,7 @@ export default function MapaChamadosScreen() {
                         Mapa de Atendimentos
                     </Text>
                     <Text style={[styles.subtituloMapa, { color: theme.subText }]}>
-                        {chamadosFiltrados.length} local(is) roteirizável(is)
+                        {chamadosFiltrados.length} atendimento(s) com endereço válido
                     </Text>
                 </View>
 
@@ -332,7 +519,8 @@ export default function MapaChamadosScreen() {
                     <View style={{ flex: 1 }}>
                         <MapView
                             ref={mapRef}
-                            provider={PROVIDER_GOOGLE}
+                            // ✅ MÁGICA AQUI: Usa Google no Android e o nativo (Apple Maps) no iOS
+                            provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
                             style={StyleSheet.absoluteFillObject}
                             initialRegion={{
                                 latitude: chamadosFiltrados[0].latitude!,
@@ -344,14 +532,22 @@ export default function MapaChamadosScreen() {
                             showsUserLocation={true}
                             showsMyLocationButton={true}
                         >
-                            {/* 🗺️ DESENHA A LINHA DA ROTA CONECTANDO OS PONTOS */}
-                            {coordenadasLinha.length > 1 && (
+                            {/* 🛣️ DESENHA A ROTA REAL (OU LINHA RETA DE FALLBACK) */}
+                            {coordenadasRotaReal.length > 0 ? (
                                 <Polyline
-                                    coordinates={coordenadasLinha}
+                                    coordinates={coordenadasRotaReal}
                                     strokeColor={theme.primary}
-                                    strokeWidth={4}
-                                    lineDashPattern={[5, 5]} // Deixa a linha tracejada estilosa
+                                    strokeWidth={5}
                                 />
+                            ) : (
+                                coordenadasLinhaReta.length > 1 && (
+                                    <Polyline
+                                        coordinates={coordenadasLinhaReta}
+                                        strokeColor={theme.primary}
+                                        strokeWidth={4}
+                                        lineDashPattern={[5, 5]}
+                                    />
+                                )
                             )}
 
                             {chamadosFiltrados.map((item) => (
@@ -362,6 +558,8 @@ export default function MapaChamadosScreen() {
                                         longitude: item.longitude!,
                                     }}
                                     pinColor={getStatusCor(item.calendar_status, item.agenda_pause)}
+                                    tracksViewChanges={false}
+                                    onPress={() => selecionarChamadoPeloCarrossel(item)}
                                 >
                                     <Callout
                                         tooltip
@@ -374,11 +572,12 @@ export default function MapaChamadosScreen() {
                                                 <View
                                                     style={[
                                                         styles.bolinhaStatus,
-                                                        { backgroundColor: getStatusCor(item.calendar_status, item.agenda_pause) }
+                                                        { backgroundColor: getStatusCor(item.calendar_status, item.agenda_pause) },
                                                     ]}
                                                 />
                                                 <Text style={styles.textoStatusPino}>
-                                                    {item.statusTexto} {item.ordemRota ? `• ${item.ordemRota}ª Parada` : ""}
+                                                    {item.statusTexto}{" "}
+                                                    {item.ordemRota ? `• ${item.ordemRota}ª Parada` : ""}
                                                 </Text>
                                             </View>
 
@@ -396,8 +595,111 @@ export default function MapaChamadosScreen() {
                             ))}
                         </MapView>
 
-                        {/* 🌟 BOTÃO FLUTUANTE DE OTIMIZAÇÃO */}
-                        <View style={styles.caixaBotaoFlutuante}>
+                        {/* ⚠️ AVISO DE CHAMADOS SEM ENDEREÇO */}
+                        {qtdSemEndereco > 0 && (
+                            <View style={styles.bannerAlertaSemEndereco}>
+                                <AlertTriangle size={16} color="#b45309" />
+                                <Text style={styles.textoAlertaSemEndereco}>
+                                    {qtdSemEndereco} chamado(s) sem endereço/localização válida.
+                                </Text>
+                            </View>
+                        )}
+
+                        {/* 📍 CARD DE ROTA ATIVA */}
+                        {distanciaTotalKm !== null && (
+                            <View style={[styles.cardRotaAtiva, { backgroundColor: theme.card }]}>
+                                <Route size={20} color={theme.primary} />
+                                <View>
+                                    <Text style={[styles.tituloRotaAtiva, { color: theme.text }]}>
+                                        Rota Otimizada
+                                    </Text>
+                                    <Text style={[styles.subtituloRotaAtiva, { color: theme.subText }]}>
+                                        {chamadosFiltrados.length} paradas • ~{distanciaTotalKm} km de percurso
+                                    </Text>
+                                </View>
+                            </View>
+                        )}
+
+                        {/* 📱 CARROSSEL BOTTOM SHEET DE CARDS */}
+                        <View style={styles.containerCarrosselInferior}>
+                            <FlatList
+                                ref={flatListRef}
+                                data={chamadosFiltrados}
+                                horizontal
+                                pagingEnabled
+                                snapToInterval={LARGURA_CARD + 12}
+                                decelerationRate="fast"
+                                showsHorizontalScrollIndicator={false}
+                                keyExtractor={(item) => item.id}
+                                onScrollToIndexFailed={() => { }}
+                                contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
+                                onMomentumScrollEnd={(e) => {
+                                    const index = Math.round(
+                                        e.nativeEvent.contentOffset.x / (LARGURA_CARD + 12)
+                                    );
+                                    if (chamadosFiltrados[index]) {
+                                        setChamadoAtivoId(chamadosFiltrados[index].id);
+                                        if (chamadosFiltrados[index].latitude && chamadosFiltrados[index].longitude) {
+                                            focarNoChamado(
+                                                chamadosFiltrados[index].latitude!,
+                                                chamadosFiltrados[index].longitude!
+                                            );
+                                        }
+                                    }
+                                }}
+                                renderItem={({ item }) => {
+                                    const isSelecionado = item.id === chamadoAtivoId;
+                                    return (
+                                        <TouchableOpacity
+                                            activeOpacity={0.9}
+                                            style={[
+                                                styles.cardCarrossel,
+                                                { backgroundColor: theme.card, borderColor: isSelecionado ? theme.primary : theme.border },
+                                                isSelecionado && styles.cardCarrosselAtivo,
+                                            ]}
+                                            onPress={() => selecionarChamadoPeloCarrossel(item)}
+                                        >
+                                            <View style={styles.headerCardCarrossel}>
+                                                <View style={styles.linhaStatus}>
+                                                    <View
+                                                        style={[
+                                                            styles.bolinhaStatus,
+                                                            { backgroundColor: getStatusCor(item.calendar_status, item.agenda_pause) },
+                                                        ]}
+                                                    />
+                                                    <Text style={[styles.textoStatusPino, { color: theme.subText }]}>
+                                                        {item.statusTexto} {item.ordemRota ? `• ${item.ordemRota}ª Parada` : ""}
+                                                    </Text>
+                                                </View>
+                                                <Text style={[styles.protocoloCard, { color: theme.subText }]}>
+                                                    {item.protocolo}
+                                                </Text>
+                                            </View>
+
+                                            <Text style={[styles.clienteCard, { color: theme.text }]} numberOfLines={1}>
+                                                {item.cliente}
+                                            </Text>
+
+                                            <View style={styles.linhaEndereco}>
+                                                <MapPin size={14} color={theme.subText} />
+                                                <Text style={[styles.enderecoCard, { color: theme.subText }]} numberOfLines={1}>
+                                                    {item.endereco}
+                                                </Text>
+                                            </View>
+
+                                            <TouchableOpacity
+                                                style={[styles.botaoNavegarCard, { backgroundColor: theme.primary }]}
+                                                onPress={() => abrirNavegadorGPS(item.latitude!, item.longitude!, item.cliente)}
+                                            >
+                                                <Navigation size={14} color="#fff" />
+                                                <Text style={styles.textoBotaoNavegarCard}>Iniciar Rota no GPS</Text>
+                                            </TouchableOpacity>
+                                        </TouchableOpacity>
+                                    );
+                                }}
+                            />
+
+                            {/* 🌟 BOTÃO FLUTUANTE DE OTIMIZAÇÃO */}
                             <TouchableOpacity
                                 style={[styles.botaoOtimizar, { backgroundColor: theme.primary }]}
                                 onPress={otimizarRota}
@@ -407,7 +709,7 @@ export default function MapaChamadosScreen() {
                                     <ActivityIndicator size="small" color="#fff" />
                                 ) : (
                                     <>
-                                        <Sparkles size={20} color="#fff" />
+                                        <Sparkles size={18} color="#fff" />
                                         <Text style={styles.textoBotaoOtimizar}>Otimizar Rota do Dia</Text>
                                     </>
                                 )}
@@ -471,7 +773,6 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         gap: 6,
-        marginBottom: 6,
     },
     bolinhaStatus: {
         width: 8,
@@ -481,9 +782,8 @@ const styles = StyleSheet.create({
     textoStatusPino: {
         fontSize: 11,
         fontWeight: "bold",
-        color: "#64748b",
     },
-    tituloPino: { fontSize: 15, fontWeight: "bold", color: "#1e293b" },
+    tituloPino: { fontSize: 15, fontWeight: "bold", color: "#1e293b", marginTop: 4 },
     protocoloPino: { fontSize: 12, color: "#64748b", marginVertical: 4, fontWeight: "500" },
     enderecoPino: { fontSize: 12, color: "#475569", marginBottom: 12, lineHeight: 16 },
     botaoRota: {
@@ -496,31 +796,121 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     textoBotaoRota: { color: "#ffffff", fontSize: 13, fontWeight: "bold" },
-    caixaBotaoFlutuante: {
+    bannerAlertaSemEndereco: {
         position: "absolute",
-        bottom: 30,
-        left: 20,
-        right: 20,
+        top: 12,
+        left: 16,
+        right: 16,
+        backgroundColor: "#fef3c7",
+        borderColor: "#f59e0b",
+        borderWidth: 1,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        flexDirection: "row",
         alignItems: "center",
+        gap: 8,
+        elevation: 3,
+    },
+    textoAlertaSemEndereco: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: "#92400e",
+    },
+    cardRotaAtiva: {
+        position: "absolute",
+        top: 56,
+        left: 16,
+        right: 16,
+        padding: 12,
+        borderRadius: 12,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        elevation: 4,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 3.84,
+    },
+    tituloRotaAtiva: { fontSize: 13, fontWeight: "bold" },
+    subtituloRotaAtiva: { fontSize: 11, marginTop: 1 },
+    containerCarrosselInferior: {
+        position: "absolute",
+        bottom: 20,
+        left: 0,
+        right: 0,
+        gap: 12,
+    },
+    cardCarrossel: {
+        width: LARGURA_CARD,
+        padding: 14,
+        borderRadius: 16,
+        borderWidth: 1.5,
+        elevation: 5,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 6,
+    },
+    cardCarrosselAtivo: {
+        borderWidth: 2,
+    },
+    headerCardCarrossel: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 6,
+    },
+    protocoloCard: {
+        fontSize: 11,
+        fontWeight: "600",
+    },
+    clienteCard: {
+        fontSize: 15,
+        fontWeight: "bold",
+        marginBottom: 6,
+    },
+    linhaEndereco: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        marginBottom: 12,
+    },
+    enderecoCard: {
+        fontSize: 12,
+        flex: 1,
+    },
+    botaoNavegarCard: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        paddingVertical: 10,
+        borderRadius: 10,
+    },
+    textoBotaoNavegarCard: {
+        color: "#fff",
+        fontSize: 13,
+        fontWeight: "bold",
     },
     botaoOtimizar: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        gap: 10,
-        paddingVertical: 16,
-        paddingHorizontal: 24,
+        gap: 8,
+        paddingVertical: 12,
+        marginHorizontal: 16,
         borderRadius: 100,
         elevation: 6,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4.65,
-        width: "100%",
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
     },
     textoBotaoOtimizar: {
         color: "#fff",
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: "bold",
     },
 });

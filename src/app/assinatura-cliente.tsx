@@ -16,6 +16,7 @@ export default function AssinaturaCliente() {
   const chamadoId = String(ticketId);
   
   const [carregado, setCarregado] = useState(false);
+  const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
     async function iniciarTela() {
@@ -30,18 +31,37 @@ export default function AssinaturaCliente() {
     iniciarTela();
 
     return () => {
+      // Restaura a orientação em Retrato ao sair
       ScreenOrientation.lockAsync(
         ScreenOrientation.OrientationLock.PORTRAIT_UP
       );
     };
   }, []);
 
-  const handleOK = async (signature: string) => {
-    await AsyncStorage.setItem(
-      `@assinatura_cliente_${chamadoId}`,
-      signature
+  const fecharTela = async () => {
+    await ScreenOrientation.lockAsync(
+      ScreenOrientation.OrientationLock.PORTRAIT_UP
     );
     router.back();
+  };
+
+  const handleOK = async (signature: string) => {
+    try {
+      if (!signature) return;
+      setSalvando(true);
+
+      // Salva no AsyncStorage
+      await AsyncStorage.setItem(
+        `@assinatura_cliente_${chamadoId}`,
+        signature
+      );
+
+      // Restaura orientação antes do back para não congelar o layout
+      await fecharTela();
+    } catch (error) {
+      console.log("Erro ao salvar assinatura:", error);
+      setSalvando(false);
+    }
   };
 
   const handleClear = () => {
@@ -49,6 +69,7 @@ export default function AssinaturaCliente() {
   };
 
   const handleConfirm = () => {
+    if (salvando) return;
     signatureRef.current?.readSignature();
   };
 
@@ -57,13 +78,16 @@ export default function AssinaturaCliente() {
 
   return (
     <View style={[styles.conteiner, { width: larguraReal, height: alturaReal }]}>
-      {/* StatusBar escura para contrastar com o fundo claro */}
       <StatusBar style="dark" backgroundColor="transparent" translucent />
 
       {/* Cabeçalho */}
       <View style={styles.cabecalho}>
         <View style={styles.grupo_esquerdo}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.botao_fechar}>
+          <TouchableOpacity 
+            onPress={fecharTela} 
+            style={styles.botao_fechar}
+            disabled={salvando}
+          >
             <X color="#1e3a8a" size={22} />
           </TouchableOpacity>
           <Text style={styles.titulo_cabecalho}>Assinatura do Cliente</Text>
@@ -74,6 +98,7 @@ export default function AssinaturaCliente() {
             onPress={handleClear}
             style={styles.botao_limpar}
             activeOpacity={0.7}
+            disabled={salvando}
           >
             <RotateCcw color="#2563eb" size={18} />
             <Text style={styles.texto_limpar}>Limpar</Text>
@@ -81,18 +106,30 @@ export default function AssinaturaCliente() {
 
           <TouchableOpacity 
             onPress={handleConfirm} 
-            style={styles.botao_confirmar}
+            style={[styles.botao_confirmar, salvando && { opacity: 0.6 }]}
             activeOpacity={0.8}
+            disabled={salvando}
           >
-            <Check color="#fff" size={20} />
-            <Text style={styles.texto_confirmar}>Confirmar</Text>
+            {salvando ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Check color="#fff" size={20} />
+                <Text style={styles.texto_confirmar}>Confirmar</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Área do Canvas com Fundo Azul Suave */}
+      {/* Área do Canvas */}
       <View style={styles.area_canvas}>
-        {carregado ? (
+        {salvando ? (
+          <View style={styles.carregando}>
+            <ActivityIndicator size="large" color="#2563eb" />
+            <Text style={styles.texto_carregando}>Salvando assinatura...</Text>
+          </View>
+        ) : carregado ? (
           <SignatureScreen
             ref={signatureRef}
             onOK={handleOK}
@@ -113,8 +150,6 @@ export default function AssinaturaCliente() {
   );
 }
 
-// Injeção CSS para o Modo Claro Azulado
-// Injeção CSS com tamanho máximo para o Canvas em Landscape
 const webStyle = `
   .m-signature-pad {
     border: none;
@@ -132,8 +167,8 @@ const webStyle = `
   .m-signature-pad--body {
     border: 2px dashed #93c5fd;
     border-radius: 16px;
-    width: 96vw;    /* Aumentado de 92vw para 96vw (usa 96% da largura da tela) */
-    height: 90vh;   /* Aumentado de 64vh para 74vh (usa 74% da altura da tela) */
+    width: 96vw;
+    height: 74vh;
     background-color: #ffffff;
     position: relative;
     margin: 0;
@@ -161,7 +196,7 @@ const webStyle = `
 const styles = StyleSheet.create({
   conteiner: {
     flex: 1,
-    backgroundColor: '#f0f4f8', // Azul gelo suave de fundo total
+    backgroundColor: '#f0f4f8',
   },
   cabecalho: {
     height: 70,
@@ -181,10 +216,10 @@ const styles = StyleSheet.create({
   botao_fechar: {
     padding: 8,
     borderRadius: 10,
-    backgroundColor: '#eff6ff', // Fundo azul bem clarinho para o X
+    backgroundColor: '#eff6ff',
   },
   titulo_cabecalho: {
-    color: '#1e3a8a', // Azul escuro imponente
+    color: '#1e3a8a',
     fontSize: 18,
     fontWeight: '700',
   },
@@ -199,16 +234,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#eff6ff', // Botão limpar sutil em tom azulado
+    backgroundColor: '#eff6ff',
     gap: 6,
   },
   texto_limpar: {
-    color: '#2563eb', // Texto azul royal
+    color: '#2563eb',
     fontWeight: '600',
     fontSize: 14,
   },
   botao_confirmar: {
-    backgroundColor: '#2563eb', // Confirmar principal em Azul Royal ativo
+    backgroundColor: '#2563eb',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,

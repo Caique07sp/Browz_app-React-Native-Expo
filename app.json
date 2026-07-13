@@ -18,7 +18,10 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "config": {
+        "googleMapsApiKey": "AIzaSyBJg8pGeMaV4E1rUoj2rWMqp3K0OVw4fBw"
+      }
     },
     "android": {
       "package": "com.caique_007.myapp",
