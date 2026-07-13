@@ -1,41 +1,59 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  SafeAreaView,
+  ScrollView,
   StatusBar,
-  StyleSheet,
-  Platform,
+  Switch,
   Text,
   TouchableOpacity,
-  View,
-  ScrollView,
-  Switch,
+  View
 } from "react-native";
 
+import { ScreenWrapper } from "@/components/ScreenWrapper";
+import { obterStatusNotificacaoSalva, requisitarEPersistirPermissao } from "@/services/notifications";
+import { logout } from "@/services/session";
+import { useTheme } from "@/theme/ThemeContext";
 import { useRouter } from "expo-router";
-
 import {
   ArrowLeft,
-  User,
   Bell,
-  Shield,
-  Moon,
+  ChevronRight,
   Info,
   LogOut,
-  ChevronRight,
+  Moon,
+  Shield,
+  Terminal,
+  User
 } from "lucide-react-native";
-
-import { useTheme } from "@/theme/ThemeContext";
+import { styles } from "../styles/settings.styles";
 
 export default function Configuracoes() {
   const router = useRouter();
-
   const { theme, darkMode, toggleTheme } = useTheme();
 
-  const [notificationsEnabled, setNotificationsEnabled] =
-    useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+
+  // 1. Carrega o estado que está persistido no AsyncStorage ao entrar na tela
+  useEffect(() => {
+    async function carregarPreferencia() {
+      const ativado = await obterStatusNotificacaoSalva();
+      setNotificationsEnabled(ativado);
+    }
+    carregarPreferencia();
+  }, []);
+
+  // 2. Manipula a alteração do Switch salvando a preferência
+  async function handleToggleNotifications(valor: boolean) {
+    const resultado = await requisitarEPersistirPermissao(valor);
+    setNotificationsEnabled(resultado);
+  }
+
+  async function fazerLogout() {
+    await logout();
+    router.replace("/");
+  }
 
   return (
-    <SafeAreaView
+    <ScreenWrapper
       style={[
         styles.container,
         {
@@ -43,14 +61,9 @@ export default function Configuracoes() {
         },
       ]}
     >
-      <StatusBar
-        barStyle={
-          darkMode
-            ? "light-content"
-            : "dark-content"
-        }
-      />
+      <StatusBar barStyle={darkMode ? "light-content" : "dark-content"} />
 
+      {/* HEADER */}
       <View
         style={[
           styles.header,
@@ -69,37 +82,19 @@ export default function Configuracoes() {
           ]}
           onPress={() => router.back()}
         >
-          <ArrowLeft
-            color={theme.text}
-            size={24}
-          />
+          <ArrowLeft color={theme.text} size={24} />
         </TouchableOpacity>
 
-        <Text
-          style={[
-            styles.title,
-            {
-              color: theme.text,
-            },
-          ]}
-        >
+        <Text style={[styles.title, { color: theme.text }]}>
           Configurações
         </Text>
 
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-      >
-        <Text
-          style={[
-            styles.sectionTitle,
-            {
-              color: theme.subText,
-            },
-          ]}
-        >
+      <ScrollView contentContainerStyle={styles.content}>
+        {/* SEÇÃO: CONTA */}
+        <Text style={[styles.sectionTitle, { color: theme.subText }]}>
           Conta
         </Text>
 
@@ -111,52 +106,25 @@ export default function Configuracoes() {
               borderColor: theme.border,
             },
           ]}
+          onPress={() => router.push("/perfil")}
         >
           <View style={styles.itemLeft}>
-            <User
-              color={theme.primary}
-              size={22}
-            />
-
+            <User color={theme.primary} size={22} />
             <View>
-              <Text
-                style={[
-                  styles.itemTitle,
-                  {
-                    color: theme.text,
-                  },
-                ]}
-              >
+              <Text style={[styles.itemTitle, { color: theme.text }]}>
                 Perfil
               </Text>
-
-              <Text
-                style={[
-                  styles.itemSubtitle,
-                  {
-                    color: theme.subText,
-                  },
-                ]}
-              >
+              <Text style={[styles.itemSubtitle, { color: theme.subText }]}>
                 Editar dados do usuário
               </Text>
             </View>
           </View>
 
-          <ChevronRight
-            color={theme.subText}
-            size={22}
-          />
+          <ChevronRight color={theme.subText} size={22} />
         </TouchableOpacity>
 
-        <Text
-          style={[
-            styles.sectionTitle,
-            {
-              color: theme.subText,
-            },
-          ]}
-        >
+        {/* SEÇÃO: PREFERÊNCIAS */}
+        <Text style={[styles.sectionTitle, { color: theme.subText }]}>
           Preferências
         </Text>
 
@@ -170,41 +138,28 @@ export default function Configuracoes() {
           ]}
         >
           <View style={styles.itemLeft}>
-            <Bell
-              color={theme.primary}
-              size={22}
-            />
-
+            <Bell color={theme.primary} size={22} />
             <View>
-              <Text
-                style={[
-                  styles.itemTitle,
-                  {
-                    color: theme.text,
-                  },
-                ]}
-              >
+              <Text style={[styles.itemTitle, { color: theme.text }]}>
                 Notificações
               </Text>
-
               <Text
                 style={[
                   styles.itemSubtitle,
                   {
-                    color: theme.subText,
+                    color: notificationsEnabled ? "#22c55e" : "#ef4444",
+                    fontWeight: "600",
                   },
                 ]}
               >
-                Receber alertas de chamados
+                {notificationsEnabled ? "● Notificações ativadas" : "○ Notificações desativadas"}
               </Text>
             </View>
           </View>
 
           <Switch
             value={notificationsEnabled}
-            onValueChange={
-              setNotificationsEnabled
-            }
+            onValueChange={handleToggleNotifications}
             trackColor={{
               false: theme.border,
               true: theme.primary,
@@ -223,31 +178,12 @@ export default function Configuracoes() {
           ]}
         >
           <View style={styles.itemLeft}>
-            <Moon
-              color={theme.primary}
-              size={22}
-            />
-
+            <Moon color={theme.primary} size={22} />
             <View>
-              <Text
-                style={[
-                  styles.itemTitle,
-                  {
-                    color: theme.text,
-                  },
-                ]}
-              >
+              <Text style={[styles.itemTitle, { color: theme.text }]}>
                 Modo escuro
               </Text>
-
-              <Text
-                style={[
-                  styles.itemSubtitle,
-                  {
-                    color: theme.subText,
-                  },
-                ]}
-              >
+              <Text style={[styles.itemSubtitle, { color: theme.subText }]}>
                 Tema escuro ativado
               </Text>
             </View>
@@ -264,14 +200,8 @@ export default function Configuracoes() {
           />
         </View>
 
-        <Text
-          style={[
-            styles.sectionTitle,
-            {
-              color: theme.subText,
-            },
-          ]}
-        >
+        {/* SEÇÃO: SISTEMA */}
+        <Text style={[styles.sectionTitle, { color: theme.subText }]}>
           Sistema
         </Text>
 
@@ -283,44 +213,24 @@ export default function Configuracoes() {
               borderColor: theme.border,
             },
           ]}
+          onPress={() => router.push("/seguranca")}
         >
           <View style={styles.itemLeft}>
-            <Shield
-              color={theme.primary}
-              size={22}
-            />
-
+            <Shield color={theme.primary} size={22} />
             <View>
-              <Text
-                style={[
-                  styles.itemTitle,
-                  {
-                    color: theme.text,
-                  },
-                ]}
-              >
+              <Text style={[styles.itemTitle, { color: theme.text }]}>
                 Segurança
               </Text>
-
-              <Text
-                style={[
-                  styles.itemSubtitle,
-                  {
-                    color: theme.subText,
-                  },
-                ]}
-              >
+              <Text style={[styles.itemSubtitle, { color: theme.subText }]}>
                 Senha e privacidade
               </Text>
             </View>
           </View>
 
-          <ChevronRight
-            color={theme.subText}
-            size={22}
-          />
+          <ChevronRight color={theme.subText} size={22} />
         </TouchableOpacity>
 
+        {/* LOGS DO SISTEMA */}
         <TouchableOpacity
           style={[
             styles.item,
@@ -329,143 +239,55 @@ export default function Configuracoes() {
               borderColor: theme.border,
             },
           ]}
+          onPress={() => router.push("/logs")}
         >
           <View style={styles.itemLeft}>
-            <Info
-              color={theme.primary}
-              size={22}
-            />
-
+            <Terminal color={theme.primary} size={22} />
             <View>
-              <Text
-                style={[
-                  styles.itemTitle,
-                  {
-                    color: theme.text,
-                  },
-                ]}
-              >
-                Sobre o aplicativo
+              <Text style={[styles.itemTitle, { color: theme.text }]}>
+                Logs do Sistema (DEV)
               </Text>
-
-              <Text
-                style={[
-                  styles.itemSubtitle,
-                  {
-                    color: theme.subText,
-                  },
-                ]}
-              >
-                Versão 1.0.0
+              <Text style={[styles.itemSubtitle, { color: theme.subText }]}>
+                Histórico de erros e requisições
               </Text>
             </View>
           </View>
 
-          <ChevronRight
-            color={theme.subText}
-            size={22}
-          />
+          <ChevronRight color={theme.subText} size={22} />
         </TouchableOpacity>
 
+        {/* SOBRE O APLICATIVO */}
         <TouchableOpacity
-          style={styles.logoutBtn}
+          style={[
+            styles.item,
+            {
+              backgroundColor: theme.card,
+              borderColor: theme.border,
+            },
+          ]}
+          onPress={() => router.push("/about")}
         >
-          <LogOut
-            color="#fff"
-            size={20}
-          />
+          <View style={styles.itemLeft}>
+            <Info color={theme.primary} size={22} />
+            <View>
+              <Text style={[styles.itemTitle, { color: theme.text }]}>
+                Sobre o aplicativo
+              </Text>
+              <Text style={[styles.itemSubtitle, { color: theme.subText }]}>
+                Versão 1.0.0_08072026_1727
+              </Text>
+            </View>
+          </View>
 
-          <Text style={styles.logoutText}>
-            Sair da conta
-          </Text>
+          <ChevronRight color={theme.subText} size={22} />
+        </TouchableOpacity>
+
+        {/* BOTÃO DE SAIR */}
+        <TouchableOpacity style={styles.logoutBtn} onPress={fazerLogout}>
+          <LogOut color="#fff" size={20} />
+          <Text style={styles.logoutText}>Sair</Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingTop: Platform.OS === 'android' ? 25 : 0,
-  },
-
-  header: {
-    height: 70,
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    borderWidth: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-
-  content: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: "bold",
-    marginBottom: 10,
-    marginTop: 10,
-    textTransform: "uppercase",
-  },
-
-  item: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  itemLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-
-  itemTitle: {
-    fontSize: 15,
-    fontWeight: "bold",
-  },
-
-  itemSubtitle: {
-    fontSize: 12,
-    marginTop: 3,
-  },
-
-  logoutBtn: {
-    backgroundColor: "#ef4444",
-    height: 58,
-    borderRadius: 16,
-    marginTop: 20,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 10,
-  },
-
-  logoutText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-});

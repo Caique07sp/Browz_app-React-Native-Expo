@@ -1,12 +1,24 @@
-import { Stack, useRouter, useSegments, useRootNavigationState } from "expo-router";
-import { useEffect, useState } from "react";
-import { View, ActivityIndicator } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
+import { Stack, useRootNavigationState, useRouter, useSegments } from "expo-router";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Platform, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from "expo-notifications";
+import * as NavigationBar from "expo-navigation-bar";
 
-import { ThemeProvider } from "../theme/ThemeContext";
+import { sincronizarChamados } from "@/services/chamadosSync";
 import { verificarSessao } from "@/services/session";
 import { sincronizarPendentes } from "@/services/sync";
-import { sincronizarChamados } from "@/services/chamadosSync";
+import { ThemeProvider, useTheme } from "../theme/ThemeContext";
+
+Notifications.setNotificationHandler({
+  handleNotification: async () =>
+  ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  } as Notifications.NotificationBehavior),
+});
 
 function NavigationGuard() {
   const router = useRouter();
@@ -15,63 +27,134 @@ function NavigationGuard() {
   const [carregandoSessao, setCarregandoSessao] = useState(true);
 
   useEffect(() => {
-    // Se o roteador nativo do Expo não estiver pronto, não faz nada ainda
+    // Só prossegue se a árvore de navegação do Expo já estiver pronta
     if (!navigationState?.key) return;
 
     async function validarRotas() {
-  try {
-    const logado = await verificarSessao();
-    
-    // Forçamos o primeiro segmento a ser uma string limpa.
-    // Se o usuário estiver na raiz ("/"), o primeiro segmento será uma string vazia ou undefined.
-    const primeiroSegmento = String(segments?.[0] || "").trim();
-    
-    // Se não houver primeiro segmento ou se ele for explicitamente "index", está na tela de login
-    const estaNaTelaDeLogin = primeiroSegmento === "" || primeiroSegmento === "index";
+      try {
+        const logado = await verificarSessao();
+        const primeiroSegmento = String(segments?.[0] || "").trim();
+        const estaNaTelaDeLogin = primeiroSegmento === "login" || primeiroSegmento === "";
 
-    if (logado && estaNaTelaDeLogin) {
-      router.replace("/home");
-    } else if (!logado && !estaNaTelaDeLogin) {
-      router.replace("/");
+        // O setTimeout joga o redirecionamento para o próximo "tick" do renderizador,
+        // garantindo que a Stack/Slot já esteja montada na tela.
+        setTimeout(() => {
+          if (!logado && !estaNaTelaDeLogin) {
+            router.replace("/");
+          } else if (logado && estaNaTelaDeLogin) {
+            router.replace("/home");
+          }
+        }, 0);
+      } catch (e) {
+        console.error("Erro ao validar rotas:", e);
+      } finally {
+        setCarregandoSessao(false);
+      }
     }
-  } catch (error) {
-    console.error("Erro na validação de rotas:", error);
-  } finally {
-    setCarregandoSessao(false);
-  }
-}
 
     validarRotas();
-  }, [segments, navigationState?.key]);
+  }, [navigationState?.key, segments]);
 
-  // Enquanto valida a sessão ou espera o roteador, segura no loading
-  if (!navigationState?.key || carregandoSessao) {
+  if (carregandoSessao) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#0D0D0D", justifyContent: "center", alignItems: "center" }}>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#0f172a" }}>
         <ActivityIndicator size="large" color="#3b82f6" />
       </View>
     );
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="login" />
+      <Stack.Screen name="home" />
+      <Stack.Screen name="notificacoes" />
+      <Stack.Screen name="perfil" />
+      <Stack.Screen name="configuracoes" />
+    </Stack>
+  );
 }
 
-export default function Layout() {
+function AppContent() {
+  const { theme, darkMode } = useTheme();
+
   useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener(async (state) => {
-      const online = state.isConnected === true && state.isInternetReachable !== false;
-      if (online) {
-        await sincronizarPendentes();
-        await sincronizarChamados();
+    if (Platform.OS === "android") {
+      async function aplicarCorBarraAndroid() {
+        try {
+          // 1. Torna a barra absoluta para o conteúdo passar por baixo
+          await NavigationBar.setPositionAsync("absolute");
+
+          // 2. Torna o fundo da barra transparente
+          await NavigationBar.setBackgroundColorAsync("transparent");
+
+          // 3. Define a cor dos botões (light = ícones brancos no escuro, dark = pretos no claro)
+          await NavigationBar.setButtonStyleAsync(darkMode ? "light" : "dark");
+        } catch (error) {
+          console.error("Erro ao configurar NavigationBar:", error);
+        }
+      }
+
+      aplicarCorBarraAndroid();
+    }
+  }, [darkMode, theme]);
+
+  useEffect(() => {
+    const unsubscribeNet = NetInfo.addEventListener((state) => {
+      if (state.isConnected && state.isInternetReachable) {
+        sincronizarPendentes();
+        sincronizarChamados();
       }
     });
 
-    return () => unsubscribe();
+    const subscription = Notifications.addNotificationReceivedListener(async (notification) => {
+      try {
+        const { title, body, data } = notification.request.content;
+        const tipoNotificacao = data?.tipo || "novo";
+        const uniqueId = data?.uniqueId || `push_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+        const novaNotificacao = {
+          uniqueId: uniqueId,
+          titulo: title || "Nova Notificação",
+          mensagem: body || "",
+          tipo: tipoNotificacao,
+          lida: false,
+          timestamp: new Date().toISOString(),
+          data: new Date().toLocaleDateString("pt-BR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        };
+
+        const salvas = await AsyncStorage.getItem("@notificacoes");
+        let listaAtual = salvas ? JSON.parse(salvas) : [];
+
+        const jaExiste = listaAtual.some((item: any) => item.uniqueId === uniqueId);
+
+        if (!jaExiste) {
+          listaAtual.unshift(novaNotificacao);
+          await AsyncStorage.setItem("@notificacoes", JSON.stringify(listaAtual));
+        }
+      } catch (error) {
+        console.error("❌ Erro ao processar gravação do push:", error);
+      }
+    });
+
+    return () => {
+      unsubscribeNet();
+      subscription.remove();
+    };
   }, []);
 
+  return <NavigationGuard />;
+}
+
+export default function RootLayout() {
   return (
     <ThemeProvider>
-      <NavigationGuard />
+      <AppContent />
     </ThemeProvider>
   );
 }

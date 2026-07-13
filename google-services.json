@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "763538452279",
+    "project_id": "browz-44775",
+    "storage_bucket": "browz-44775.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:763538452279:android:ddf0a07c06bb01670934b2",
+        "android_client_info": {
+          "package_name": "com.caique_007.myapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDC94SRhyn9xrVL1xXCjw5xMJ0Vn7ltwzo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

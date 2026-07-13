@@ -1,15 +1,19 @@
 {
   "expo": {
-    "name": "myapp",
+    "name": "Browz",
     "slug": "myapp",
+    "owner": "caique_007",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
+    "notification": {
+      "androidMode": "default"
+    },
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -17,51 +21,52 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.caique_007.myapp",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
+      "edgeToEdgeEnabled": false,
       "predictiveBackGestureEnabled": false,
-      "package": "com.caique_007.myapp",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyBJg8pGeMaV4E1rUoj2rWMqp3K0OVw4fBw"
         }
       }
     },
-    "edgeToEdgeEnabled": true,
-    "predictiveBackGestureEnabled": false,
-    "package": "com.caique_007.myapp",
+    "plugins": [
+      "expo-router",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O aplicativo precisa de acesso às suas fotos para anexar mídias ao chamado.",
+          "cameraPermission": "O aplicativo precisa de acesso à câmera para tirar fotos e gravar vídeos dos chamados."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "default",
+          "sounds": [],
+          "enableBackgroundRemoteNotifications": true
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
     "extra": {
+      "router": {},
       "eas": {
         "projectId": "607e6908-5e0b-4396-b2e7-ccd4c6e3a42c"
       }
-    }
-  },
-  "web": {
-    "bundler": "metro",
-    "output": "static",
-    "favicon": "./assets/images/favicon.png"
-  },
-  "plugins": [
-    "expo-router",
-    "@react-native-community/datetimepicker",
-    [
-      "onesignal-expo-plugin",
-      {
-        "mode": "production",
-        "devTeam": ""
-      }
-    ]
-  ],
-  "experiments": {
-    "typedRoutes": true
-  },
-  "extra": {
-    "router": {},
-    "eas": {
-      "projectId": "607e6908-5e0b-4396-b2e7-ccd4c6e3a42c"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/icon.png"
     }
   }
 }

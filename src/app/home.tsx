@@ -1,16 +1,21 @@
+import { obterStatusNotificacaoSalva, requisitarEPersistirPermissao } from "@/services/notifications";
 import { contarPendencias } from "@/services/syncStatus";
+import { useTheme } from "@/theme/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import NetInfo from "@react-native-community/netinfo";
-
-import { useTheme } from "@/theme/ThemeContext";
-import { Link, useFocusEffect } from "expo-router";
+import * as Notifications from "expo-notifications";
+import { useFocusEffect } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import {
+  Bell,
+  ChevronRight,
   Inbox,
-  Info,
   LayoutDashboard,
   LogOut,
+  MapPin,
   Menu,
+  RefreshCw,
   Search,
   Settings,
   SlidersHorizontal,
@@ -20,29 +25,28 @@ import {
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Modal,
   Platform,
   RefreshControl,
   SafeAreaView,
   ScrollView,
-  StatusBar,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
+import { styles } from "../styles/home.styles";
 
-import { sincronizarPendentes } from "@/services/sync";
+import { ScreenWrapper } from "@/components/ScreenWrapper";
+import { estaSincronizando, sincronizarPendentes } from "@/services/sync";
 
 import { isOnline } from '@/services/network';
 import { logout } from "@/services/session";
-import Constants from 'expo-constants';
-import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
 import { router } from "expo-router";
 
+let alertaDeslogarVisivel = false;
 
 export default function Browz() {
   const [filterVisible, setFilterVisible] = useState(false);
@@ -54,14 +58,13 @@ export default function Browz() {
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [nome, setNome] = useState("");
   const [perfil, setPerfil] = useState("");
   const [tecnicos, setTecnicos] = useState<any>({});
   const [categorias, setCategorias] = useState<any>({});
   const [clientes, setClientes] = useState<any>({});
-  const [chamados, setChamados] = useState<any[]>([]);
   const [searchText, setSearchText] = useState("");
 
   const [todosChamados, setTodosChamados] = useState<any[]>([]);
@@ -77,43 +80,114 @@ export default function Browz() {
   const logoLight = require("../assets/browz.png");
   const logoDark = require("../assets/logo-white.png");
 
+  // ==========================================
+  // LÓGICA 1: VALIDAÇÃO ISOLADA DA SESSÃO LOCAL
+  // ==========================================
+  async function verificarSessaoValida() {
+    const token = await AsyncStorage.getItem("token");
+    const representativeId = await AsyncStorage.getItem("representative_id");
+
+    if (!token || !representativeId) {
+      console.log("❌ Sessão corrompida localmente. Redirecionando para login...");
+      await logout();
+      router.replace("/");
+      return false;
+    }
+    return true;
+  }
+
+  // ==========================================
+  // LÓGICA 2: CARREGAMENTO DOS DADOS DE APOIO
+  // ==========================================
+  async function carregarDadosDeApoio() {
+    console.log("⚡ Carregando dados de apoio em paralelo...");
+    await Promise.all([
+      buscarTecnicos(),
+      buscarCategorias(),
+      buscarClientes()
+    ]);
+  }
+
+  // ==========================================
+  // LÓGICA 3: SINCRONIZAÇÃO E BUSCA DE OS
+  // ==========================================
+  async function sincronizarEBuscarChamados() {
+    if (estaSincronizando()) {
+      console.log("⏳ Sincronização em andamento por segundo plano...");
+      return;
+    }
+
+    // Executa sincronização de pendências
+    await sincronizarPendentes();
+    const qtd = await contarPendencias();
+    setPendencias(qtd);
+
+    // Se não há pendências na fila offline, busca do servidor online
+    if (qtd === 0) {
+      await buscarChamados();
+    } else {
+      // Se possui pendência offline ativa, preserva o cache local de chamados na tela
+      const cacheChamados = await AsyncStorage.getItem("@cache_chamados");
+      if (cacheChamados) {
+        const chamadosSalvos = JSON.parse(cacheChamados);
+        setTodosChamados(chamadosSalvos);
+        aplicarFiltros(chamadosSalvos);
+      }
+    }
+  }
+
   useFocusEffect(
     React.useCallback(() => {
-
       async function carregarTudo() {
+        try {
+          setLoading(true);
 
-        await sincronizarPendentes();
+          // Atualiza a badge sempre que a tela Home ganha foco (ex: ao voltar da tela de notificações)
+          await carregarQuantidadeNotificacoes();
 
-        const qtd = await contarPendencias();
-        setPendencias(qtd);
+          // PASSO 1: Valida a sessão local prioritariamente. Se falhar, interrompe o resto.
+          const sessaoOk = await verificarSessaoValida();
+          if (!sessaoOk) return;
 
-        await carregarUsuario();
+          // Carrega os filtros persistidos na memória interna
+          const filtrosSalvos = await AsyncStorage.getItem("@saved_selected_status");
+          if (filtrosSalvos) setSelectedStatus(JSON.parse(filtrosSalvos));
 
-        if (qtd === 0) {
-          await buscarChamados();
-        } else {
-          const cacheChamados = await AsyncStorage.getItem("@cache_chamados");
+          const dataInicioSalva = await AsyncStorage.getItem("@saved_start_date");
+          if (dataInicioSalva) setStartDate(new Date(dataInicioSalva));
 
-          if (cacheChamados) {
-            const chamadosSalvos = JSON.parse(cacheChamados);
-            setTodosChamados(chamadosSalvos);
-            aplicarFiltros(chamadosSalvos);
-          }
+          const dataFimSalva = await AsyncStorage.getItem("@saved_end_date");
+          if (dataFimSalva) setEndDate(new Date(dataFimSalva));
+
+          await carregarUsuario();
+          await carregarQuantidadeNotificacoes();
+
+          // PASSO 2: Carrega dados leves e estáticos na memória
+          await carregarDadosDeApoio();
+
+          // PASSO 3: Realiza a sincronização e busca das ordens de serviço (Processo pesado de rede)
+          await sincronizarEBuscarChamados();
+
+        } catch (error) {
+          console.log("Erro no carregamento modular da home:", error);
+        } finally {
+          setLoading(false);
         }
-
-        await buscarTecnicos();
-
-        await buscarCategorias();
-
-        await buscarClientes();
-
-        await carregarQuantidadeNotificacoes();
       }
 
       carregarTudo();
-
     }, [])
   );
+
+  useEffect(() => {
+    // Escuta a chegada de notificações enquanto você está com a Home aberta
+    const subscription = Notifications.addNotificationReceivedListener(() => {
+      // Sempre que chegar uma notificação, recarrega a contagem da badge imediatamente
+      carregarQuantidadeNotificacoes();
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     aplicarFiltros();
@@ -140,15 +214,42 @@ export default function Browz() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    async function iniciarNotificacoes() {
+      const ativadaPeloUsuario = await obterStatusNotificacaoSalva();
+      if (ativadaPeloUsuario) {
+        // Dispara o fluxo de ativação / pedido se for um novo dispositivo
+        await requisitarEPersistirPermissao(true);
+      }
+    }
+    iniciarNotificacoes();
+  }, []);
+
+  // Listeners de notificação push
+  useEffect(() => {
+    // Recebeu notificação com app em foreground — recarrega chamados
+    const subRecebida = Notifications.addNotificationReceivedListener(() => {
+      console.log("🔔 Notificação recebida em foreground, recarregando chamados...");
+      buscarChamados();
+    });
+
+    // Usuário tocou na notificação — recarrega chamados e navega se tiver calendar_id
+    const subToque = Notifications.addNotificationResponseReceivedListener((response) => {
+      console.log("👆 Notificação tocada:", response.notification.request.content.data);
+      buscarChamados();
+    });
+
+    return () => {
+      subRecebida.remove();
+      subToque.remove();
+    };
+  }, []);
+
   async function fazerLogout() {
     await logout();
     setMenuVisible(false);
     router.replace("/");
   }
-
-
-  //Testando aqui o modo offline |
-  //                             v
 
   async function buscarChamados(isRefresh = false) {
     try {
@@ -158,23 +259,17 @@ export default function Browz() {
         setLoading(true);
       }
 
-      // VERIFICA INTERNET
-      const online = await isOnline();
+      const isOnlineStatus = await isOnline();
 
-      // OFFLINE
-      if (!online) {
+      if (!isOnlineStatus) {
         console.log("📴 Sem internet, carregando cache");
-
         const cacheChamados = await AsyncStorage.getItem("@cache_chamados");
 
         if (cacheChamados) {
           const chamadosSalvos = JSON.parse(cacheChamados);
-
           setTodosChamados(chamadosSalvos);
-
           aplicarFiltros(chamadosSalvos);
         }
-
         return;
       }
 
@@ -198,20 +293,61 @@ export default function Browz() {
 
       const data = await response.json();
 
+      if (response.status === 401 || data.data?.code === "SESSION_TERMINATED") {
+        // 1. Desativa os loadings imediatamente para não travar a interface visual
+        setLoading(false);
+        setRefreshing(false);
+
+        // 2. Executa o logout local imediatamente para limpar o AsyncStorage
+        await logout();
+
+        // Se o alerta JÁ ESTIVER sendo exibido, ignora as próximas chamadas paralelas
+        if (alertaDeslogarVisivel) {
+          router.replace("/");
+          return;
+        }
+
+        // Ativa a trava para os próximos disparos paralelos não entrarem aqui
+        alertaDeslogarVisivel = true;
+
+        Alert.alert(
+          "Sessão Encerrada",
+          "Sua conexão caiu ou este usuário foi conectado em outro dispositivo.",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                // Destrava a flag apenas quando o usuário clicar em OK
+                alertaDeslogarVisivel = false;
+                router.replace("/");
+              },
+            },
+          ],
+          { cancelable: false } // Impede o usuário de fechar clicando fora (no Android)
+        );
+
+        return;
+      }
+
+      if (data.status === "error") {
+        console.log("Erro interno do servidor ao buscar chamados, usando cache local.");
+        const cacheChamados = await AsyncStorage.getItem("@cache_chamados");
+        if (cacheChamados) {
+          const chamadosSalvos = JSON.parse(cacheChamados);
+          setTodosChamados(chamadosSalvos);
+          aplicarFiltros(chamadosSalvos);
+        }
+        return;
+      }
+
       if (data.status === "success") {
-        const representativeId =
-          await AsyncStorage.getItem("representative_id");
+        const representativeId = await AsyncStorage.getItem("representative_id");
 
         const chamadosDoTecnico = data.data.filter(
           (calendar: any) =>
-            Number(calendar.representative_id) ===
-            Number(representativeId)
+            Number(calendar.representative_id) === Number(representativeId)
         );
 
-        // Antes de gravar o cache, sobrepõe o estado local de chamados
-        // que ainda estão pausados offline mas a API ainda não refletiu.
-        // O flag @ticket_X_pausado só é removido pelo sync.ts após
-        // confirmação da API, então aqui ele ainda pode existir.
         const chamadosComEstadoLocal = await Promise.all(
           chamadosDoTecnico.map(async (item: any) => {
             const pausadoLocal = await AsyncStorage.getItem(
@@ -224,7 +360,6 @@ export default function Browz() {
           })
         );
 
-        // SALVA CACHE
         await AsyncStorage.setItem(
           "@cache_chamados",
           JSON.stringify(chamadosComEstadoLocal)
@@ -232,26 +367,19 @@ export default function Browz() {
 
         await verificarAlteracoes(chamadosComEstadoLocal);
 
-        // Cacheia checklists apenas dos chamados ainda sem cache
         if (token) cachearChecklistsNovos(token, chamadosComEstadoLocal).catch(() => { });
 
         setUltimosChamados(chamadosComEstadoLocal);
-
         setTodosChamados(chamadosComEstadoLocal);
-
         aplicarFiltros(chamadosComEstadoLocal);
       }
     } catch (error) {
-      console.log("ERRO:", error);
-
-      // FALLBACK CACHE
+      console.log("ERRO AO BUSCAR OS CHAMADOS DA API:", error);
       const cacheChamados = await AsyncStorage.getItem("@cache_chamados");
 
       if (cacheChamados) {
         const chamadosSalvos = JSON.parse(cacheChamados);
-
         setTodosChamados(chamadosSalvos);
-
         aplicarFiltros(chamadosSalvos);
       }
     } finally {
@@ -264,38 +392,24 @@ export default function Browz() {
   function aplicarFiltros(listaOriginal = todosChamados) {
     let lista = [...listaOriginal];
 
-    // Por padrão não mostra finalizados
     if (!selectedStatus.includes("finalizado")) {
       lista = lista.filter((item) => Number(item.calendar_status) !== 2);
     }
 
-    // Status
     if (selectedStatus.length > 0) {
       lista = lista.filter((item) => {
         const status = Number(item.calendar_status);
         const pausado = Number(item.agenda_pause) === 1;
 
         if (selectedStatus.includes("aberto") && status === 0) return true;
-
-        if (
-          selectedStatus.includes("em_atendimento") &&
-          status === 1 &&
-          !pausado
-        ) return true;
-
-        if (
-          selectedStatus.includes("aguardando") &&
-          status === 1 &&
-          pausado
-        ) return true;
-
+        if (selectedStatus.includes("em_atendimento") && status === 1 && !pausado) return true;
+        if (selectedStatus.includes("aguardando") && status === 1 && pausado) return true;
         if (selectedStatus.includes("finalizado") && status === 2) return true;
 
         return false;
       });
     }
 
-    // Pesquisa
     if (searchText.trim()) {
       const termo = searchText.toLowerCase();
 
@@ -314,7 +428,6 @@ export default function Browz() {
       });
     }
 
-    // Data selecionada
     if (startDate && endDate) {
       const inicio = new Date(startDate);
       inicio.setHours(0, 0, 0, 0);
@@ -326,7 +439,6 @@ export default function Browz() {
         if (!item.calendar_start) return false;
 
         const dataChamado = new Date(item.calendar_start);
-
         return dataChamado >= inicio && dataChamado <= fim;
       });
 
@@ -345,45 +457,30 @@ export default function Browz() {
         if (!item.calendar_start) return false;
 
         const dataChamado = new Date(item.calendar_start);
-
         return dataChamado >= inicioSemana && dataChamado <= fimSemana;
       });
     }
 
-
     lista.sort((a, b) => {
-
       if (!a.calendar_start) return 1;
       if (!b.calendar_start) return -1;
 
       const dataA = new Date(a.calendar_start).getTime();
       const dataB = new Date(b.calendar_start).getTime();
 
-
-      return dataB - dataA;
+      return dataA - dataB;
     });
-
 
     setFilteredChamados(lista);
   }
 
-
-  //Offline
-
-  //    |
-  //    v
-
   async function buscarTecnicos() {
     try {
-      const online = await isOnline();
+      const isOnlineStatus = await isOnline();
 
-      if (!online) {
+      if (!isOnlineStatus) {
         const cache = await AsyncStorage.getItem("@cache_tecnicos");
-
-        if (cache) {
-          setTecnicos(JSON.parse(cache));
-        }
-
+        if (cache) setTecnicos(JSON.parse(cache));
         return;
       }
 
@@ -408,42 +505,27 @@ export default function Browz() {
 
       if (data.status === "success") {
         const mapa: any = {};
-
         data.data.forEach((usuario: any) => {
           mapa[usuario.id] = usuario.name;
         });
 
         setTecnicos(mapa);
-
-        await AsyncStorage.setItem(
-          "@cache_tecnicos",
-          JSON.stringify(mapa)
-        );
+        await AsyncStorage.setItem("@cache_tecnicos", JSON.stringify(mapa));
       }
     } catch (error) {
       console.log("ERRO TECNICOS:", error);
-
       const cache = await AsyncStorage.getItem("@cache_tecnicos");
-
-      if (cache) {
-        setTecnicos(JSON.parse(cache));
-      }
+      if (cache) setTecnicos(JSON.parse(cache));
     }
   }
 
-
-
   async function buscarCategorias() {
     try {
-      const online = await isOnline();
+      const isOnlineStatus = await isOnline();
 
-      if (!online) {
+      if (!isOnlineStatus) {
         const cache = await AsyncStorage.getItem("@cache_categorias");
-
-        if (cache) {
-          setCategorias(JSON.parse(cache));
-        }
-
+        if (cache) setCategorias(JSON.parse(cache));
         return;
       }
 
@@ -468,49 +550,30 @@ export default function Browz() {
 
       if (data.status === "success") {
         const mapa: any = {};
-
         data.data.forEach((categoria: any) => {
-          mapa[categoria.service_type_id] =
-            categoria.service_type_name;
+          mapa[categoria.service_type_id] = categoria.service_type_name;
         });
 
         setCategorias(mapa);
-
-        await AsyncStorage.setItem(
-          "@cache_categorias",
-          JSON.stringify(mapa)
-        );
+        await AsyncStorage.setItem("@cache_categorias", JSON.stringify(mapa));
       }
     } catch (error) {
       console.log("ERRO CATEGORIAS:", error);
-
       const cache = await AsyncStorage.getItem("@cache_categorias");
-
-      if (cache) {
-        setCategorias(JSON.parse(cache));
-      }
+      if (cache) setCategorias(JSON.parse(cache));
     }
   }
 
-  //Testando aqui o modo offline |
-  //                              v
-
   async function buscarClientes() {
     try {
-      const online = await isOnline();
+      const isOnlineStatus = await isOnline();
 
-      // OFFLINE
-      if (!online) {
+      if (!isOnlineStatus) {
         const cache = await AsyncStorage.getItem("@cache_clientes");
-
-        if (cache) {
-          setClientes(JSON.parse(cache));
-        }
-
+        if (cache) setClientes(JSON.parse(cache));
         return;
       }
 
-      // ONLINE
       const token = await AsyncStorage.getItem("token");
 
       const response = await fetch(
@@ -532,40 +595,50 @@ export default function Browz() {
 
       if (data.status === "success") {
         const mapa: any = {};
-
         data.data.forEach((cliente: any) => {
-          mapa[cliente.customer_id] =
-            cliente.customer_name;
+          mapa[cliente.customer_id] = cliente.customer_name;
         });
 
         setClientes(mapa);
-
-        // SALVA CACHE
-        await AsyncStorage.setItem(
-          "@cache_clientes",
-          JSON.stringify(mapa)
-        );
+        await AsyncStorage.setItem("@cache_clientes", JSON.stringify(mapa));
       }
     } catch (error) {
       console.log("ERRO CLIENTES:", error);
-
-      // FALLBACK
       const cache = await AsyncStorage.getItem("@cache_clientes");
-
-      if (cache) {
-        setClientes(JSON.parse(cache));
-      }
+      if (cache) setClientes(JSON.parse(cache));
     }
   }
 
+  const toggleStatus = async (status: string) => {
+    try {
+      setSelectedStatus((prev) => {
+        const novoStatus = prev.includes(status)
+          ? prev.filter((item) => item !== status)
+          : [...prev, status];
 
+        AsyncStorage.setItem("@saved_selected_status", JSON.stringify(novoStatus)).catch(
+          (err) => console.log("Erro ao salvar status do filtro:", err)
+        );
 
-  const toggleStatus = (status: string) => {
-    setSelectedStatus((prev) =>
-      prev.includes(status)
-        ? prev.filter((item) => item !== status)
-        : [...prev, status]
-    );
+        return novoStatus;
+      });
+    } catch (error) {
+      console.log("Erro na função toggleStatus:", error);
+    }
+  };
+
+  const limparFiltros = async () => {
+    setSelectedStatus([]);
+    setStartDate(null);
+    setEndDate(null);
+    setSearchText("");
+    try {
+      await AsyncStorage.removeItem("@saved_selected_status");
+      await AsyncStorage.removeItem("@saved_start_date");
+      await AsyncStorage.removeItem("@saved_end_date");
+    } catch (error) {
+      console.log("Erro ao limpar filtros no cache:", error);
+    }
   };
 
   async function carregarUsuario() {
@@ -604,7 +677,6 @@ export default function Browz() {
     const s = Number(status);
     const pausado = Number(agendaPause) === 1;
 
-
     if (s === 0) return "#ffa200ff";
     if (s === 1 && pausado) return "#ff00776e";
     if (s === 1) return "#3b82f6";
@@ -613,16 +685,8 @@ export default function Browz() {
     return "#94a3b8";
   }
 
-
   function getCategoriaText(serviceTypeId: any) {
-    return (
-      categorias[serviceTypeId] ||
-      `Categoria ID: ${serviceTypeId}`
-    );
-  }
-
-  function getTecnicoText(representativeId: any) {
-    return tecnicos[representativeId] || `Técnico ID: ${representativeId}`;
+    return categorias[serviceTypeId] || `Categoria ID: ${serviceTypeId}`;
   }
 
   function getClienteText(customerId: any) {
@@ -637,36 +701,22 @@ export default function Browz() {
     calendarId: any
   ) {
     const saved = await AsyncStorage.getItem("@notificacoes");
-
     const savedIds = await AsyncStorage.getItem("@notificacoes_ids");
-
-    const jaCarregados =
-      await AsyncStorage.getItem("@chamados_ja_carregados");
+    const jaCarregados = await AsyncStorage.getItem("@chamados_ja_carregados");
 
     let lista = saved ? JSON.parse(saved) : [];
-
     let ids = savedIds ? JSON.parse(savedIds) : [];
+    let chamadosCarregados = jaCarregados ? JSON.parse(jaCarregados) : [];
 
-    let chamadosCarregados = jaCarregados
-      ? JSON.parse(jaCarregados)
-      : [];
-
-
-
-    // NÃO DEIXA REPETIR
-    if (ids.includes(uniqueId)) {
+    // Evita duplicar se o uniqueId já existir nos IDs ou na lista
+    if (ids.includes(uniqueId) || lista.some((item: any) => item.uniqueId === uniqueId)) {
       return;
     }
 
     if (!chamadosCarregados.includes(calendarId)) {
       chamadosCarregados.push(calendarId);
-
-      await AsyncStorage.setItem(
-        "@chamados_ja_carregados",
-        JSON.stringify(chamadosCarregados)
-      );
+      await AsyncStorage.setItem("@chamados_ja_carregados", JSON.stringify(chamadosCarregados));
     }
-
 
     ids.push(uniqueId);
 
@@ -675,54 +725,37 @@ export default function Browz() {
       mensagem,
       tipo,
       uniqueId,
-
-      data: new Date().toLocaleString("pt-BR", {
-        timeZone: "America/Sao_Paulo",
-      }),
-
+      lida: false, // Inicia como não lida
+      data: new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
       timestamp: new Date().toISOString(),
-
     });
 
-    await AsyncStorage.setItem(
-      "@notificacoes",
-      JSON.stringify(lista)
-    );
+    await AsyncStorage.setItem("@notificacoes", JSON.stringify(lista));
+    await AsyncStorage.setItem("@notificacoes_ids", JSON.stringify(ids));
 
-    await AsyncStorage.setItem(
-      "@notificacoes_ids",
-      JSON.stringify(ids)
-    );
-
-    setQuantidadeNotificacoes(lista.length);
+    // Conta apenas as não lidas e únicas
+    const naoLidas = lista.filter((item: any) => !item.lida);
+    setQuantidadeNotificacoes(naoLidas.length);
   }
 
   async function verificarAlteracoes(novosChamados: any[]) {
-    // 1. Pegar o que tínhamos salvo na última vez
     const chamadosSalvosStr = await AsyncStorage.getItem("@ultimos_chamados_sync");
     const ultimosSalvos = chamadosSalvosStr ? JSON.parse(chamadosSalvosStr) : [];
 
-    const jaCarregadosStr = await AsyncStorage.getItem("@chamados_ja_carregados");
-    const chamadosCarregados = jaCarregadosStr ? JSON.parse(jaCarregadosStr) : [];
+    // 1. Se for a primeira inicialização do app, atualiza o cache local e encerra
+    if (ultimosSalvos.length === 0 && novosChamados.length > 0) {
+      await AsyncStorage.setItem("@ultimos_chamados_sync", JSON.stringify(novosChamados));
+      return;
+    }
 
+    // 2. Compara apenas MUDANÇAS DE STATUS em chamados já existentes
     for (const novo of novosChamados) {
       const antigo = ultimosSalvos.find(
         (item: any) => String(item.calendar_id) === String(novo.calendar_id)
       );
 
-      // LÓGICA: NOVO CHAMADO
-      // Se não existia na lista anterior e não está na lista de "já notificados"
-      if (!antigo && !chamadosCarregados.includes(novo.calendar_id)) {
-        await salvarNotificacao(
-          "Novo chamado",
-          `Chamado #${novo.calendar_id} atribuído para você`,
-          "novo",
-          `novo_${novo.calendar_id}`,
-          novo.calendar_id
-        );
-      }
-      // LÓGICA: MUDANÇA DE STATUS
-      else if (antigo && Number(antigo.calendar_status) !== Number(novo.calendar_status)) {
+      // Se o chamado já existia na lista e mudou para finalizado
+      if (antigo && Number(antigo.calendar_status) !== Number(novo.calendar_status)) {
         if (Number(novo.calendar_status) === 2) {
           await salvarNotificacao(
             "Chamado finalizado",
@@ -735,28 +768,19 @@ export default function Browz() {
       }
     }
 
-    // 2. ATUALIZAR O SNAPSHOT: Salva a lista atual para a próxima comparação
+    // Atualiza o cache local para a próxima verificação
     await AsyncStorage.setItem("@ultimos_chamados_sync", JSON.stringify(novosChamados));
   }
 
   async function cachearChecklistsNovos(token: string, chamados: any[]) {
     try {
-      console.log(`🔍 [CHECKLIST] Verificando ${chamados.length} chamado(s)...`);
-
-      // Filtra apenas chamados que ainda não têm checklist cacheado
       const semCache: any[] = [];
       for (const chamado of chamados) {
         const cached = await AsyncStorage.getItem(`@checklist_${chamado.calendar_id}`);
-        console.log(`   Chamado ${chamado.calendar_id}: ${cached ? '✅ já cacheado' : '❌ sem cache'}`);
         if (!cached) semCache.push(chamado);
       }
 
-      if (semCache.length === 0) {
-        console.log("🔍 [CHECKLIST] Todos já cacheados, nada a fazer.");
-        return;
-      }
-
-      console.log(`🔍 [CHECKLIST] Buscando checklists para ${semCache.length} chamado(s) sem cache...`);
+      if (semCache.length === 0) return;
 
       const response = await fetch("https://browz.com.br/rest.php", {
         method: "POST",
@@ -771,33 +795,18 @@ export default function Browz() {
       });
 
       const data = await response.json();
-      console.log(`🔍 [CHECKLIST] Resposta API: status=${data.status}, total=${Array.isArray(data.data) ? data.data.length : 'N/A'}`);
 
-      if (data.status !== "success" || !Array.isArray(data.data)) {
-        console.log("🔍 [CHECKLIST] API não retornou dados válidos:", JSON.stringify(data).substring(0, 200));
-        return;
-      }
+      if (data.status !== "success" || !Array.isArray(data.data)) return;
 
       for (const chamado of semCache) {
         const id = chamado.calendar_id;
-        const item = data.data.find(
-          (c: any) => String(c.calendar_id) === String(id)
-        );
+        const item = data.data.find((c: any) => String(c.calendar_id) === String(id));
 
-        if (!item) {
-          console.log(`   Chamado ${id}: ⚠️ não encontrado na resposta da API`);
-          continue;
-        }
-        if (!item.calendar_checklist_template) {
-          console.log(`   Chamado ${id}: ⚠️ sem template de checklist`);
-          continue;
-        }
+        if (!item || !item.calendar_checklist_template) continue;
 
         try {
           const template = JSON.parse(item.calendar_checklist_template);
-          const ordenado = template.sort(
-            (a: any, b: any) => Number(a.order) - Number(b.order)
-          );
+          const ordenado = template.sort((a: any, b: any) => Number(a.order) - Number(b.order));
           await AsyncStorage.setItem(
             `@checklist_${id}`,
             JSON.stringify({
@@ -805,9 +814,8 @@ export default function Browz() {
               template: ordenado,
             })
           );
-          console.log(`   Chamado ${id}: 📋 checklist salvo (${ordenado.length} itens)`);
         } catch (e) {
-          console.log(`   Chamado ${id}: ❌ erro ao salvar:`, e);
+          console.log(`❌ erro ao salvar checklist do chamado ${id}:`, e);
         }
       }
     } catch (error) {
@@ -819,54 +827,19 @@ export default function Browz() {
     const saved = await AsyncStorage.getItem("@notificacoes");
 
     if (saved) {
-      const lista = JSON.parse(saved);
+      const lista: any[] = JSON.parse(saved);
 
-      setQuantidadeNotificacoes(lista.length);
+      // Filtra apenas as notificações que ainda NÃO foram lidas
+      const naoLidas = lista.filter((item) => !item.lida);
+
+      setQuantidadeNotificacoes(naoLidas.length);
     } else {
       setQuantidadeNotificacoes(0);
     }
   }
 
-  async function registerForPushNotificationsAsync() {
-    let token;
-
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#FF231F7C',
-      });
-    }
-
-    if (Device.isDevice) {
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-      if (finalStatus !== 'granted') {
-        alert('Falha ao obter permissão para notificações!');
-        return;
-      }
-
-      // Pega o ID do projeto do seu app.json
-      const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-
-      token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-      console.log("Token do Dispositivo:", token);
-    } else {
-      alert('Push Notifications só funcionam em dispositivos físicos');
-    }
-
-    return token;
-  }
-
-
-
   return (
-    <SafeAreaView
+    <ScreenWrapper
       style={[
         styles.container,
         {
@@ -874,13 +847,8 @@ export default function Browz() {
         },
       ]}
     >
-      <StatusBar
-        barStyle={
-          darkMode
-            ? "light-content"
-            : "dark-content"
-        }
-      />
+
+      <StatusBar style={darkMode ? "light" : "dark"} />
 
       {/* HEADER */}
       <View
@@ -892,58 +860,45 @@ export default function Browz() {
         ]}
       >
         <View style={styles.logoContainer}>
-          <Image
-            source={darkMode ? logoDark : logoLight}
-            style={styles.logoImage}
-          />
+          <Image source={darkMode ? logoDark : logoLight} style={styles.logoImage} />
         </View>
 
         <View style={styles.headerIcons}>
-          <Link href="/notificacoes" asChild>
-
-            <TouchableOpacity style={styles.iconButton}>
-              {/*<View>
-                <Bell size={24} color="#fff" />
-
-                {quantidadeNotificacoes > 0 && (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>
-                      {quantidadeNotificacoes}
-                    </Text>
-                  </View>
-                )}
-              </View>*/}
-            </TouchableOpacity>
-          </Link>
-          <View
-            style={{
-              backgroundColor: darkMode ? "#1E293B" : "#F1F5F9",
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 8,
-            }}
-          >
-            <Text
-              style={{
-                color: darkMode ? "#FFFFFF" : "#000000",
-                fontWeight: "600",
-              }}
-            >
-              {online ? "🟢 Sincronizado" : "🔴 Offline"}
-            </Text>
-          </View>
 
           <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => setMenuVisible(true)}
+            style={[styles.iconButton, { marginRight: 4, position: 'relative' }]}
+            onPress={() => router.push("/notificacoes")}
           >
-            <Menu
-              size={24}
-              color={theme.text}
-            />
+            <Bell size={24} color={theme.text} />
+
+            {/* BADGE COM CONTADOR DE NOTIFICAÇÕES */}
+            {quantidadeNotificacoes > 0 && (
+              <View
+                style={{
+                  position: 'absolute',
+                  right: -2,
+                  top: -2,
+                  backgroundColor: '#ef4444', // Vermelho ativo
+                  borderRadius: 10,
+                  minWidth: 18,
+                  height: 18,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  paddingHorizontal: 4,
+                  borderWidth: 1.5,
+                  borderColor: theme.card
+                }}
+              >
+                <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>
+                  {quantidadeNotificacoes}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
 
-
+          <TouchableOpacity style={styles.iconButton} onPress={() => setMenuVisible(true)}>
+            <Menu size={24} color={theme.text} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -955,22 +910,16 @@ export default function Browz() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={async () => {
+              try {
+                setRefreshing(true);
+                const sessaoOk = await verificarSessaoValida();
+                if (!sessaoOk) return;
 
-              await sincronizarPendentes();
-
-              const qtd = await contarPendencias();
-              setPendencias(qtd);
-
-              if (qtd === 0) {
-                await buscarChamados(true);
-              } else {
-                const cacheChamados = await AsyncStorage.getItem("@cache_chamados");
-
-                if (cacheChamados) {
-                  const chamadosSalvos = JSON.parse(cacheChamados);
-                  setTodosChamados(chamadosSalvos);
-                  aplicarFiltros(chamadosSalvos);
-                }
+                await sincronizarEBuscarChamados();
+              } catch (e) {
+                console.log("Erro no onRefresh:", e);
+              } finally {
+                setRefreshing(false);
               }
             }}
             tintColor="#3b82f6"
@@ -1004,303 +953,136 @@ export default function Browz() {
           </View>
 
 
-          <TouchableOpacity
-            style={styles.filterButton}
-            onPress={() => setFilterVisible(true)}
-          >
+          <TouchableOpacity style={styles.filterButton} onPress={() => setFilterVisible(true)}>
             <SlidersHorizontal size={20} color="#fff" />
-
           </TouchableOpacity>
         </View>
 
-        {/*<View style={styles.sectionHeader}>
-         <Text
-            style={[
-              styles.sectionTitle,
-              {
-                color: theme.text,
-              },
-            ]}
-          >Chamados Recentes</Text>
-          <TouchableOpacity>
-            <Text style={{ color: "#3b82f6" }}>Ver todos</Text>
-          </TouchableOpacity>
-        </View>*/}
-
-
-
-
-        {/*<View style={styles.syncBadge}>
-          <Text style={styles.syncText}>
-            {online ? "🟢 Online" : "🔴 Offline"}
-            {pendencias > 0 ? ` • ${pendencias} pendência(s)` : " • Sincronizado"}
-          </Text>
-        </View>*/}
 
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#3b82f6" />
-            <Text
-              style={[
-                styles.loadingText,
-                {
-                  color: theme.subText,
-                },
-              ]}
-            >Carregando chamados...</Text>
+            <Text style={[styles.loadingText, { color: theme.subText }]}>
+              Carregando chamados...
+            </Text>
           </View>
         ) : filteredChamados.length === 0 ? (
           <View style={styles.emptyContainer}>
             <View style={styles.illustrationContainer}>
-              <View
-                style={[
-                  styles.isometricBox,
-                  {
-                    backgroundColor: theme.card,
-                    borderColor: theme.border,
-                  },
-                ]}
-              >
+              <View style={[styles.isometricBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
                 <Inbox size={60} color="#3b82f6" />
               </View>
             </View>
 
-            <Text
-              style={[
-                styles.emptyTitle,
-                {
-                  color: theme.text,
-                },
-              ]}
-            >
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>
               Nenhum chamado corresponde aos filtros selecionados
             </Text>
 
-            <Text
-              style={[
-                styles.emptySubtitle,
-                {
-                  color: theme.subText,
-                },
-              ]}
-            >
+            <Text style={[styles.emptySubtitle, { color: theme.subText }]}>
               ↓ Arraste para baixo para sincronizar
             </Text>
           </View>
+
         ) : (
-
           filteredChamados.map((calendar, index) => (
-            <Link
-              key={String(calendar.calendar_id || index)}
-              href={{
-                pathname: "/detalhes",
-                params: {
-                  id: calendar.calendar_id,
-                },
-              }}
-              asChild
+            <TouchableOpacity
+              key={calendar.calendar_id || index}
+              activeOpacity={0.8}
+              onPress={() =>
+                router.push({
+                  pathname: "/detalhes",
+                  params: { id: calendar.calendar_id },
+                })
+              }
             >
-              <TouchableOpacity
-                activeOpacity={0.8}
+              <View
                 style={{
-                  backgroundColor: theme.card,
-                  borderRadius: 16,
-                  padding: 16,
                   marginBottom: 15,
-                  borderWidth: 3,
-                  borderLeftColor: theme.card,
-                  borderRightColor: getStatusColor(
-                    calendar.calendar_status,
-                    calendar.agenda_pause
-
-                  ),
-                  borderTopColor: theme.card,
-                  borderBottomColor: theme.card,
+                  borderRadius: 16,
+                  backgroundColor: getStatusColor(calendar.calendar_status, calendar.agenda_pause),
+                  paddingRight: 3,
                 }}
               >
+                <View style={{ backgroundColor: theme.card, borderRadius: 16, padding: 16 }}>
+                  <View style={styles.cardHeader}>
+                    <View style={[styles.idBadge, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                      <Text style={[styles.idText, { color: theme.subText }]}>
+                        #{calendar.calendar_id}
+                      </Text>
+                    </View>
 
-
-                <View style={styles.cardHeader}>
-                  <View
-                    style={[
-                      styles.idBadge,
-                      {
-                        backgroundColor: theme.background,
-                        borderColor: theme.border,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.idText,
-                        {
-                          color: theme.subText,
-                        },
-                      ]}
-                    >
-                      #{calendar.calendar_id}
-                    </Text>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(calendar.calendar_status, calendar.agenda_pause) }]}>
+                      <View style={[styles.statusDot, { backgroundColor: getStatusDotColor(calendar.calendar_status, calendar.agenda_pause) }]} />
+                      <Text style={styles.statusText}>
+                        {getStatusText(calendar.calendar_status, calendar.agenda_pause)}
+                      </Text>
+                    </View>
                   </View>
 
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      {
+                  <Text style={[styles.footerDate, { color: theme.subText }]}>
+                    {new Date(calendar.calendar_start).toLocaleDateString("pt-BR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </Text>
 
-                        backgroundColor: getStatusColor(
-                          calendar.calendar_status,
-                          calendar.agenda_pause
+                  <Text style={[styles.cardTitle, { color: theme.text }]}>
+                    {getClienteText(calendar.customer_id)}
+                  </Text>
 
-                        ),
-                      },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.statusDot,
-                        {
-                          backgroundColor: getStatusDotColor(
-                            calendar.calendar_status,
-                            calendar.agenda_pause
-                          ),
-                        },
-                      ]}
-                    />
+                  <Text style={[styles.cardDescription, { color: theme.subText }]}>
+                    {calendar.calendar_address || "Sem descrição"}
+                  </Text>
 
-                    <Text style={styles.statusText}>
-
-
-                      {getStatusText(calendar.calendar_status, calendar.agenda_pause)}
-
-
-
-
-                    </Text>
+                  <View style={styles.cardFooter}>
+                    <View style={styles.footerInfo}>
+                      <Inbox size={14} color="#64748b" />
+                      <Text style={[styles.footerText, { color: theme.subText }]}>
+                        {getCategoriaText(calendar.service_type_id)}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-
-                <Text
-                  style={[
-                    styles.footerDate,
-                    {
-                      color: theme.subText,
-                    },
-                  ]}
-                >
-                  {new Date(calendar.calendar_start).toLocaleDateString("pt-BR", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </Text>
-
-                <Text
-                  style={[
-                    styles.cardTitle,
-                    {
-                      color: theme.text,
-                    },
-                  ]}
-                >
-                  {getClienteText(calendar.customer_id)}
-                </Text>
-
-                <Text
-                  style={[
-                    styles.cardDescription,
-                    {
-                      color: theme.subText,
-                    },
-                  ]}
-                >
-                  {calendar.calendar_address || "Sem descrição"}
-                </Text>
-
-
-
-                <View style={styles.cardFooter}>
-                  <View style={styles.footerInfo}>
-                    <Inbox size={14} color="#64748b" />
-                    <Text
-                      style={[
-                        styles.footerText,
-                        {
-                          color: theme.subText,
-                        },
-                      ]}
-                    >
-                      {getCategoriaText(calendar.service_type_id)}
-                    </Text>
-                  </View>
-
-
-
-
-                </View>
-              </TouchableOpacity>
-            </Link>
+              </View>
+            </TouchableOpacity>
           ))
-
         )}
       </ScrollView>
 
       {/* MODAL FILTRO */}
-      <Modal
-        transparent
-        animationType="slide"
-        visible={filterVisible}
-        onRequestClose={() => setFilterVisible(false)}
-
-      >
+      <Modal transparent animationType="fade" visible={filterVisible} onRequestClose={() => setFilterVisible(false)}>
         <View style={styles.overlay}>
-          <View
-            style={[
-              styles.modalBox,
-              {
-                backgroundColor: theme.card,
-              },
-            ]}
-          >
-            <View style={styles.modalHeader}>
-              <Text
-                style={[
-                  styles.modalTitle,
-                  {
-                    color: theme.text,
-                  },
-                ]}
-              >Filtros</Text>
+          <View style={[styles.modalBox, { backgroundColor: theme.card }]}>
+            <View style={styles.modalDragIndicator} />
 
-              <TouchableOpacity onPress={() => setFilterVisible(false)}>
-                <X
-                  size={24}
-                  color={theme.text}
-                />
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>Filtrar Chamados</Text>
+                <Text style={{ color: theme.subText, fontSize: 13, marginTop: 2 }}>
+                  Refine a sua listagem de ordens de serviço
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setFilterVisible(false)}>
+                <X size={20} color={theme.text} />
               </TouchableOpacity>
             </View>
 
-            <Text
-              style={[
-                styles.modalLabel,
-                {
-                  color: theme.subText,
-                },
-              ]}
-            >Status</Text>
+            <Text style={[styles.modalLabel, { color: theme.text, fontWeight: "600" }]}>Status do Chamado</Text>
 
-            <View style={styles.optionColumn}>
-
-
+            <View style={styles.statusGrid}>
               <TouchableOpacity
                 style={[
-                  styles.optionBtn,
+                  styles.filterOptionBtn,
                   {
-                    backgroundColor: theme.background,
-                    borderColor: theme.border,
-                  },
-                  selectedStatus.includes("aberto") && styles.optionBtnActive,
+                    backgroundColor: selectedStatus.includes("aberto") ? "#ffaa0088" : theme.background,
+                    borderColor: "#ffa200",
+                    // 👇 Adicione essas duas linhas abaixo para centralizar o conteúdo
+                    justifyContent: 'center',
+                    alignItems: 'center'
+                  }
                 ]}
                 onPress={() => toggleStatus("aberto")}
               >
@@ -1308,20 +1090,26 @@ export default function Browz() {
                   style={[
                     styles.optionText,
                     {
-                      color: theme.text,
-                    },
+                      color: selectedStatus.includes("aberto") ? "#ffffff" : theme.text,
+                      fontWeight: selectedStatus.includes("aberto") ? "700" : "400",
+                      // Opcional: garante que o texto interno também se comporte como centralizado
+                      textAlign: 'center'
+                    }
                   ]}
-                >Aberto</Text>
+                >
+                  Aberto
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
-                  styles.optionBtn,
+                  styles.filterOptionBtn,
                   {
-                    backgroundColor: theme.background,
-                    borderColor: theme.border,
-                  },
-                  selectedStatus.includes("em_atendimento") && styles.optionBtnActive,
+                    backgroundColor: selectedStatus.includes("em_atendimento") ? "#4b9dd880" : theme.background,
+                    borderColor: "#3b82f6",
+                    justifyContent: 'center',
+                    alignItems: 'center'
+                  }
                 ]}
                 onPress={() => toggleStatus("em_atendimento")}
               >
@@ -1329,20 +1117,25 @@ export default function Browz() {
                   style={[
                     styles.optionText,
                     {
-                      color: theme.text,
-                    },
+                      color: selectedStatus.includes("em_atendimento") ? "#ffffff" : theme.text,
+                      fontWeight: selectedStatus.includes("em_atendimento") ? "700" : "400",
+                      textAlign: 'center'
+                    }
                   ]}
-                >Em atendimento</Text>
+                >
+                  Em atendimento
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
-                  styles.optionBtn,
+                  styles.filterOptionBtn,
                   {
-                    backgroundColor: theme.background,
-                    borderColor: theme.border,
-                  },
-                  selectedStatus.includes("aguardando") && styles.optionBtnActive,
+                    backgroundColor: selectedStatus.includes("aguardando") ? "#e673997e" : theme.background,
+                    borderColor: "#ff0077",
+                    justifyContent: 'center',
+                    alignItems: 'center'
+                  }
                 ]}
                 onPress={() => toggleStatus("aguardando")}
               >
@@ -1350,104 +1143,96 @@ export default function Browz() {
                   style={[
                     styles.optionText,
                     {
-                      color: theme.text,
-                    },
+                      color: selectedStatus.includes("aguardando") ? "#ffffff" : theme.text,
+                      fontWeight: selectedStatus.includes("aguardando") ? "700" : "400",
+                      textAlign: 'center'
+                    }
                   ]}
-                >Aguardando</Text>
+                >
+                  Pausado
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[
-                  styles.optionBtn,
-                  {
-                    backgroundColor: theme.background,
-                    borderColor: theme.border,
-                  },
-                  selectedStatus.includes("finalizado") && styles.optionBtnActive,
-                ]}
+                style={[styles.filterOptionBtn, {
+                  backgroundColor: selectedStatus.includes("finalizado") ? "#0d9e4788" : theme.background, borderColor: "#22c55e",
+                  justifyContent: 'center',
+                  alignItems: 'center'
+                }]}
                 onPress={() => toggleStatus("finalizado")}
               >
                 <Text
                   style={[
                     styles.optionText,
                     {
-                      color: theme.text,
-                    },
+                      color: selectedStatus.includes("finalizado") ? "#ffffff" : theme.text,
+                      fontWeight: selectedStatus.includes("finalizado") ? "700" : "400",
+                      textAlign: 'center'
+                    }
                   ]}
-                >Finalizado</Text>
+                >
+                  Finalizado
+                </Text>
               </TouchableOpacity>
-
-
             </View>
 
-            <Text style={[styles.modalLabel, { marginTop: 20 }]}>Período</Text>
+            <Text style={[styles.modalLabel, { color: theme.text, fontWeight: "600", marginTop: 20 }]}>Período de Data</Text>
 
-            <TouchableOpacity
-              style={[
-                styles.dateInput,
-                {
-                  backgroundColor: theme.background,
-                  borderColor: theme.border,
-                },
-              ]}
-              onPress={() => {
-                setShowEndPicker(false);
-                setShowStartPicker(true);
-              }}
-            >
-              <Text style={{
-                color: startDate
-                  ? theme.text
-                  : theme.subText
-              }}>
-                {startDate
-                  ? `Início : ${startDate.toLocaleDateString("pt-BR")}`
-                  : "Selecionar data inicial"}
-              </Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <TouchableOpacity
+                style={[styles.dateInput, { flex: 1, backgroundColor: theme.background, borderColor: theme.border }]}
+                onPress={() => { setShowEndPicker(false); setShowStartPicker(true); }}
+              >
+                <Text style={{ fontSize: 12, color: theme.subText, marginBottom: 2 }}>De:</Text>
+                <Text style={{ color: startDate ? theme.text : theme.subText, fontWeight: startDate ? "600" : "400" }}>
+                  {startDate ? startDate.toLocaleDateString("pt-BR") : "--/--/----"}
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.dateInput,
+              <TouchableOpacity
+                style={[styles.dateInput, { flex: 1, backgroundColor: theme.background, borderColor: theme.border }]}
+                onPress={() => { setShowStartPicker(false); setShowEndPicker(true); }}
+              >
+                <Text style={{ fontSize: 12, color: theme.subText, marginBottom: 2 }}>Até:</Text>
+                <Text style={{ color: endDate ? theme.text : theme.subText, fontWeight: endDate ? "600" : "400" }}>
+                  {endDate ? endDate.toLocaleDateString("pt-BR") : "--/--/----"}
+                </Text>
+              </TouchableOpacity>
+            </View>
 
-              {
-                backgroundColor: theme.background,
-                borderColor: theme.border,
-              },
-              { marginTop: 10 }]}
-              onPress={() => {
-                setShowStartPicker(false);
-                setShowEndPicker(true);
-              }}
-            >
-              <Text style={{
-                color: endDate
-                  ? theme.text
-                  : theme.subText
-              }}>
-                {endDate
-                  ? `Fim : ${endDate.toLocaleDateString("pt-BR")}`
-                  : "Selecionar data final"}
-              </Text>
-            </TouchableOpacity>
+            {(startDate || endDate) && (
+              <TouchableOpacity
+                style={styles.clearDateBtn}
+                onPress={async () => {
+                  setStartDate(null);
+                  setEndDate(null);
+                  await AsyncStorage.removeItem("@saved_start_date");
+                  await AsyncStorage.removeItem("@saved_end_date");
+                }}
+              >
+                <Text style={styles.clearDateText}>Limpar período de data</Text>
+              </TouchableOpacity>
+            )}
 
-            <TouchableOpacity
-              style={styles.clearDateBtn}
-              onPress={() => {
-                setStartDate(null);
-                setEndDate(null);
-              }}
-            >
-              <Text style={styles.clearDateText}>Limpar período</Text>
-            </TouchableOpacity>
+            <View style={styles.filterFooterActions}>
+              <TouchableOpacity
+                style={[styles.modalSecondaryBtn, { borderColor: theme.border }]}
+                onPress={() => { limparFiltros(); setFilterVisible(false); }}
+              >
+                <Text style={[styles.modalSecondaryBtnText, { color: theme.text }]}>Limpar Tudo</Text>
+              </TouchableOpacity>
 
-            {showStartPicker && (
+              <TouchableOpacity style={styles.modalPrimaryBtn} onPress={() => { aplicarFiltros(); setFilterVisible(false); }}>
+                <Text style={styles.modalPrimaryBtnText}>Aplicar Filtros</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* DATA INICIAL */}
+            {showStartPicker && Platform.OS === "android" && (
               <DateTimePicker
-                themeVariant={
-                  darkMode ? "dark" : "light"
-                }
                 value={startDate || new Date()}
                 mode="date"
-                display={Platform.OS === "ios" ? "spinner" : "default"}
+                display="default"
                 locale="pt-BR"
                 onChange={(event, date) => {
                   setShowStartPicker(false);
@@ -1456,19 +1241,21 @@ export default function Browz() {
 
                   if (date) {
                     setStartDate(date);
+                    AsyncStorage.setItem(
+                      "@saved_start_date",
+                      date.toISOString()
+                    ).catch(console.log);
                   }
                 }}
               />
             )}
 
-            {showEndPicker && (
+            {/* DATA FINAL */}
+            {showEndPicker && Platform.OS === "android" && (
               <DateTimePicker
-                themeVariant={
-                  darkMode ? "dark" : "light"
-                }
                 value={endDate || new Date()}
                 mode="date"
-                display={Platform.OS === "ios" ? "spinner" : "default"}
+                display="default"
                 locale="pt-BR"
                 onChange={(event, date) => {
                   setShowEndPicker(false);
@@ -1477,545 +1264,221 @@ export default function Browz() {
 
                   if (date) {
                     setEndDate(date);
+                    AsyncStorage.setItem(
+                      "@saved_end_date",
+                      date.toISOString()
+                    ).catch(console.log);
                   }
                 }}
               />
             )}
 
-            <TouchableOpacity
-              style={styles.applyBtn}
-              onPress={() => {
-                aplicarFiltros();
+            {Platform.OS === "ios" && (
+              <Modal
+                transparent
+                visible={showStartPicker}
+                animationType="fade"
+                onRequestClose={() => setShowStartPicker(false)}
+              >
+                <View style={styles.centeredView}>
+                  <View
+                    style={[
+                      styles.calendarModalBox,
+                      { backgroundColor: theme.card }
+                    ]}
+                  >
+                    <DateTimePicker
+                      themeVariant={darkMode ? "dark" : "light"}
+                      value={startDate || new Date()}
+                      mode="date"
+                      display="inline"
+                      locale="pt-BR"
+                      onChange={(event, date) => {
+                        if (date) {
+                          setStartDate(date);
 
-                setFilterVisible(false);
-              }}
-            >
-              <Text style={styles.applyText}>Aplicar Filtros</Text>
-            </TouchableOpacity>
+                          AsyncStorage.setItem(
+                            "@saved_start_date",
+                            date.toISOString()
+                          ).catch(console.log);
+                        }
+                      }}
+                    />
+
+                    <TouchableOpacity
+                      style={styles.calendarCloseBtn}
+                      onPress={() => setShowStartPicker(false)}
+                    >
+                      <Text style={styles.calendarCloseBtnText}>
+                        Confirmar
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </Modal>
+            )}
+
+            {Platform.OS === "ios" && (
+              <Modal
+                transparent
+                visible={showEndPicker}
+                animationType="fade"
+                onRequestClose={() => setShowEndPicker(false)}
+              >
+                <View style={styles.centeredView}>
+                  <View
+                    style={[
+                      styles.calendarModalBox,
+                      { backgroundColor: theme.card }
+                    ]}
+                  >
+                    <DateTimePicker
+                      themeVariant={darkMode ? "dark" : "light"}
+                      value={endDate || new Date()}
+                      mode="date"
+                      display="inline"
+                      locale="pt-BR"
+                      onChange={(event, date) => {
+                        if (date) {
+                          setEndDate(date);
+
+                          AsyncStorage.setItem(
+                            "@saved_end_date",
+                            date.toISOString()
+                          ).catch(console.log);
+                        }
+                      }}
+                    />
+
+                    <TouchableOpacity
+                      style={styles.calendarCloseBtn}
+                      onPress={() => setShowEndPicker(false)}
+                    >
+                      <Text style={styles.calendarCloseBtnText}>
+                        Confirmar
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </Modal>
+            )}
+
           </View>
         </View>
       </Modal>
 
       {/* MODAL MENU HAMBÚRGUER */}
-     <Modal
+      {/* MODAL MENU HAMBÚRGUER */}
+      <Modal
         transparent
         visible={menuVisible}
         animationType="fade"
         onRequestClose={() => setMenuVisible(false)}
       >
         <View style={styles.menuOverlay}>
-
-          {/* Área escura */}
+          {/* Área escura externa para fechar ao clicar fora */}
           <TouchableOpacity
-            style={styles.overlay}
+            style={styles.menuCloseOverlayTouch}
             activeOpacity={1}
             onPress={() => setMenuVisible(false)}
           />
 
-          {/* Menu lateral */}
-          <View
-            style={[
-              styles.menuBox,
-              {
-                backgroundColor: theme.card,
-              },
-            ]}
-          >
-            <View style={styles.menuHeader}>
-              <Text
-                style={[
-                  styles.menuTitle,
-                  {
-                    color: theme.text,
-                  },
-                ]}
-              >
-                Menu
-              </Text>
+          {/* Caixa do Menu Lateral */}
+          <View style={[styles.menuBox, { backgroundColor: theme.card }]}>
 
-              <TouchableOpacity
-                onPress={() => setMenuVisible(false)}
-              >
-                <X
-                  size={24}
-                  color={theme.text}
-                />
-              </TouchableOpacity>
-            </View>
+            {/* SafeAreaView garante que o menu não fique embaixo da Dynamic Island / Notch no iPhone */}
+            <SafeAreaView style={{ flex: 1 }}>
 
-            <View style={styles.profileBox}>
-              <View style={styles.avatar}>
-                <User size={22} color="#fff" />
+              {/* CABEÇALHO DO MENU */}
+              <View style={styles.menuHeaderAdjusted}>
+                <Text style={[styles.menuTitle, { color: theme.text }]}>Menu</Text>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  {/* Indicador de Status de Conexão */}
+                  <View
+                    style={{
+                      backgroundColor: darkMode ? "#1E293B" : "#F1F5F9",
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: darkMode ? "#FFFFFF" : "#000000",
+                        fontWeight: "600",
+                        fontSize: 13,
+                      }}
+                    >
+                      {online ? "🟢 Sincronizado" : "🔴 Offline"}
+                    </Text>
+                  </View>
+
+                  {/* Botão Fechar */}
+                  <TouchableOpacity onPress={() => setMenuVisible(false)} style={styles.menuCloseBtnClickable}>
+                    <X size={24} color={theme.text} />
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              <View>
-                <Text
-                  style={[
-                    styles.userName,
-                    {
-                      color: theme.text,
-                    },
-                  ]}
+              {/* CONTEÚDO DO MENU (Perfil e Links) */}
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+
+                <TouchableOpacity
+                  style={styles.profileBox}
+                  onPress={() => { setMenuVisible(false); router.push("/perfil"); }}
                 >
-                  {nome || "Usuário"}
-                </Text>
+                  <View style={styles.avatar}>
+                    <User size={22} color="#fff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.userName, { color: theme.text }]}>{nome || "Usuário"}</Text>
+                    <Text style={[styles.userSub, { color: theme.subText }]}>{perfil || "Técnico"}</Text>
+                  </View>
+                  <ChevronRight size={16} color={theme.subText} />
+                </TouchableOpacity>
 
-                <Text
-                  style={[
-                    styles.userSub,
-                    {
-                      color: theme.subText,
-                    },
-                  ]}
+                <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); router.push("/home"); }}>
+                  <LayoutDashboard size={20} color="#3b82f6" />
+                  <Text style={[styles.menuText, { color: theme.text }]}>Home</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    setMenuVisible(false);
+                    router.push("/mapa-chamados");
+                  }}
                 >
-                  {perfil || "Técnico"}
-                </Text>
-              </View>
-            </View>
+                  <MapPin size={20} color="#3b82f6" />
+                  <Text style={[styles.menuText, { color: theme.text }]}>Mapa de Atendimentos</Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setMenuVisible(false);
-                router.push("/home");
-              }}
-            >
-              <LayoutDashboard size={20} color="#3b82f6" />
-              <Text
-                style={[
-                  styles.menuText,
-                  {
-                    color: theme.text,
-                  },
-                ]}
-              >
-                Home
-              </Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => { setMenuVisible(false); router.push("/sincronizacao"); }}
+                >
+                  <RefreshCw size={20} color="#3b82f6" />
+                  <Text style={[styles.menuText, { color: theme.text }]}>
+                    Sincronização {pendencias > 0 ? `(${pendencias})` : ''}
+                  </Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setMenuVisible(false);
-                router.push("/configuracoes");
-              }}
-            >
-              <Settings size={20} color="#3b82f6" />
-              <Text
-                style={[
-                  styles.menuText,
-                  {
-                    color: theme.text,
-                  },
-                ]}
-              >
-                Configurações
-              </Text>
-            </TouchableOpacity>
+                <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); router.push("/configuracoes"); }}>
+                  <Settings size={20} color="#3b82f6" />
+                  <Text style={[styles.menuText, { color: theme.text }]}>Configurações</Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.menuItem}
-            >
-              <Info size={20} color="#3b82f6" />
-              <Text
-                style={[
-                  styles.menuText,
-                  {
-                    color: theme.text,
-                  },
-                ]}
-              >
-                Sobre
-              </Text>
-            </TouchableOpacity>
+                <TouchableOpacity style={styles.logoutBtn} onPress={fazerLogout}>
+                  <LogOut size={18} color="#fff" />
+                  <Text style={styles.logoutText}>Sair</Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.logoutBtn}
-              onPress={fazerLogout}
-            >
-              <LogOut size={18} color="#fff" />
-              <Text style={styles.logoutText}>
-                Sair
-              </Text>
-            </TouchableOpacity>
-
+              </ScrollView>
+            </SafeAreaView>
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0f172a",
-    paddingTop: Platform.OS === 'android' ? 35 : 0,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingBottom: 100,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-  },
-  logoContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  logoImage: {
-    width: 120,
-    height: 30,
-    resizeMode: "contain",
-  },
-  headerIcons: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  iconButton: {
-    marginLeft: 15,
-  },
-  badge: {
-    position: "absolute",
-    top: -5,
-    right: -5,
-    backgroundColor: "#ef4444",
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#0f172a",
-  },
-  badgeText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "bold",
-  },
-  searchSection: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 10,
-    marginBottom: 25,
-  },
-  searchBar: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1e293b",
-    borderRadius: 12,
-    height: 50,
-    borderWidth: 1,
-    borderColor: "#334155",
-    paddingHorizontal: 12,
-  },
-  input: {
-    flex: 1,
-    color: "#fff",
-    paddingHorizontal: 10,
-    fontSize: 16,
-  },
-  filterButton: {
-    backgroundColor: "#3b82f6",
-    width: 50,
-    height: 50,
-    borderRadius: 12,
-    marginLeft: 10,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 15,
-  },
-  sectionTitle: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  card: {
-    backgroundColor: "#1e293b",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 15,
-    borderWidth: 2,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  idBadge: {
-    backgroundColor: "#334155",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  idText: {
-    color: "#94a3b8",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 6,
-  },
-  statusText: {
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  cardTitle: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 6,
-  },
-  cardDescription: {
-    color: "#94a3b8",
-    fontSize: 14,
-    marginBottom: 15,
-  },
-  cardFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderTopWidth: 1,
-    borderTopColor: "#334155",
-    paddingTop: 12,
-  },
-  footerInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  footerText: {
-    color: "#64748b",
-    fontSize: 12,
-    marginLeft: 6,
-  },
-  footerDate: {
-    color: "#64748b",
-    fontSize: 14,
-    marginBottom: 10,
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "flex-end",
-  },
-  modalBox: {
-    backgroundColor: "#1e293b",
-    padding: 25,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  modalTitle: {
-    color: "#fff",
-    fontSize: 22,
-    fontWeight: "bold",
-  },
-  modalLabel: {
-    color: "#94a3b8",
-    marginBottom: 10,
-  },
-  optionColumn: {
-    gap: 10,
-  },
-  optionBtn: {
-    backgroundColor: "#0f172a",
-    padding: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#334155",
-  },
-  optionBtnActive: {
-    backgroundColor: "#3b82f6",
-    borderColor: "#60a5fa",
-  },
-  optionText: {
-    color: "#fff",
-  },
-  applyBtn: {
-    backgroundColor: "#3b82f6",
-    padding: 16,
-    borderRadius: 14,
-    alignItems: "center",
-    marginTop: 20,
-  },
-  applyText: {
-    color: "#fff",
-    fontWeight: "bold",
-  },
-  dateInput: {
-    backgroundColor: "#0f172a",
-    borderRadius: 12,
-    color: "#fff",
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#334155",
-  },
-  menuOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    alignItems: "flex-end",
-  },
-  menuBox: {
-    width: "75%",
-    height: "100%",
-    backgroundColor: "#1e293b",
-    padding: 25,
-  },
-  menuHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 40,
-    marginBottom: 30,
-  },
-  menuTitle: {
-    color: "#fff",
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-  profileBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 30,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#334155",
-  },
-  avatar: {
-    width: 45,
-    height: 45,
-    borderRadius: 25,
-    backgroundColor: "#3b82f6",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  userName: {
-    color: "#fff",
-    fontWeight: "bold",
-  },
-  userSub: {
-    color: "#94a3b8",
-    fontSize: 12,
-  },
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 16,
-    gap: 12,
-  },
-  menuText: {
-    color: "#fff",
-    fontSize: 16,
-  },
-  logoutBtn: {
-    marginTop: "auto",
-    marginBottom: 40,
-    backgroundColor: "#ef4444",
-    padding: 14,
-    borderRadius: 12,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 10,
-  },
-  logoutText: {
-    color: "#fff",
-    fontWeight: "bold",
-  },
-  emptyContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 60,
-  },
-
-  illustrationContainer: {
-    marginBottom: 20,
-  },
-
-  isometricBox: {
-    width: 100,
-    height: 100,
-    backgroundColor: "#1e293b",
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#334155",
-  },
-
-  emptyTitle: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 5,
-  },
-
-  emptySubtitle: {
-    color: "#94a3b8",
-    textAlign: "center",
-  },
-  loadingContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 60,
-  },
-
-  loadingText: {
-    color: "#94a3b8",
-    marginTop: 12,
-    fontSize: 14,
-  },
-  clearDateBtn: {
-    marginTop: 12,
-    alignItems: "center",
-  },
-
-  clearDateText: {
-    color: "#ef4444",
-    fontWeight: "600",
-  },
-  syncBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "#e0f2fe",
-    alignSelf: "flex-start",
-    marginBottom: 10,
-  },
-
-  syncText: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#0369a1",
-  },
-
-});

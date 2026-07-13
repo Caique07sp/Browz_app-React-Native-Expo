@@ -2,34 +2,29 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { ChevronLeft, ClipboardList, FileText, ImageIcon, PenTool, User } from 'lucide-react-native';
+import { ChevronLeft, ClipboardList, Eye, FileText, ImageIcon, PenTool, Play, User, Video as VideoIcon, X } from 'lucide-react-native';
 
-import React, { useEffect, useState } from 'react';
 import { useTheme } from "@/theme/ThemeContext";
+import React, { useEffect, useState } from 'react';
+import { ScreenWrapper } from "@/components/ScreenWrapper";
 
 import { isOnline } from '@/services/network';
-
 import {
-
     ActivityIndicator,
 
     Image,
-
-    SafeAreaView,
-
+    Modal,
     Platform,
-
     ScrollView,
-
-    StyleSheet,
-
     Text,
 
     TouchableOpacity,
 
-    View,
-
+    View
 } from 'react-native';
+import { styles } from "../styles/view-report.styles";
+
+import { ResizeMode, Video as VideoPlayer } from 'expo-av';
 
 
 export default function VisualizarRelatorio() {
@@ -49,6 +44,12 @@ export default function VisualizarRelatorio() {
     const [checklistTemplate, setChecklistTemplate] = useState<any[]>([]);
 
     const [checklistResponses, setChecklistResponses] = useState<any[]>([]);
+
+    const [fotoModalVisible, setFotoModalVisible] = useState(false);
+    const [fotoUriSelecionada, setFotoUriSelecionada] = useState<string | null>(null);
+
+    const [videoModalVisible, setVideoModalVisible] = useState(false);
+    const [videoUriSelecionado, setVideoUriSelecionado] = useState<string | null>(null);
 
     const { theme, darkMode } = useTheme();
 
@@ -81,31 +82,10 @@ export default function VisualizarRelatorio() {
 
 
     async function buscarChamado() {
+    try {
+        const online = await isOnline();
 
-        try {
-
-            // CACHE PRIMEIRO
-            const cache =
-                await AsyncStorage.getItem(
-                    `@relatorio_final_${chamadoId}`
-                );
-
-            if (cache) {
-
-                const relatorio = JSON.parse(cache);
-
-                setCalendar(relatorio.calendar || relatorio);
-            }
-
-            const online = await isOnline();
-
-            // OFFLINE
-            if (!online) {
-                console.log("📴 Offline relatório");
-                return;
-            }
-
-            // ONLINE
+        if (online) {
             const token = await AsyncStorage.getItem('token');
 
             const response = await fetch(
@@ -125,34 +105,38 @@ export default function VisualizarRelatorio() {
 
             const data = await response.json();
 
-            if (
-                data.status === 'success' &&
-                Array.isArray(data.data)
-            ) {
-
+            if (data.status === 'success') {
                 const encontrado = data.data.find(
                     (item: any) =>
-                        String(item.calendar_id) ===
-                        String(chamadoId)
+                        String(item.calendar_id) === String(chamadoId)
                 );
 
-                setCalendar(encontrado || null);
-
-                // SALVA CACHE
                 if (encontrado) {
+                    setCalendar(encontrado);
 
                     await AsyncStorage.setItem(
                         `@relatorio_final_${chamadoId}`,
                         JSON.stringify(encontrado)
                     );
+
+                    return;
                 }
             }
-
-        } catch (error) {
-
-            console.log(error);
         }
+
+        // Se estiver offline ou der erro, usa o cache
+        const cache = await AsyncStorage.getItem(
+            `@relatorio_final_${chamadoId}`
+        );
+
+        if (cache) {
+            setCalendar(JSON.parse(cache));
+        }
+
+    } catch (error) {
+        console.log(error);
     }
+}
 
     async function buscarChecklist() {
 
@@ -308,19 +292,26 @@ export default function VisualizarRelatorio() {
     }
 
 
-    function getFotos() {
+    function getMidias(): { uri: string; isVideo: boolean }[] {
+        const remotas: { uri: string; isVideo: boolean }[] = [];
 
-        if (!calendar?.calendar_images) return [];
+        if (calendar?.calendar_images) {
+            String(calendar.calendar_images)
+                .split(',')
+                .map((item: string) => item.trim())
+                .filter(Boolean)
+                .forEach((item: string) => {
+                    const uri = item.startsWith('http')
+                        ? item
+                        : `https://browz.com.br/${item.replace(/^\/+/, '')}`;
+                    const isVideo =
+                        uri.toLowerCase().endsWith('.mp4') ||
+                        uri.toLowerCase().endsWith('.mov');
+                    remotas.push({ uri, isVideo });
+                });
+        }
 
-
-        return String(calendar.calendar_images)
-
-            .split(',')
-
-            .map((item: string) => item.trim())
-
-            .filter(Boolean);
-
+        return remotas;
     }
 
 
@@ -328,7 +319,7 @@ export default function VisualizarRelatorio() {
 
         return (
 
-            <SafeAreaView
+            <ScreenWrapper
                 style={[
                     styles.container,
                     {
@@ -352,7 +343,7 @@ export default function VisualizarRelatorio() {
 
                 </View>
 
-            </SafeAreaView>
+            </ScreenWrapper>
 
         );
 
@@ -363,7 +354,7 @@ export default function VisualizarRelatorio() {
 
         return (
 
-            <SafeAreaView
+            <ScreenWrapper
                 style={[
                     styles.container,
                     {
@@ -385,19 +376,19 @@ export default function VisualizarRelatorio() {
 
                 </View>
 
-            </SafeAreaView>
+            </ScreenWrapper>
 
         );
 
     }
 
 
-    const fotos = getFotos();
+    const midias = getMidias();
 
 
     return (
 
-        <SafeAreaView
+        <ScreenWrapper
             style={[
                 styles.container,
                 {
@@ -471,7 +462,6 @@ export default function VisualizarRelatorio() {
                             },
                         ]}
                     >
-
                         {calendar.calendar_report || 'Nenhuma descrição informada.'}
 
                     </Text>
@@ -620,57 +610,154 @@ export default function VisualizarRelatorio() {
                         },
                     ]}
                 >
-
                     <View style={styles.cardHeader}>
-
                         <ImageIcon size={20} color="#38bdf8" />
-
-                        <Text
-                            style={[
-                                styles.cardTitle,
-                                {
-                                    color: theme.text,
-                                },
-                            ]}
-                        >Fotos</Text>
-
+                        <Text style={[styles.cardTitle, { color: theme.text }]}>
+                            Fotos e Vídeos
+                        </Text>
                     </View>
 
-
-                    {fotos.length === 0 ? (
-
-                        <Text
-                            style={[
-                                styles.text,
-                                {
-                                    color: theme.subText,
-                                },
-                            ]}
-                        >Nenhuma foto enviada.</Text>
-
+                    {midias.length === 0 ? (
+                        <Text style={[styles.text, { color: theme.subText }]}>
+                            Nenhuma foto ou vídeo enviado.
+                        </Text>
                     ) : (
-
-                        fotos.map((foto: string, index: number) => (
-
-                            <Image
-
-                                key={index}
-
-                                source={{
-                                    uri: foto.startsWith('file')
-                                        ? foto
-                                        : `https://browz.com.br/${foto}`
-                                }}
-
-                                style={styles.image}
-
-                            />
-
-                        ))
-
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                            {midias.map(({ uri, isVideo }, index) => (
+                                <TouchableOpacity
+                                    key={index}
+                                    activeOpacity={0.85}
+                                    onPress={() => {
+                                        if (isVideo) {
+                                            setVideoUriSelecionado(uri);
+                                            setVideoModalVisible(true);
+                                        } else {
+                                            setFotoUriSelecionada(uri);
+                                            setFotoModalVisible(true);
+                                        }
+                                    }}
+                                    style={{
+                                        width: '47%',
+                                        aspectRatio: 1,
+                                        borderRadius: 12,
+                                        overflow: 'hidden',
+                                        backgroundColor: theme.background,
+                                        position: 'relative',
+                                    }}
+                                >
+                                    <Image
+                                        source={{ uri }}
+                                        resizeMode="cover"
+                                        style={{ width: '100%', height: '100%' }}
+                                    />
+                                    {/* Badge de vídeo */}
+                                    {isVideo && (
+                                        <View style={{
+                                            position: 'absolute',
+                                            top: 6,
+                                            left: 6,
+                                            backgroundColor: 'rgba(0,0,0,0.6)',
+                                            padding: 4,
+                                            borderRadius: 4,
+                                        }}>
+                                            <VideoIcon size={12} color="#fff" />
+                                        </View>
+                                    )}
+                                    {/* Botão central */}
+                                    <View style={{
+                                        position: 'absolute',
+                                        bottom: 0, left: 0, right: 0, top: 0,
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                    }}>
+                                        <View style={{
+                                            backgroundColor: isVideo
+                                                ? 'rgba(59,130,246,0.80)'
+                                                : 'rgba(15,23,42,0.55)',
+                                            padding: 10,
+                                            borderRadius: 99,
+                                        }}>
+                                            {isVideo
+                                                ? <Play size={18} color="#fff" fill="#fff" />
+                                                : <Eye size={18} color="#fff" />
+                                            }
+                                        </View>
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
                     )}
 
                 </View>
+
+                {/* Modal visualizador de foto */}
+                <Modal
+                    visible={fotoModalVisible}
+                    animationType="fade"
+                    transparent={false}
+                    onRequestClose={() => setFotoModalVisible(false)}
+                >
+                    <View style={{ flex: 1, backgroundColor: '#0b0f19', justifyContent: 'center', alignItems: 'center' }}>
+                        <TouchableOpacity
+                            style={{
+                                position: 'absolute',
+                                top: Platform.OS === 'ios' ? 60 : 40,
+                                right: 20,
+                                zIndex: 10,
+                                backgroundColor: 'rgba(255,255,255,0.15)',
+                                padding: 12,
+                                borderRadius: 99,
+                            }}
+                            onPress={() => setFotoModalVisible(false)}
+                        >
+                            <X size={24} color="#fff" />
+                        </TouchableOpacity>
+                        {fotoUriSelecionada && (
+                            <Image
+                                source={{ uri: fotoUriSelecionada }}
+                                style={{ width: '100%', height: '85%' }}
+                                resizeMode="contain"
+                            />
+                        )}
+                    </View>
+                </Modal>
+
+                {/* Modal player de vídeo */}
+                <Modal
+                    visible={videoModalVisible}
+                    animationType="slide"
+                    transparent={false}
+                    onRequestClose={() => setVideoModalVisible(false)}
+                >
+                    <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+                        <TouchableOpacity
+                            style={{
+                                position: 'absolute',
+                                top: Platform.OS === 'ios' ? 60 : 40,
+                                right: 20,
+                                zIndex: 10,
+                                backgroundColor: 'rgba(0,0,0,0.5)',
+                                padding: 10,
+                                borderRadius: 99,
+                            }}
+                            onPress={() => setVideoModalVisible(false)}
+                        >
+                            <X size={24} color="#fff" />
+                        </TouchableOpacity>
+                        {videoUriSelecionado && (
+                            <VideoPlayer
+                                source={{ uri: videoUriSelecionado }}
+                                rate={1.0}
+                                volume={1.0}
+                                isMuted={false}
+                                resizeMode={ResizeMode.CONTAIN}
+                                shouldPlay
+                                useNativeControls
+                                style={{ width: '100%', height: '80%' }}
+                            />
+                        )}
+                    </View>
+                </Modal>
 
 
                 <View
@@ -700,28 +787,20 @@ export default function VisualizarRelatorio() {
 
 
                     {calendar.calendar_signature ? (
-
                         <View style={styles.signatureBox}>
-
                             <Image
-
                                 source={{
-
-                                    uri:
-                                        String(calendar.calendar_signature).startsWith('file')
-                                            ? calendar.calendar_signature
-                                            : `https://browz.com.br/${calendar.calendar_signature}`
-
+                                    uri: String(calendar.calendar_signature).startsWith("http")
+                                        ? calendar.calendar_signature
+                                        : `https://browz.com.br/${String(
+                                            calendar.calendar_signature
+                                        ).replace(/^\/+/, "")}`,
                                 }}
-
+                                resizeMode="contain"
                                 style={styles.signatureImage}
-
                             />
-
                         </View>
-
                     ) : (
-
                         <Text
                             style={[
                                 styles.text,
@@ -729,8 +808,9 @@ export default function VisualizarRelatorio() {
                                     color: theme.subText,
                                 },
                             ]}
-                        >Nenhuma assinatura encontrada.</Text>
-
+                        >
+                            Nenhuma assinatura encontrada.
+                        </Text>
                     )}
 
                 </View>
@@ -762,251 +842,8 @@ export default function VisualizarRelatorio() {
 
             </ScrollView>
 
-        </SafeAreaView>
+        </ScreenWrapper>
 
     );
 
 }
-
-
-const styles = StyleSheet.create({
-
-    container: {
-
-        flex: 1,
-
-        backgroundColor: '#0f172a',
-
-        paddingTop: Platform.OS === 'android' ? 25 : 0,
-
-
-    },
-
-
-    scrollContent: {
-
-        padding: 20,
-
-        paddingBottom: 40,
-
-    },
-
-
-    loadingBox: {
-
-        flex: 1,
-
-        justifyContent: 'center',
-
-        alignItems: 'center',
-
-    },
-
-
-    loadingText: {
-
-        color: '#94a3b8',
-
-        marginTop: 12,
-
-    },
-
-
-    backButton: {
-
-        width: 44,
-
-        height: 44,
-
-        borderRadius: 12,
-
-        backgroundColor: '#1e293b',
-
-        justifyContent: 'center',
-
-        alignItems: 'center',
-
-        marginBottom: 18,
-
-    },
-
-
-    title: {
-
-        color: '#fff',
-
-        fontSize: 24,
-
-        fontWeight: 'bold',
-
-    },
-
-
-    subtitle: {
-
-        color: '#3b82f6',
-
-        marginBottom: 20,
-
-    },
-
-
-    card: {
-
-        backgroundColor: '#1e293b',
-
-        borderRadius: 18,
-
-        padding: 16,
-
-        marginBottom: 16,
-
-        borderWidth: 1,
-
-        borderColor: '#334155',
-
-    },
-
-
-    cardHeader: {
-
-        flexDirection: 'row',
-
-        alignItems: 'center',
-
-        gap: 8,
-
-        marginBottom: 14,
-
-    },
-
-
-    cardTitle: {
-
-        color: '#fff',
-
-        fontWeight: 'bold',
-
-        fontSize: 15,
-
-    },
-
-
-    text: {
-
-        color: '#cbd5e1',
-
-        lineHeight: 22,
-
-    },
-
-
-    infoText: {
-
-        color: '#e2e8f0',
-
-        marginBottom: 8,
-
-    },
-
-
-    answerBox: {
-
-        backgroundColor: '#0f172a',
-
-        borderRadius: 12,
-
-        padding: 12,
-
-        marginBottom: 10,
-
-    },
-
-
-    question: {
-
-        color: '#94a3b8',
-
-        fontSize: 13,
-
-        marginBottom: 5,
-
-    },
-
-
-    answer: {
-
-        color: '#fff',
-
-        fontWeight: '600',
-
-    },
-
-
-    image: {
-
-        width: '100%',
-
-        height: 190,
-
-        borderRadius: 14,
-
-        marginBottom: 12,
-
-        backgroundColor: '#020617',
-
-    },
-
-
-    signatureBox: {
-
-        backgroundColor: '#fff',
-
-        borderRadius: 14,
-
-        overflow: 'hidden',
-
-        height: 160,
-
-    },
-
-
-    signatureImage: {
-
-        width: '100%',
-
-        height: '100%',
-
-        resizeMode: 'contain',
-
-    },
-
-
-    editButton: {
-
-        backgroundColor: '#3b82f6',
-
-        height: 56,
-
-        borderRadius: 16,
-
-        justifyContent: 'center',
-
-        alignItems: 'center',
-
-        marginTop: 10,
-
-    },
-
-
-    editButtonText: {
-
-        color: '#fff',
-
-        fontWeight: 'bold',
-
-        fontSize: 16,
-
-    },
-
-}); 

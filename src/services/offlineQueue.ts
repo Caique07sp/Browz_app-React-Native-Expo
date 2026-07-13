@@ -1,17 +1,3 @@
-/**
- * offlineQueue.ts
- *
- * Fila de operações pendentes persistida no AsyncStorage.
- *
- * Cada item da fila segue a estrutura QueueItem e é identificado
- * unicamente por `criadoEm` (ISO timestamp).
- *
- * Funções exportadas:
- * - buscarFila()       → lê a fila atual do storage
- * - salvarFila(fila)   → persiste a fila no storage
- * - adicionarNaFila()  → adiciona um item e persiste imediatamente
- */
-
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const CHAVE_FILA = "@offline_queue";
@@ -26,6 +12,15 @@ export interface QueueItemBase {
 
 export interface QueueItemFoto extends QueueItemBase {
   tipo: "foto_chamado";
+  ticketId: string;
+  uri: string;         // caminho permanente no documentDirectory
+  fileName: string;
+  description?: string;
+}
+
+// NOVO: Suporte para Fila de Vídeos Offline
+export interface QueueItemVideo extends QueueItemBase {
+  tipo: "video_chamado";
   ticketId: string;
   uri: string;         // caminho permanente no documentDirectory
   fileName: string;
@@ -74,6 +69,7 @@ export interface QueueItemPausa extends QueueItemBase {
 
 export type QueueItem =
   | QueueItemFoto
+  | QueueItemVideo
   | QueueItemStatus
   | QueueItemCheckin
   | QueueItemFinalizacao

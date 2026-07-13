@@ -1,23 +1,22 @@
+import { isOnline } from '@/services/network';
+import { useTheme } from "@/theme/ThemeContext";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Check, ChevronLeft, PenTool, Trash2 } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  ScrollView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from "@/theme/ThemeContext";
-import { useFocusEffect } from '@react-navigation/native';
-import { isOnline } from '@/services/network';
+import { ScreenWrapper } from "@/components/ScreenWrapper";
+import { styles } from "../styles/edit-report.styles";
 
 
 
@@ -41,14 +40,29 @@ export default function EditarRelatorio() {
   const [loadingDetail, setLoadingDetail] = useState('');
   const { theme, darkMode } = useTheme();
 
+  const [carregouUmaVez, setCarregouUmaVez] = useState(false);
+
   useFocusEffect(
     React.useCallback(() => {
-      checkSignature();
-    }, [])
+      let ativo = true;
+
+      async function iniciarTela() {
+        if (!carregouUmaVez) {
+          await carregarDados();
+          if (ativo) setCarregouUmaVez(true);
+        } else {
+          await checkSignature();
+        }
+      }
+
+      iniciarTela();
+
+      return () => {
+        ativo = false;
+      };
+    }, [carregouUmaVez])
   );
-  useEffect(() => {
-    carregarDados();
-  }, []);
+
 
   async function carregarDados() {
     try {
@@ -56,6 +70,7 @@ export default function EditarRelatorio() {
 
       await buscarDadosRelatorio();
       await buscarChecklist();
+      await aplicarRascunhoSalvo();
       await checkSignature();
 
     } finally {
@@ -63,14 +78,39 @@ export default function EditarRelatorio() {
     }
   }
 
-  async function checkSignature() {
-    const savedSig = await AsyncStorage.getItem(
-      `@assinatura_cliente_${chamadoId}`);
+  async function aplicarRascunhoSalvo() {
+    try {
+      const rascunhoStr = await AsyncStorage.getItem(
+        `@rascunho_relatorio_${chamadoId}`
+      );
 
-    if (savedSig) {
-      setSignatureImg(savedSig);
+      if (!rascunhoStr) return;
+
+      const rascunho = JSON.parse(rascunhoStr);
+
+      if (rascunho.description !== undefined) setDescription(rascunho.description);
+      if (rascunho.signerName !== undefined) setSignerName(rascunho.signerName);
+      if (rascunho.signerContact !== undefined) setSignerContact(rascunho.signerContact);
+      if (rascunho.checklistResponses !== undefined) {
+        setChecklistResponses(rascunho.checklistResponses);
+      }
+
+      // Existe rascunho pendente, então havia alteração não finalizada
+      setHasChanges(true);
+    } catch (e) {
+      console.log('Erro ao aplicar rascunho salvo:', e);
     }
   }
+
+  async function checkSignature() {
+  const savedSig = await AsyncStorage.getItem(
+    `@assinatura_cliente_${chamadoId}`
+  );
+
+  if (savedSig) {
+    setSignatureImg(savedSig);
+  }
+}
 
   async function buscarDadosRelatorio() {
     try {
@@ -95,9 +135,15 @@ export default function EditarRelatorio() {
         );
 
         if (chamado.calendar_signature) {
-          setSignatureImg(
-            chamado.calendar_signature
+          const assinaturaLocal = await AsyncStorage.getItem(
+            `@assinatura_cliente_${chamadoId}`
           );
+          if (!assinaturaLocal) {
+            const uriSig = String(chamado.calendar_signature).startsWith('http')
+              ? chamado.calendar_signature
+              : `https://browz.com.br/${String(chamado.calendar_signature).replace(/^\/+/, '')}`;
+            setSignatureImg(uriSig);
+          }
         }
       }
 
@@ -153,6 +199,19 @@ export default function EditarRelatorio() {
           setSignerContact(
             chamado.calendar_signatory_email || ''
           );
+
+          // Carrega assinatura existente do servidor (se não houver uma local já salva)
+          if (chamado.calendar_signature) {
+            const assinaturaLocal = await AsyncStorage.getItem(
+              `@assinatura_cliente_${chamadoId}`
+            );
+            if (!assinaturaLocal) {
+              const uriAssinatura = String(chamado.calendar_signature).startsWith('http')
+                ? chamado.calendar_signature
+                : `https://browz.com.br/${String(chamado.calendar_signature).replace(/^\/+/, '')}`;
+              setSignatureImg(uriAssinatura);
+            }
+          }
 
           // SALVA CACHE
           await AsyncStorage.setItem(
@@ -234,7 +293,6 @@ export default function EditarRelatorio() {
           return;
         }
 
-        setCalendarChecklistId(itemChecklist.calendar_checklist_id);
         setCalendarChecklistId(itemChecklist.calendar_checklist_id);
 
         let ordenado: any[] = [];
@@ -362,7 +420,9 @@ export default function EditarRelatorio() {
         body: JSON.stringify(payload),
       });
       const data = await response.json();
+      console.log("RETORNO CHECKLIST:", JSON.stringify(data, null, 2));
       return data.status === 'success';
+
     } catch (error) {
       console.log('ERRO AO ENVIAR CHECKLIST:', error);
       return false;
@@ -379,7 +439,6 @@ export default function EditarRelatorio() {
         method: 'store',
         data: {
           id: Number(chamadoId),
-          calendar_id: Number(chamadoId),
           calendar_report: relatorioFinal.descricao,
           calendar_signatory_name: relatorioFinal.assinante_nome,
           calendar_signatory_email: relatorioFinal.assinante_contato,
@@ -400,7 +459,9 @@ export default function EditarRelatorio() {
       });
 
       const data = await response.json();
+      console.log("RETORNO CALENDAR:", JSON.stringify(data, null, 2));
       return data.status === 'success';
+
 
     } catch (error) {
       console.log('ERRO AO ENVIAR RELATÓRIO:', error);
@@ -422,7 +483,7 @@ export default function EditarRelatorio() {
       // AGORA GERA NOME ÚNICO
       const nomeArquivo = `assinatura_${Date.now()}.png`;
 
-      const caminhoBanco = `file/signatures/${chamadoId}/${nomeArquivo}`;
+      const caminhoBanco = `files/signatures/${chamadoId}/${nomeArquivo}`;
 
       const formData = new FormData();
 
@@ -437,7 +498,7 @@ export default function EditarRelatorio() {
 
       formData.append(
         'path',
-        `file/signatures/${chamadoId}`
+        `files/signatures/${chamadoId}`
       );
 
       formData.append('file', {
@@ -512,6 +573,9 @@ export default function EditarRelatorio() {
     if (!signerContact.trim()) {
       return Alert.alert('Erro', 'Informe o e-mail de quem assinou.');
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerContact.trim())) {
+      return Alert.alert('Erro', 'Por favor, insira um e-mail válido.');
+    }
     if (hasChanges && !signatureImg) {
       return Alert.alert(
         'Nova assinatura necessária',
@@ -532,6 +596,7 @@ export default function EditarRelatorio() {
       setLoadingMessage('Atualizando checklist...');
       setLoadingDetail('Salvando respostas atualizadas');
       const enviadoChecklist = await enviarChecklistParaApi(relatorioFinal);
+      console.log("Checklist enviado:", enviadoChecklist);
       setLoadingMessage('Atualizando relatório...');
       setLoadingDetail('Salvando dados do atendimento');
       setLoadingMessage('Enviando nova assinatura...');
@@ -544,13 +609,36 @@ export default function EditarRelatorio() {
 
       const caminhoAssinatura =
         assinaturaResult.caminhoBanco ||
-        `file/signatures/${chamadoId}/assinatura.png`;
+        `files/signatures/${chamadoId}/assinatura.png`;
 
       const enviadoRelatorio =
         await enviarRelatorioCalendarParaApi(
           relatorioFinal,
           caminhoAssinatura
         );
+
+      console.log("Relatório enviado:", enviadoRelatorio);
+      console.log(relatorioFinal);
+
+      await AsyncStorage.setItem(
+        `@relatorio_final_${chamadoId}`,
+        JSON.stringify({
+          calendar_id: chamadoId,
+          calendar_report: relatorioFinal.descricao,
+          calendar_signatory_name: relatorioFinal.assinante_nome,
+          calendar_signatory_email: relatorioFinal.assinante_contato,
+          calendar_signature: caminhoAssinatura,
+          calendar_status: 2,
+          calendar: {
+            calendar_id: chamadoId,
+            calendar_report: relatorioFinal.descricao,
+            calendar_signatory_name: relatorioFinal.assinante_nome,
+            calendar_signatory_email: relatorioFinal.assinante_contato,
+            calendar_signature: caminhoAssinatura,
+            calendar_status: 2,
+          },
+        })
+      );
 
       const enviadoAssinatura = assinaturaResult.success;
 
@@ -597,7 +685,7 @@ export default function EditarRelatorio() {
 
   if (loading) {
     return (
-      <SafeAreaView
+      <ScreenWrapper
         style={[
           styles.loadingContainer,
           {
@@ -614,13 +702,13 @@ export default function EditarRelatorio() {
             },
           ]}
         >Carregando dados do relatório...</Text>
-      </SafeAreaView>
+      </ScreenWrapper>
     );
   }
 
   if (sending) {
     return (
-      <SafeAreaView
+      <ScreenWrapper
         style={[
           styles.loadingContainer,
           {
@@ -663,12 +751,12 @@ export default function EditarRelatorio() {
             <View style={styles.loadingBarFill} />
           </View>
         </View>
-      </SafeAreaView>
+      </ScreenWrapper>
     );
   }
 
   return (
-    <SafeAreaView
+    <ScreenWrapper
       style={[
         styles.container,
         {
@@ -842,7 +930,7 @@ export default function EditarRelatorio() {
                         style={[
                           styles.optionText,
                           {
-                            color: theme.text,
+                            color: checklistResponses[field.id]?.field_value === optionIndex ? '#fff' : theme.text,
                           },
                         ]}
                       >{option}</Text>
@@ -869,7 +957,8 @@ export default function EditarRelatorio() {
                         style={[
                           styles.optionText,
                           {
-                            color: theme.text,
+                              color: theme.text,
+
                           },
                         ]}
                       >{option}</Text>
@@ -919,7 +1008,8 @@ export default function EditarRelatorio() {
                           style={[
                             styles.optionText,
                             {
-                              color: theme.text,
+                               color: theme.text,
+
                             },
                           ]}
                         >{option}</Text>
@@ -990,7 +1080,7 @@ export default function EditarRelatorio() {
                   color: theme.subText,
                 },
               ]}
-            >NOVA ASSINATURA</Text>
+            >{hasChanges ? 'NOVA ASSINATURA' : 'ASSINATURA ATUAL'}</Text>
 
             {signatureImg && (
 
@@ -1056,284 +1146,6 @@ export default function EditarRelatorio() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 }
-
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a', paddingTop: Platform.OS === 'android' ? 25 : 0, },
-
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 25,
-  },
-
-  loadingText: {
-    color: '#94a3b8',
-    marginTop: 12,
-  },
-
-  loadingCard: {
-    width: '100%',
-    backgroundColor: '#1e293b',
-    borderRadius: 30,
-    padding: 30,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-
-  loadingTitle: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginTop: 25,
-    textAlign: 'center',
-  },
-
-  loadingSubtitle: {
-    color: '#94a3b8',
-    fontSize: 15,
-    marginTop: 10,
-    textAlign: 'center',
-  },
-
-  loadingBarBackground: {
-    width: '100%',
-    height: 10,
-    backgroundColor: '#0f172a',
-    borderRadius: 999,
-    marginTop: 30,
-    overflow: 'hidden',
-  },
-
-  loadingBarFill: {
-    width: '70%',
-    height: '100%',
-    backgroundColor: '#3b82f6',
-    borderRadius: 999,
-  },
-
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#1e293b',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 18,
-  },
-
-  title: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: 'bold',
-  },
-
-  subtitle: {
-    color: '#3b82f6',
-    marginBottom: 20,
-  },
-
-  warningBox: {
-    backgroundColor: '#451a03',
-    borderColor: '#f59e0b',
-    borderWidth: 1,
-    padding: 14,
-    borderRadius: 12,
-    marginBottom: 20,
-  },
-
-  warningText: {
-    color: '#fbbf24',
-    fontWeight: '600',
-  },
-
-  section: {
-    marginBottom: 25,
-  },
-
-  label: {
-    color: '#64748b',
-    marginBottom: 10,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-
-  textArea: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    color: '#fff',
-    padding: 15,
-    minHeight: 220,
-    textAlignVertical: 'top',
-  },
-
-  input: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    color: '#fff',
-    padding: 15,
-    marginBottom: 12,
-    fontSize: 16,
-  },
-
-  checklistItem: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-
-  checklistLabel: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-
-  textAreaSmall: {
-    backgroundColor: '#0f172a',
-    borderRadius: 12,
-    color: '#fff',
-    padding: 15,
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-
-  optionButton: {
-    backgroundColor: '#0f172a',
-    padding: 13,
-    borderRadius: 10,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-
-  optionButtonSelected: {
-    borderColor: '#3b82f6',
-    backgroundColor: '#1d4ed8',
-  },
-
-  optionText: {
-    color: '#fff',
-    fontSize: 14,
-  },
-
-  radioRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 10,
-  },
-
-  radioCircle: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: '#64748b',
-  },
-
-  radioCircleSelected: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
-  },
-
-  checkboxBox: {
-    width: 18,
-    height: 18,
-    borderRadius: 5,
-    borderWidth: 2,
-    borderColor: '#64748b',
-  },
-
-  checkboxBoxSelected: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
-  },
-
-  emptyChecklist: {
-    color: '#94a3b8',
-    backgroundColor: '#1e293b',
-    padding: 15,
-    borderRadius: 12,
-  },
-
-  signatureHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-
-  clearBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-
-  clearBtnText: {
-    color: '#ef4444',
-  },
-
-  signatureTrigger: {
-    height: 140,
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#3b82f6',
-    borderStyle: 'dashed',
-  },
-
-  signatureTriggerText: {
-    color: '#3b82f6',
-    fontWeight: '600',
-    marginTop: 8,
-  },
-
-  previewContainer: {
-    height: 140,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-
-  previewImage: {
-    width: '100%',
-    height: '100%',
-  },
-
-  submitBtn: {
-    backgroundColor: '#10b981',
-    height: 60,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 30,
-  },
-
-  submitBtnDisabled: {
-    backgroundColor: '#334155',
-  },
-
-  submitBtnText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-}); 

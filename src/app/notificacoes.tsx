@@ -8,8 +8,9 @@ import {
   Clock,
 } from "lucide-react-native";
 import React, { useCallback, useState } from "react";
+import { ScreenWrapper } from "@/components/ScreenWrapper";
+import { useTheme } from "@/theme/ThemeContext";
 import {
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -20,6 +21,7 @@ import {
 
 export default function Notificacoes() {
   const router = useRouter();
+  const { theme, darkMode } = useTheme();
 
   const [notificacoes, setNotificacoes] = useState<any[]>([]);
 
@@ -33,54 +35,64 @@ export default function Notificacoes() {
     const saved = await AsyncStorage.getItem("@notificacoes");
 
     if (saved) {
-      const lista = JSON.parse(saved);
+      let lista = JSON.parse(saved);
+
+      lista = lista.filter(
+        (item: any, index: number, self: any[]) =>
+          index === self.findIndex((t) => t.uniqueId === item.uniqueId)
+      );
 
       lista.sort(
         (a: any, b: any) =>
-          new Date(b.timestamp).getTime() -
-          new Date(a.timestamp).getTime()
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       );
 
-      setNotificacoes(lista);
+      const listaAtualizada = lista.map((item: any) => ({
+        ...item,
+        lida: true,
+      }));
+
+      setNotificacoes(listaAtualizada);
+      await AsyncStorage.setItem(
+        "@notificacoes",
+        JSON.stringify(listaAtualizada)
+      );
     }
   }
 
   function getIcon(tipo: string) {
-    if (tipo === "novo")
-      return <Bell color="#3b82f6" size={22} />;
+    if (tipo === "novo") return <Bell color="#3b82f6" size={22} />;
 
-    if (tipo === "andamento")
-      return <Clock color="#60a5fa" size={22} />;
+    if (tipo === "andamento") return <Clock color="#60a5fa" size={22} />;
 
-    if (tipo === "finalizado")
-      return <CheckCircle color="#22c55e" size={22} />;
+    if (tipo === "finalizado") return <CheckCircle color="#22c55e" size={22} />;
 
     return <AlertCircle color="#ef4444" size={22} />;
   }
 
-  function getColor(tipo: string) {
-    if (tipo === "novo") return "#0f172a";
+  function getIconBgColor(tipo: string) {
+    if (tipo === "novo") return darkMode ? "#0f172a" : "#dbeafe";
 
-    if (tipo === "andamento") return "#1e3a8a";
+    if (tipo === "andamento") return darkMode ? "#1e3a8a" : "#bfdbfe";
 
-    if (tipo === "finalizado") return "#14532d";
+    if (tipo === "finalizado") return darkMode ? "#14532d" : "#dcfce7";
 
-    return "#7f1d1d";
+    return darkMode ? "#7f1d1d" : "#fee2e2";
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <ScreenWrapper style={[styles.container, { backgroundColor: theme.background }]}>
+      <StatusBar barStyle={darkMode ? "light-content" : "dark-content"} />
 
       <View style={styles.header}>
         <TouchableOpacity
-          style={styles.backBtn}
+          style={[styles.backBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
           onPress={() => router.back()}
         >
-          <ArrowLeft color="#fff" size={24} />
+          <ArrowLeft color={theme.text} size={24} />
         </TouchableOpacity>
 
-        <Text style={styles.title}>Notificações</Text>
+        <Text style={[styles.title, { color: theme.text }]}>Notificações</Text>
 
         <TouchableOpacity
           onPress={async () => {
@@ -92,28 +104,32 @@ export default function Notificacoes() {
             setNotificacoes([]);
           }}
         >
-          <Text style={{ color: "#ef4444", fontWeight: "bold" }}>
-            Limpar
-          </Text>
+          <Text style={{ color: "#ef4444", fontWeight: "bold" }}>Limpar</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         {notificacoes.length === 0 ? (
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyText, { color: theme.subText }]}>
             Nenhuma notificação encontrada.
           </Text>
         ) : (
           notificacoes.map((item, index) => (
             <View
               key={index}
-              style={styles.notificationCard}
+              style={[
+                styles.notificationCard,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.border,
+                },
+              ]}
             >
               <View
                 style={[
                   styles.iconBox,
                   {
-                    backgroundColor: getColor(item.tipo),
+                    backgroundColor: getIconBgColor(item.tipo),
                   },
                 ]}
               >
@@ -121,15 +137,15 @@ export default function Notificacoes() {
               </View>
 
               <View style={styles.notificationInfo}>
-                <Text style={styles.notificationTitle}>
+                <Text style={[styles.notificationTitle, { color: theme.text }]}>
                   {item.titulo}
                 </Text>
 
-                <Text style={styles.notificationText}>
+                <Text style={[styles.notificationText, { color: theme.subText }]}>
                   {item.mensagem}
                 </Text>
 
-                <Text style={styles.notificationDate}>
+                <Text style={[styles.notificationDate, { color: theme.subText }]}>
                   {item.data}
                 </Text>
               </View>
@@ -137,14 +153,13 @@ export default function Notificacoes() {
           ))
         )}
       </ScrollView>
-    </SafeAreaView>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f172a",
   },
 
   header: {
@@ -159,13 +174,12 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "#1e293b",
+    borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
   },
 
   title: {
-    color: "#fff",
     fontSize: 20,
     fontWeight: "bold",
   },
@@ -176,13 +190,11 @@ const styles = StyleSheet.create({
   },
 
   notificationCard: {
-    backgroundColor: "#1e293b",
     borderRadius: 16,
     padding: 15,
     marginBottom: 14,
     flexDirection: "row",
     borderWidth: 1,
-    borderColor: "#334155",
   },
 
   iconBox: {
@@ -199,27 +211,23 @@ const styles = StyleSheet.create({
   },
 
   notificationTitle: {
-    color: "#fff",
     fontSize: 15,
     fontWeight: "bold",
     marginBottom: 4,
   },
 
   notificationText: {
-    color: "#94a3b8",
     fontSize: 13,
     lineHeight: 18,
   },
 
   notificationDate: {
-    color: "#64748b",
     fontSize: 12,
     marginTop: 8,
   },
 
   emptyText: {
-    color: "#94a3b8",
     textAlign: "center",
     marginTop: 40,
   },
-})
+});

@@ -8,19 +8,21 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Check, ChevronLeft, PenTool, Trash2 } from 'lucide-react-native';
+
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScreenWrapper } from '@/components/ScreenWrapper';
+import { styles } from "../styles/finished-report.styles";
 
 export default function FinalizacaoRelatorio() {
   const router = useRouter();
@@ -41,14 +43,35 @@ export default function FinalizacaoRelatorio() {
   const [loadingMessage, setLoadingMessage] = useState('');
   const [loadingDetail, setLoadingDetail] = useState('');
   const { theme, darkMode } = useTheme();
-
+  const [avisoMidiaVisible, setAvisoMidiaVisible] = useState(false);
+  const [nomeTecnico, setNomeTecnico] = useState('Técnico');
   ; useFocusEffect(
     React.useCallback(() => {
-      checkSignature();
-      carregarRascunhoRelatorio();
-      buscarChecklist();
-    }, [])
+      let ativo = true;
+
+      if (ativo) {
+        checkSignature();
+        carregarRascunhoRelatorio();
+        buscarChecklist();
+        carregarNomeTecnico();
+      }
+
+      return () => {
+        ativo = false;
+      };
+    }, [chamadoId])
   );
+
+  async function carregarNomeTecnico() {
+    try {
+      const nomeSalvo = await AsyncStorage.getItem('nome');
+      if (nomeSalvo) {
+        setNomeTecnico(nomeSalvo);
+      }
+    } catch (error) {
+      console.log('Erro ao carregar nome do técnico:', error);
+    }
+  }
 
   async function checkSignature() {
     const savedSig = await AsyncStorage.getItem(
@@ -207,6 +230,11 @@ export default function FinalizacaoRelatorio() {
   } */}
 
   const comprimirImagem = async (uri: string) => {
+
+    if (uri.toLowerCase().endsWith('.mp4')) {
+      return uri;
+    }
+
     try {
       const manipResult = await ImageManipulator.manipulateAsync(
         uri,
@@ -233,12 +261,18 @@ export default function FinalizacaoRelatorio() {
         return true;
       }
 
-      const caminhosBanco = listaFotos.map((_: any, index: number) => {
-        return `files/calendar/${chamadoId}/foto_${index + 1}_${Date.now()}.jpg`;
+      const caminhosBanco = listaFotos.map((uri: any, index: number) => {
+        const ehVideo = uri.toLowerCase().endsWith('.mp4');
+        const ext = ehVideo ? 'mp4' : 'jpg';
+        return `files/calendar/${chamadoId}/midia_${index + 1}_${Date.now()}.${ext}`;
       });
 
+      // O FOR COMEÇA AQUI:
       for (const [index, fotoUri] of listaFotos.entries()) {
         setLoadingDetail(`Foto ${index + 1} de ${listaFotos.length}`);
+
+        // 🌟 ADICIONE ESSA LINHA AQUI DENTRO DO FOR:
+        const ehVideo = fotoUri.toLowerCase().endsWith('.mp4');
 
         const uriComprimida = await comprimirImagem(fotoUri);
 
@@ -261,7 +295,7 @@ export default function FinalizacaoRelatorio() {
         formData.append('file', {
           uri: uriComprimida,
           name: nomeArquivo,
-          type: 'image/jpeg',
+          type: ehVideo ? 'video/mp4' : 'image/jpeg'
         } as any);
 
         const response = await fetch('https://browz.com.br/rest.php', {
@@ -296,7 +330,7 @@ export default function FinalizacaoRelatorio() {
       // Define o nome do arquivo
       const nomeArquivo = `assinatura.png`;
       // Define o caminho exato que você quer no banco
-      const caminhoBanco = `file/signatures/${chamadoId}/${nomeArquivo}`;
+      const caminhoBanco = `files/signatures/${chamadoId}/${nomeArquivo}`;
 
       const formData = new FormData();
       formData.append('class', 'CalendarService');
@@ -307,7 +341,7 @@ export default function FinalizacaoRelatorio() {
       formData.append('data[calendar_signature]', caminhoBanco);
 
       // Define a pasta onde o arquivo físico será salvo no servidor
-      formData.append('path', `file/signatures/${chamadoId}`);
+      formData.append('path', `files/signatures/${chamadoId}`);
 
       // O arquivo propriamente dito
       formData.append('file', {
@@ -498,7 +532,7 @@ text     vira tentry
             relatorioFinal.assinante_contato,
 
           calendar_signature:
-            `file/signatures/${chamadoId}/assinatura.png`,
+            `files/signatures/${chamadoId}/assinatura.png`,
 
           calendar_status: 2,
 
@@ -733,29 +767,12 @@ text     vira tentry
     return result.status === "success";
   }
 
-  const handleFinalize = async () => {
-    if (sending) return;
-
-    if (!description.trim()) {
-      return Alert.alert('Erro', 'Descreva o serviço.');
-    }
-
-    if (!validarChecklistObrigatorio()) {
-      return;
-    }
-
-    if (!signerName.trim() || !signerContact.trim() || !signatureImg) {
-      return Alert.alert('Erro', 'Preencha todos os campos e a assinatura.');
-    }
-
-    // DENTRO DE: const handleFinalize = async () => { ...
-    // ... (validações iniciais permanecem iguais)
-
+  // 🌟 MUDOU: Esta passou a ser a execução real do envio após todas as validações e confirmações
+  const executarFinalizacaoReal = async () => {
     try {
       setSending(true);
 
       const checkin = await AsyncStorage.getItem(`@checkin_${chamadoId}`);
-      // CORREÇÃO: Buscando a chave correta no plural que guarda a lista de fotos
       const fotosStr = await AsyncStorage.getItem(`@fotos_chamado_${chamadoId}`);
       const notasStr = await AsyncStorage.getItem(`notas_chamado_${chamadoId}`);
       const online = await isOnline();
@@ -765,15 +782,15 @@ text     vira tentry
 
       const relatorioFinal = {
         calendar_id: chamadoId,
-        calendar_checklist_id: calendarChecklistId, // IMPORTANTE: salvar para o sync saber qual ID atualizar
+        calendar_checklist_id: calendarChecklistId,
         descricao: description.trim(),
         assinante_nome: signerName.trim(),
         assinante_contato: signerContact.trim(),
-        assinatura: signatureImg, // Base64 ou URI persistente
-        checklist_template: checklistTemplate, // Guarda o template usado
+        assinatura: signatureImg,
+        checklist_template: checklistTemplate,
         checklist_response: Object.values(checklistResponses),
         checkin: checkin ? JSON.parse(checkin) : null,
-        fotos: fotosStr ? JSON.parse(fotosStr) : [], // Nome corrigido para bater com sua lista
+        fotos: fotosStr ? JSON.parse(fotosStr) : [],
         notas: notasStr ? JSON.parse(notasStr) : [],
         finalizado_em: new Date().toISOString(),
       };
@@ -783,7 +800,6 @@ text     vira tentry
         setLoadingMessage('Salvando dados offline...');
         setLoadingDetail('Copiando arquivos para armazenamento permanente');
 
-        // Helper para garantir que o diretório existe sem usar makeDirectoryAsync
         const garantirDiretorio = async (dir: string) => {
           const info = await FileSystem.getInfoAsync(dir);
           if (!info.exists) {
@@ -791,7 +807,6 @@ text     vira tentry
           }
         };
 
-        // --- Persiste assinatura em caminho permanente ---
         let assinaturaPath: string | null = null;
         if (signatureImg) {
           const dirAssinatura = `${FileSystem.documentDirectory}browz/assinaturas/${chamadoId}`;
@@ -810,25 +825,26 @@ text     vira tentry
           console.log('📝 Assinatura persistida:', assinaturaPath);
         }
 
-        // --- Persiste fotos em caminho permanente ---
         const fotosPermanentes: string[] = [];
         if (relatorioFinal.fotos?.length > 0) {
           const dirFotos = `${FileSystem.documentDirectory}browz/fotos/${chamadoId}`;
           await garantirDiretorio(dirFotos);
 
           for (const [i, uri] of relatorioFinal.fotos.entries()) {
-            const dest = `${dirFotos}/foto_${i + 1}.jpg`;
+            const ehVideo = uri.toLowerCase().endsWith('.mp4');
+            const dest = `${dirFotos}/foto_${i + 1}.${ehVideo ? 'mp4' : 'jpg'}`;
+
             try {
               const info = await FileSystem.getInfoAsync(uri);
               if (info.exists) {
                 await FileSystem.copyAsync({ from: uri, to: dest });
                 fotosPermanentes.push(dest);
-                console.log(`📸 Foto ${i + 1} persistida:`, dest);
+                console.log(`📸 Mídia ${i + 1} persistida:`, dest);
               } else {
-                console.log(`⚠️ Foto ${i + 1} não encontrada, pulando:`, uri);
+                console.log(`⚠️ Mídia ${i + 1} não encontrada, pulando:`, uri);
               }
             } catch (e) {
-              console.log(`⚠️ Erro ao copiar foto ${i + 1}:`, e);
+              console.log(`⚠️ Erro ao copiar mídia ${i + 1}:`, e);
             }
           }
         }
@@ -839,7 +855,6 @@ text     vira tentry
           fotos: fotosPermanentes,
         };
 
-        // Usa a chave correta — deve bater com QUEUE_KEY em offlineQueue.ts
         const filaAtual = await AsyncStorage.getItem("@offline_queue");
         const listaAtual = filaAtual ? JSON.parse(filaAtual) : [];
         const jaTemFinalizacao = listaAtual.some(
@@ -858,7 +873,6 @@ text     vira tentry
         }
 
         await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
-
         await salvarEventoCheckin(2);
 
         await salvarEventoLinhaTempo(
@@ -878,13 +892,9 @@ text     vira tentry
         return;
       }
 
-
-      // 2. ENVIOS SEQUENCIAIS COM FEEDBACK NA TELA
-
+      // ENVIOS SEQUENCIAIS ONLINE
       setLoadingMessage('Registrando check-out...');
       setLoadingDetail('Salvando evento de saída');
-
-
       const enviadoCheckout = await salvarEventoCheckin(2);
 
       const enviadoEventoCheckout = await salvarEventoLinhaTempo(
@@ -909,13 +919,8 @@ text     vira tentry
       setLoadingDetail('Sincronizando fotos da galeria');
       const enviadoFotos = await enviarFotosParaApi(setLoadingDetail);
 
-
-
-      // 3. VERIFICAÇÃO FINAL
       if (enviadoCheckout && enviadoEventoCheckout && enviadoChecklist && enviadoRelatorio && enviadoAssinatura && enviadoFotos) {
-
         await atualizarCacheFinalizado();
-
         await AsyncStorage.multiRemove([
           `@rascunho_relatorio_${chamadoId}`,
           `@assinatura_cliente_${chamadoId}`,
@@ -925,8 +930,6 @@ text     vira tentry
         ]);
 
         await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
-
-
 
         Alert.alert('Sucesso', 'Atendimento finalizado com sucesso!', [
           { text: 'OK', onPress: () => router.replace('/home') },
@@ -945,6 +948,44 @@ text     vira tentry
     }
   };
 
+  // 🌟 ADICIONAR: Nova função handleFinalize que faz as validações e a pergunta inteligente das mídias
+  const handleFinalize = async () => {
+    if (sending) return;
+
+    if (!description.trim()) {
+      return Alert.alert('Erro', 'Descreva o serviço.');
+    }
+
+    if (!validarChecklistObrigatorio()) {
+      return;
+    }
+
+    if (!signerName.trim() || !signerContact.trim() || !signatureImg) {
+      return Alert.alert('Erro', 'Preencha todos os campos e a assinatura.');
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerContact.trim())) {
+      return Alert.alert('Erro', 'Por favor, insira um e-mail válido.');
+    }
+
+    try {
+      // 2. Busca a lista de mídias salvas localmente para este chamado específico
+      const fotosStr = await AsyncStorage.getItem(`@fotos_chamado_${chamadoId}`);
+      const listaMidias = fotosStr ? JSON.parse(fotosStr) : [];
+
+      // 3. Se NÃO houver mídias vinculadas, abre o nosso Modal Customizado
+      if (!Array.isArray(listaMidias) || listaMidias.length === 0) {
+        setAvisoMidiaVisible(true);
+        return;
+      }
+
+      // Se possuir fotos ou vídeos normais, prossegue direto
+      await executarFinalizacaoReal();
+
+    } catch (e) {
+      console.log('Erro ao checar mídias no encerramento:', e);
+      await executarFinalizacaoReal();
+    }
+  };
   const isFormValid =
     description.trim() &&
     signerName.trim() &&
@@ -953,7 +994,7 @@ text     vira tentry
 
   if (sending) {
     return (
-      <SafeAreaView
+      <ScreenWrapper
         style={[
           styles.loadingContainer,
           {
@@ -998,12 +1039,12 @@ text     vira tentry
             <View style={styles.loadingBarFill} />
           </View>
         </View>
-      </SafeAreaView>
+      </ScreenWrapper>
     );
   }
 
   return (
-    <SafeAreaView
+    <ScreenWrapper
       style={[
         styles.container,
         {
@@ -1201,7 +1242,7 @@ text     vira tentry
                         style={[
                           styles.optionText,
                           {
-                            color: theme.text,
+                            color: checklistResponses[field.id]?.field_value === index ? '#fff' : theme.text,
                           },
                         ]}
                       >{option}</Text>
@@ -1230,6 +1271,7 @@ text     vira tentry
                           styles.optionText,
                           {
                             color: theme.text,
+
                           },
                         ]}
                       >{option}</Text>
@@ -1286,6 +1328,7 @@ text     vira tentry
                             styles.optionText,
                             {
                               color: theme.text,
+
                             },
                           ]}
                         >{option}</Text>
@@ -1373,14 +1416,13 @@ text     vira tentry
               onPress={async () => {
                 await salvarRascunhoRelatorio();
 
-                router.push({
+                // Mudado de router.push para router.navigate
+                router.navigate({
                   pathname: '/assinatura-cliente',
                   params: {
                     ticketId: chamadoId
                   }
-
-                })
-
+                });
               }}
             >
               <PenTool color="#3b82f6" size={28} />
@@ -1403,277 +1445,119 @@ text     vira tentry
           </Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+
+      {/* 🌟 MODAL PREMIUM DE AVISO DE MÍDIAS EM FALTA */}
+      <Modal
+        visible={avisoMidiaVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setAvisoMidiaVisible(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(15, 23, 42, 0.75)', // Fundo escurecido suave
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 24
+        }}>
+          <View style={{
+            backgroundColor: theme.card,
+            borderRadius: 24,
+            padding: 24,
+            width: '100%',
+            maxWidth: 340,
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: theme.border,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.25,
+            shadowRadius: 10,
+            elevation: 10
+          }}>
+            {/* Ícone de Alerta Animado/Estilizado */}
+            <View style={{
+              backgroundColor: '#fef2f2',
+              padding: 16,
+              borderRadius: 99,
+              marginBottom: 16
+            }}>
+              <View style={{ backgroundColor: '#fee2e2', padding: 12, borderRadius: 99 }}>
+                {/* Você pode trocar por um ícone da Lucide como AlertTriangle se preferir */}
+                <Text style={{ fontSize: 28 }}>📸</Text>
+              </View>
+            </View>
+
+            <Text style={{
+              fontSize: 20,
+              fontWeight: 'bold',
+              color: theme.text,
+              marginBottom: 12,
+              textAlign: 'center'
+            }}>
+              Aviso de Mídias
+            </Text>
+
+            <Text style={{
+              fontSize: 15,
+              color: theme.subText || '#94a3b8',
+              textAlign: 'center',
+              lineHeight: 22,
+              marginBottom: 24
+            }}>
+              Olá, <Text style={{ fontWeight: 'bold', color: theme.text }}>{nomeTecnico}</Text>! Notamos que você não anexou nenhuma <Text style={{ fontWeight: '600', color: '#ef4444' }}>FOTO</Text> ou <Text style={{ fontWeight: '600', color: '#ef4444' }}>VÍDEO</Text> para este chamado. Deseja encerrar mesmo assim?
+            </Text>
+
+            {/* Botão Principal: Voltar e Anexar */}
+            <TouchableOpacity
+              style={{
+                width: '100%',
+                padding: 14,
+                borderRadius: 12,
+                borderColor: theme.border,
+                borderWidth: 1,
+                alignItems: 'center',
+                marginBottom: 10
+              }}
+              onPress={() => {
+                // 1. Fecha o modal de aviso
+                setAvisoMidiaVisible(false);
+
+                // 2. Navega para a página de fotos passando o ID do chamado
+                // Ajuste o nome da pasta se a sua rota for um pouco diferente (ex: '/fotos-chamado')
+                router.push(`/fotos-chamado?id=${ticketId}`);
+              }}
+            >
+              <Text style={{ color: '#ef4444', fontSize: 16, fontWeight: 'bold' }}>
+                Voltar e Anexar
+              </Text>
+            </TouchableOpacity>
+
+            {/* Botão Secundário: Sim, Finalizar */}
+            <TouchableOpacity
+              style={{
+                width: '100%',
+                padding: 14,
+                borderRadius: 12,
+                alignItems: 'center',
+                backgroundColor: '#3b82f6',
+                borderWidth: 1,
+                borderColor: theme.border
+              }}
+              onPress={async () => {
+                setAvisoMidiaVisible(false);
+                await executarFinalizacaoReal();
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>
+                Sim, Finalizar Sem Imagens
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+    </ScreenWrapper>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-
-  title: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: 'bold',
-  },
-
-  subtitle: {
-    color: '#3b82f6',
-    marginBottom: 20,
-  },
-
-  section: {
-    marginBottom: 25,
-  },
-
-  label: {
-    color: '#64748b',
-    marginBottom: 10,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-
-  textArea: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    color: '#fff',
-    padding: 15,
-    minHeight: 220,
-    textAlignVertical: 'top',
-  },
-
-  input: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    color: '#fff',
-    padding: 15,
-    marginBottom: 12,
-    fontSize: 16,
-  },
-
-  checklistItem: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-
-  checklistLabel: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-
- textAreaSmall: {
-  borderRadius: 12,
-  padding: 15,
-  minHeight: 100,
-  textAlignVertical: 'top',
-  borderWidth: 1,
-},
-
-  optionButton: {
-    backgroundColor: '#0f172a',
-    padding: 13,
-    borderRadius: 10,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-
-  optionButtonSelected: {
-    borderColor: '#3b82f6',
-    backgroundColor: '#1d4ed8',
-  },
-
-  optionText: {
-    color: '#fff',
-    fontSize: 14,
-  },
-
-  radioRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 10,
-  },
-
-  radioCircle: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: '#64748b',
-  },
-
-  radioCircleSelected: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
-  },
-
-  checkboxBox: {
-    width: 18,
-    height: 18,
-    borderRadius: 5,
-    borderWidth: 2,
-    borderColor: '#64748b',
-  },
-
-  checkboxBoxSelected: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
-  },
-
-  loadingChecklist: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    padding: 18,
-    alignItems: 'center',
-    gap: 8,
-  },
-
-  loadingText: {
-    color: '#94a3b8',
-    marginTop: 8,
-  },
-
-  emptyChecklist: {
-    color: '#94a3b8',
-    backgroundColor: '#1e293b',
-    padding: 15,
-    borderRadius: 12,
-  },
-
-  signatureHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-
-  clearBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-
-  clearBtnText: {
-    color: '#ef4444',
-  },
-
-  signatureTrigger: {
-    height: 140,
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#3b82f6',
-    borderStyle: 'dashed',
-  },
-
-  signatureTriggerText: {
-    color: '#3b82f6',
-    fontWeight: '600',
-    marginTop: 8,
-  },
-
-  previewContainer: {
-    height: 140,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-
-  previewImage: {
-    width: '100%',
-    height: '100%',
-  },
-
-  submitBtn: {
-    backgroundColor: '#10b981',
-    height: 60,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 30,
-  },
-
-  submitBtnDisabled: {
-    backgroundColor: '#334155',
-  },
-
-  submitBtnText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  topBar: {
-    marginBottom: 15,
-  },
-
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#1e293b',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 25,
-  },
-
-  loadingCard: {
-    width: '100%',
-    backgroundColor: '#1e293b',
-    borderRadius: 30,
-    padding: 30,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-
-  loadingTitle: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginTop: 25,
-    textAlign: 'center',
-  },
-
-  loadingSubtitle: {
-    color: '#94a3b8',
-    fontSize: 15,
-    marginTop: 10,
-    textAlign: 'center',
-  },
-
-  loadingBarBackground: {
-    width: '100%',
-    height: 10,
-    backgroundColor: '#0f172a',
-    borderRadius: 999,
-    marginTop: 30,
-    overflow: 'hidden',
-  },
-
-  loadingBarFill: {
-    width: '70%',
-    height: '100%',
-    backgroundColor: '#3b82f6',
-    borderRadius: 999,
-  },
-});

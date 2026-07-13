@@ -2,55 +2,71 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import { isOnline } from "./network";
 import { buscarFila, salvarFila } from "./offlineQueue";
+import { deslogarForcado, validarSessaoDispositivo } from "./session";
+import { registrarLog } from "./logger";
 
 const MAX_TENTATIVAS = 5;
 
 let sincronizando = false;
+let alertaSyncDeslogarVisivel = false;
+
+export function estaSincronizando() {
+  return sincronizando;
+}
 
 export async function sincronizarPendentes() {
   if (sincronizando) return;
 
+  // 1. Verifica se a sessão caiu enquanto estava offline
+  const sessaoAtiva = await validarSessaoDispositivo();
+
+  if (!sessaoAtiva) {
+    await deslogarForcado();
+
+    if (alertaSyncDeslogarVisivel) {
+      return false;
+    }
+
+    alertaSyncDeslogarVisivel = true;
+    return false;
+  }
+
+  console.log("Sessão válida! Iniciando envio da fila offline...");
+
   const online = await isOnline();
   if (!online) return;
+
+  const token = await AsyncStorage.getItem("token");
+  if (!token) return;
+
+  const fila = await buscarFila();
+  if (fila.length === 0) return;
 
   sincronizando = true;
 
   try {
-    const token = await AsyncStorage.getItem("token");
-    if (!token) {
-      console.log("⚠️ Sync abortado: sem token");
-      return;
-    }
+    let filaAtual = await buscarFila();
+    console.log("📦 FILA PARA SINCRONIZAR:", filaAtual.length, filaAtual);
 
-    let fila = await buscarFila();
-    console.log("📦 FILA PARA SINCRONIZAR:", fila.length, fila);
+    if (filaAtual.length === 0) return;
 
-    if (fila.length === 0) return;
-
-    // Itera sobre cópia estática — evita bugs de iteração ao reatribuir fila
-    const itensParaProcessar = [...fila];
+    const itensParaProcessar = [...filaAtual];
 
     for (const item of itensParaProcessar) {
-      // Pula itens que já excederam o limite de tentativas
       if ((item.tentativas || 0) >= MAX_TENTATIVAS) {
-        
-        // Remove da fila para não acumular infinitamente
-        fila = fila.filter((p: any) => p.criadoEm !== item.criadoEm);
-        await salvarFila(fila);
+        filaAtual = filaAtual.filter((p: any) => p.criadoEm !== item.criadoEm);
+        await salvarFila(filaAtual);
+        registrarLog("WARN", "SYNC", `Item removido após exceder ${MAX_TENTATIVAS} tentativas`, item);
         continue;
       }
-
-      
 
       const sucesso = await processarItem(item, token);
 
       if (sucesso) {
-        
-        fila = fila.filter((p: any) => p.criadoEm !== item.criadoEm);
-        await salvarFila(fila);
+        filaAtual = filaAtual.filter((p: any) => p.criadoEm !== item.criadoEm);
+        await salvarFila(filaAtual);
       } else {
-     
-        fila = fila.map((p: any) => {
+        filaAtual = filaAtual.map((p: any) => {
           if (p.criadoEm === item.criadoEm) {
             return {
               ...p,
@@ -60,13 +76,18 @@ export async function sincronizarPendentes() {
           }
           return p;
         });
-        await salvarFila(fila);
+        await salvarFila(filaAtual);
       }
     }
 
-    console.log("📭 Fila após sync:", fila.length, "pendentes");
+    console.log("📭 Fila após sync:", filaAtual.length, "pendentes");
+
+    if (filaAtual.length === 0) {
+      await AsyncStorage.setItem("@status_sincronizacao", "concluido");
+    }
   } catch (error) {
     console.log("💥 Erro geral ao sincronizar:", error);
+    registrarLog("ERROR", "SYNC", "Erro geral na função sincronizarPendentes", error);
   } finally {
     sincronizando = false;
   }
@@ -97,74 +118,98 @@ async function processarItem(item: any, token: string) {
     }
 
     console.log("⚠️ Tipo desconhecido na fila, removendo:", item.tipo);
-    return true; // Remove tipos desconhecidos para não travar a fila
+    return true;
   } catch (error) {
     console.log("💥 Exceção em processarItem:", item.tipo, error);
+    registrarLog("ERROR", "PROCESSAR_ITEM", `Exceção ao processar item do tipo ${item.tipo}`, error);
     return false;
   }
 }
 
 async function sincronizarStatusChamado(item: any, token: string) {
-  const payload = {
-    class: "CalendarService",
-    method: "store",
-    data: {
-      id: Number(item.ticketId),
-      calendar_id: Number(item.ticketId),
-      calendar_status: Number(item.status),
-      agenda_pause: Number(item.extraData?.agenda_pause ?? 0),
-      ...item.extraData,
-    },
-  };
+  try {
+    const payload = {
+      class: "CalendarService",
+      method: "store",
+      data: {
+        id: Number(item.ticketId),
+        calendar_id: Number(item.ticketId),
+        calendar_status: Number(item.status),
+        agenda_pause: Number(item.extraData?.agenda_pause ?? 0),
+        ...item.extraData,
+      },
+    };
 
-  console.log("📤 ENVIANDO STATUS:", JSON.stringify(payload));
+    registrarLog("INFO", "SYNC_STATUS", `Enviando status do chamado #${item.ticketId}`, payload);
+    console.log("📤 ENVIANDO STATUS:", JSON.stringify(payload));
 
-  const response = await fetch("https://browz.com.br/rest.php", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  });
+    const response = await fetch("https://browz.com.br/rest.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
 
-  const result = await response.json();
-  console.log("📥 RETORNO STATUS:", JSON.stringify(result));
+    const result = await response.json();
+    console.log("📥 RETORNO STATUS:", JSON.stringify(result));
 
-  if (result.status === "success" && Number(item.extraData?.agenda_pause ?? 0) === 0) {
-    // check-in: limpa flag de pausado para o cache refletir corretamente
-    await AsyncStorage.removeItem(`@ticket_${item.ticketId}_pausado`);
+    if (result.status === "success") {
+      if (Number(item.extraData?.agenda_pause ?? 0) === 0) {
+        await AsyncStorage.removeItem(`@ticket_${item.ticketId}_pausado`);
+      }
+
+      registrarLog("SUCCESS", "SYNC_STATUS", `Status do chamado #${item.ticketId} sincronizado`);
+      return true;
+    } else {
+      registrarLog("ERROR", "SYNC_STATUS", `API retornou erro no chamado #${item.ticketId}`, result);
+      return false;
+    }
+  } catch (error: any) {
+    console.log("💥 Exceção em sincronizarStatusChamado:", error);
+    registrarLog("ERROR", "SYNC_STATUS", `Falha no chamado #${item.ticketId}`, error?.message || error);
+    return false;
   }
-
-  return result.status === "success";
 }
 
 async function sincronizarCheckin(item: any, token: string) {
-  const payload = {
-    class: "CalendarService",
-    method: "store",
-    data: {
-      id: Number(item.ticketId),
-      calendar_id: Number(item.ticketId),
-      calendar_status: 1,
-      ...item.checkinData,
-    },
-  };
+  try {
+    const payload = {
+      class: "CalendarService",
+      method: "store",
+      data: {
+        id: Number(item.ticketId),
+        calendar_id: Number(item.ticketId),
+        calendar_status: 1,
+        ...item.checkinData,
+      },
+    };
 
-  console.log("📤 ENVIANDO CHECKIN:", JSON.stringify(payload));
+    registrarLog("INFO", "SYNC_CHECKIN", `Enviando Check-in do chamado #${item.ticketId}`, payload);
 
-  const response = await fetch("https://browz.com.br/rest.php", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  });
+    const response = await fetch("https://browz.com.br/rest.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
 
-  const result = await response.json();
-  console.log("📥 RETORNO CHECKIN:", JSON.stringify(result));
-  return result.status === "success";
+    const result = await response.json();
+
+    if (result.status === "success") {
+      registrarLog("SUCCESS", "SYNC_CHECKIN", `Check-in do chamado #${item.ticketId} realizado`);
+      return true;
+    } else {
+      registrarLog("ERROR", "SYNC_CHECKIN", `Erro no Check-in #${item.ticketId}`, result);
+      return false;
+    }
+  } catch (error: any) {
+    registrarLog("ERROR", "SYNC_CHECKIN", `Falha de rede no Check-in #${item.ticketId}`, error?.message || error);
+    return false;
+  }
 }
 
 async function sincronizarFinalizacao(item: any, token: string) {
@@ -176,7 +221,7 @@ async function sincronizarFinalizacao(item: any, token: string) {
     return true;
   }
 
-  console.log(`📋 Iniciando sync de finalização para ticket ${ticketId}`);
+  registrarLog("INFO", "SYNC_FINALIZACAO", `Iniciando finalização do chamado #${ticketId}`);
 
   // 1. Checklist
   if (r.calendar_checklist_id && r.checklist_response) {
@@ -191,16 +236,14 @@ async function sincronizarFinalizacao(item: any, token: string) {
         calendar_checklist_response: JSON.stringify(r.checklist_response),
       },
     };
-    console.log("📤 SYNC CHECKLIST:", JSON.stringify(payloadChecklist));
     const resChecklist = await fetch("https://browz.com.br/rest.php", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(payloadChecklist),
     });
     const dataChecklist = await resChecklist.json();
-    console.log("📥 RETORNO CHECKLIST:", JSON.stringify(dataChecklist));
     if (dataChecklist.status !== "success") {
-      console.log("❌ Falhou ao sincronizar checklist");
+      registrarLog("ERROR", "SYNC_FINALIZACAO", `Falha no checklist do ticket #${ticketId}`, dataChecklist);
       return false;
     }
   }
@@ -222,20 +265,17 @@ async function sincronizarFinalizacao(item: any, token: string) {
         name: nomeArquivo,
         type: "image/png",
       } as any);
-      console.log("📤 SYNC ASSINATURA para ticket:", ticketId);
+
       const resAssinatura = await fetch("https://browz.com.br/rest.php", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formDataAssinatura,
       });
       const dataAssinatura = await resAssinatura.json();
-      console.log("📥 RETORNO ASSINATURA:", JSON.stringify(dataAssinatura));
       if (dataAssinatura.status !== "success") {
-        console.log("❌ Falhou ao sincronizar assinatura");
+        registrarLog("ERROR", "SYNC_FINALIZACAO", `Falha na assinatura do ticket #${ticketId}`, dataAssinatura);
         return false;
       }
-    } else {
-      console.log("⚠️ Arquivo de assinatura não encontrado, continuando sem ela:", r.assinatura);
     }
   }
 
@@ -247,10 +287,7 @@ async function sincronizarFinalizacao(item: any, token: string) {
 
     for (const [i, fotoUri] of r.fotos.entries()) {
       const { exists } = await FileSystem.getInfoAsync(fotoUri);
-      if (!exists) {
-        console.log(`⚠️ Foto ${i + 1} não encontrada, pulando:`, fotoUri);
-        continue;
-      }
+      if (!exists) continue;
 
       const caminhoBanco = caminhosBanco[i];
       const nomeArquivo = caminhoBanco.split("/").pop() || `foto_${i + 1}.jpg`;
@@ -268,30 +305,25 @@ async function sincronizarFinalizacao(item: any, token: string) {
         type: "image/jpeg",
       } as any);
 
-      console.log(`📤 SYNC FOTO ${i + 1}/${r.fotos.length} para ticket:`, ticketId);
       const resFoto = await fetch("https://browz.com.br/rest.php", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formDataFoto,
       });
       const dataFoto = await resFoto.json();
-      console.log(`📥 RETORNO FOTO ${i + 1}:`, JSON.stringify(dataFoto));
 
       if (dataFoto.status !== "success") {
-        console.log(`❌ Falhou ao sincronizar foto ${i + 1}`);
+        registrarLog("ERROR", "SYNC_FINALIZACAO", `Falha no upload da foto ${i + 1} do ticket #${ticketId}`, dataFoto);
         return false;
       }
 
-      // Remove foto local após upload com sucesso
       try {
         await FileSystem.deleteAsync(fotoUri, { idempotent: true });
-      } catch (e) {
-        console.log("⚠️ Erro ao remover foto local após upload (não crítico):", e);
-      }
+      } catch (e) {}
     }
   }
 
-  // 4. Relatório principal + status 2 (finalizado) + checkout
+  // 4. Relatório principal
   const now = new Date();
   const brasilDate = new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString();
 
@@ -311,21 +343,19 @@ async function sincronizarFinalizacao(item: any, token: string) {
     },
   };
 
-  console.log("📤 SYNC RELATÓRIO:", JSON.stringify(payloadRelatorio));
   const resRelatorio = await fetch("https://browz.com.br/rest.php", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify(payloadRelatorio),
   });
   const dataRelatorio = await resRelatorio.json();
-  console.log("📥 RETORNO RELATÓRIO:", JSON.stringify(dataRelatorio));
 
   if (dataRelatorio.status !== "success") {
-    console.log("❌ Falhou ao sincronizar relatório principal");
+    registrarLog("ERROR", "SYNC_FINALIZACAO", `Falha no relatório do ticket #${ticketId}`, dataRelatorio);
     return false;
   }
 
-  // 5. Limpeza local após tudo sincronizado
+  // 5. Limpeza local
   try {
     await AsyncStorage.multiRemove([
       `@rascunho_relatorio_${ticketId}`,
@@ -336,12 +366,14 @@ async function sincronizarFinalizacao(item: any, token: string) {
       `@ticket_${ticketId}_status`,
     ]);
 
-    // Remove assinatura do armazenamento permanente após upload
+    let filaAtual = await buscarFila();
+    filaAtual = filaAtual.filter((p: any) => String(p.ticketId) !== String(ticketId));
+    await salvarFila(filaAtual);
+
     if (r.assinatura) {
       await FileSystem.deleteAsync(r.assinatura, { idempotent: true });
     }
 
-    // Atualiza cache de chamados para refletir status finalizado
     const cache = await AsyncStorage.getItem("@cache_chamados");
     if (cache) {
       const chamados = JSON.parse(cache);
@@ -353,70 +385,66 @@ async function sincronizarFinalizacao(item: any, token: string) {
       await AsyncStorage.setItem("@cache_chamados", JSON.stringify(atualizados));
     }
 
-    console.log(`✅ Finalização do ticket ${ticketId} sincronizada e limpa com sucesso`);
-  } catch (e) {
-    console.log("⚠️ Erro na limpeza pós-sync (não crítico):", e);
-  }
+    registrarLog("SUCCESS", "SYNC_FINALIZACAO", `Finalização do chamado #${ticketId} concluída com sucesso`);
+  } catch (e) {}
 
   return true;
 }
 
 async function sincronizarEventoLinhaTempo(item: any, token: string) {
-  const payload = {
-    class: "CalendarEventService",
-    method: "store",
-    data: item.data,
-  };
+  try {
+    const payload = {
+      class: "CalendarEventService",
+      method: "store",
+      data: item.data,
+    };
 
-  console.log("📤 ENVIANDO EVENTO_LINHA_TEMPO:", JSON.stringify(payload));
+    const response = await fetch("https://browz.com.br/rest.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
 
-  const response = await fetch("https://browz.com.br/rest.php", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const result = await response.json();
-  console.log("📥 RETORNO EVENTO_LINHA_TEMPO:", JSON.stringify(result));
-  return result.status === "success";
+    const result = await response.json();
+    return result.status === "success";
+  } catch (e) {
+    return false;
+  }
 }
 
 async function sincronizarEventoCheckin(item: any, token: string) {
-  const payload = {
-    class: "CalendarCheckinService",
-    method: "store",
-    data: item.data,
-  };
+  try {
+    const payload = {
+      class: "CalendarCheckinService",
+      method: "store",
+      data: item.data,
+    };
 
-  console.log("📤 ENVIANDO EVENTO_CHECKIN:", JSON.stringify(payload));
+    const response = await fetch("https://browz.com.br/rest.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
 
-  const response = await fetch("https://browz.com.br/rest.php", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const result = await response.json();
-  console.log("📥 RETORNO EVENTO_CHECKIN:", JSON.stringify(result));
-  return result.status === "success";
+    const result = await response.json();
+    return result.status === "success";
+  } catch (e) {
+    return false;
+  }
 }
 
 async function sincronizarFotoChamado(item: any, token: string) {
   try {
-    // Verifica se o arquivo ainda existe antes de tentar upload
     const fileInfo = await FileSystem.getInfoAsync(item.uri);
     if (!fileInfo.exists) {
-      console.log("🗑️ Arquivo de foto não existe mais, removendo da fila:", item.uri);
-      return true; // Retorna true para remover da fila sem tentar upload
+      return true;
     }
-
-    console.log("📤 ENVIANDO FOTO:", item.uri, "ticket:", item.ticketId);
 
     const formData = new FormData();
     formData.append("class", "CalendarFileService");
@@ -440,57 +468,52 @@ async function sincronizarFotoChamado(item: any, token: string) {
     });
 
     const result = await response.json();
-    console.log("📥 RETORNO FOTO:", JSON.stringify(result));
 
     if (result.status === "success") {
       try {
         await FileSystem.deleteAsync(item.uri, { idempotent: true });
-        console.log("🗑️ Foto local removida após upload:", item.uri);
-      } catch (e) {
-        console.log("⚠️ Erro ao remover foto local (não crítico):", e);
-      }
+      } catch (e) {}
     }
 
     return result.status === "success";
   } catch (error) {
-    console.log("💥 Erro no upload de foto:", error);
     return false;
   }
 }
 
 async function sincronizarPausaChamado(item: any, token: string) {
-  const payload = {
-    class: "CalendarService",
-    method: "store",
-    data: {
-      id: Number(item.ticketId),
-      calendar_id: Number(item.ticketId),
-      calendar_status: 1,
-      agenda_pause: 1,
-      pausa_motivo: item.data?.pausa_motivo,
-      pausa_data: item.data?.pausa_data,
-    },
-  };
+  try {
+    const payload = {
+      class: "CalendarService",
+      method: "store",
+      data: {
+        id: Number(item.ticketId),
+        calendar_id: Number(item.ticketId),
+        calendar_status: 1,
+        agenda_pause: 1,
+        pausa_motivo: item.data?.pausa_motivo,
+        pausa_data: item.data?.pausa_data,
+      },
+    };
 
-  console.log("📤 ENVIANDO PAUSA:", JSON.stringify(payload));
+    const response = await fetch("https://browz.com.br/rest.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
 
-  const response = await fetch("https://browz.com.br/rest.php", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  });
+    const result = await response.json();
 
-  const result = await response.json();
-  console.log("📥 RETORNO PAUSA:", JSON.stringify(result));
+    if (result.status === "success") {
+      await AsyncStorage.removeItem(`@ticket_${item.ticketId}_pausado`);
+      registrarLog("SUCCESS", "SYNC_PAUSA", `Chamado #${item.ticketId} pausado com sucesso`);
+    }
 
-  if (result.status === "success") {
-    // Remove o flag local de pausado após confirmação da API
-    await AsyncStorage.removeItem(`@ticket_${item.ticketId}_pausado`);
-    console.log("🧹 Flag pausado removido para ticket:", item.ticketId);
+    return result.status === "success";
+  } catch (e) {
+    return false;
   }
-
-  return result.status === "success";
 }
