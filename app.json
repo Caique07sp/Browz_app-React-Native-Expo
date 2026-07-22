@@ -7,11 +7,12 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
+    "jsEngine": "hermes",
     "notification": {
       "androidMode": "default"
     },
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
@@ -19,6 +20,7 @@
     },
     "ios": {
       "supportsTablet": true,
+      "jsEngine": "hermes",
       "config": {
         "googleMapsApiKey": "AIzaSyBJg8pGeMaV4E1rUoj2rWMqp3K0OVw4fBw"
       }
@@ -26,6 +28,7 @@
     "android": {
       "package": "com.caique_007.myapp",
       "googleServicesFile": "./google-services.json",
+      "jsEngine": "hermes",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#ffffff"
@@ -40,12 +43,12 @@
     },
     "plugins": [
       "expo-router",
-      "@react-native-community/datetimepicker",
       [
         "expo-image-picker",
         {
           "photosPermission": "O aplicativo precisa de acesso às suas fotos para anexar mídias ao chamado.",
-          "cameraPermission": "O aplicativo precisa de acesso à câmera para tirar fotos e gravar vídeos dos chamados."
+          "cameraPermission": "O aplicativo precisa de acesso à câmera para tirar fotos e gravar vídeos dos chamados.",
+          "microphonePermission": "O aplicativo precisa de acesso ao microfone para gravar vídeos dos chamados."
         }
       ],
       [
@@ -55,7 +58,10 @@
           "sounds": [],
           "enableBackgroundRemoteNotifications": true
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
