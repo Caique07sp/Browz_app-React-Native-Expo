@@ -13,6 +13,7 @@ import {
     Navigation,
     Route,
     Sparkles,
+    X,
 } from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -111,7 +112,7 @@ export default function MapaChamadosScreen() {
             setTodosChamados(mapeados);
             await aplicarFiltroPorData(mapeados, dataSelecionada);
         } catch (error) {
-            console.log("Erro ao carregar dados pro mapa:", error);
+            //console.log("Erro ao carregar dados pro mapa:", error);
             setLoading(false);
         }
     }
@@ -139,7 +140,7 @@ export default function MapaChamadosScreen() {
                 return coordenadas;
             }
         } catch (e) {
-            console.log(`Erro geocode no endereço: ${endereco}`, e);
+            //console.log(`Erro geocode no endereço: ${endereco}`, e);
         }
         return null;
     }
@@ -255,33 +256,25 @@ export default function MapaChamadosScreen() {
                     .map((p) => `${p.latitude},${p.longitude}`)
                     .join("|");
 
-                const params = new URLSearchParams({
-                    origin: origem,
-                    destination: destino,
-                    mode: "driving",
-                    key: GOOGLE_DIRECTIONS_API_KEY,
-                });
+                // 🛠️ MUDANÇA AQUI: Formata a URL escapando caracteres especiais como "|"
+                let url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origem}&destination=${destino}&mode=driving&key=${GOOGLE_DIRECTIONS_API_KEY}`;
 
                 if (intermediarios) {
-                    params.append("waypoints", `optimize:false|${intermediarios}`);
+                    const waypointsFormatted = encodeURIComponent(`optimize:false|${intermediarios}`);
+                    url += `&waypoints=${waypointsFormatted}`;
                 }
 
-                const resposta = await fetch(
-                    `https://maps.googleapis.com/maps/api/directions/json?${params.toString()}`
-                );
+                const resposta = await fetch(url);
                 const json = await resposta.json();
 
                 if (json.status === "OK" && json.routes?.length > 0) {
                     const pontosPolyline = decodificarPolyline(json.routes[0].overview_polyline.points);
                     trajetoCompleto = trajetoCompleto.concat(pontosPolyline);
-                } else {
-                    console.log("Directions API retornou erro:", json.status, json.error_message);
                 }
             }
 
             setCoordenadasRotaReal(trajetoCompleto);
         } catch (error) {
-            console.log("Erro ao buscar rota real do Google:", error);
             setCoordenadasRotaReal([]);
         }
     }
@@ -405,7 +398,7 @@ export default function MapaChamadosScreen() {
 
             Alert.alert("Rota Otimizada! 🚀", `Calculamos o melhor trajeto. Distância est.: ${kmTotal.toFixed(1)} km`);
         } catch (error) {
-            console.log("Erro ao otimizar trajeto:", error);
+            //console.log("Erro ao otimizar trajeto:", error);
         } finally {
             setOtimizando(false);
         }
@@ -427,15 +420,36 @@ export default function MapaChamadosScreen() {
         return "Desconhecido";
     }
 
-    function abrirNavegadorGPS(lat: number, lng: number, label: string) {
-        const scheme = Platform.OS === "ios" ? "maps:0,0?q=" : "geo:0,0?q=";
+    async function abrirNavegadorGPS(lat: number, lng: number, label: string) {
+        const labelEncoded = encodeURIComponent(label);
         const latLng = `${lat},${lng}`;
-        const url = Platform.select({
-            ios: `${scheme}${label}@${latLng}`,
-            android: `${scheme}${latLng}(${label})`,
-        });
 
-        if (url) Linking.openURL(url);
+        // URLs para apps nativos e fallback web
+        const urlIos = `maps:0,0?q=${labelEncoded}@${latLng}`;
+        const urlAndroid = `geo:0,0?q=${latLng}(${labelEncoded})`;
+        const urlWeb = `https://www.google.com/maps/search/?api=1&query=${latLng}`;
+
+        try {
+            if (Platform.OS === "ios") {
+                const podeAbrirAppleMaps = await Linking.canOpenURL(urlIos);
+                if (podeAbrirAppleMaps) {
+                    await Linking.openURL(urlIos);
+                    return;
+                }
+            } else if (Platform.OS === "android") {
+                const podeAbrirGeo = await Linking.canOpenURL(urlAndroid);
+                if (podeAbrirGeo) {
+                    await Linking.openURL(urlAndroid);
+                    return;
+                }
+            }
+
+            // Fallback: Se não conseguir abrir o app nativo (ex: no emulador), abre no navegador/Google Maps
+            await Linking.openURL(urlWeb);
+        } catch (error) {
+            // Se tudo falhar, abre direto a URL do Google Maps web sem quebrar o app
+            Linking.openURL(urlWeb);
+        }
     }
 
     const coordenadasLinhaReta = chamadosFiltrados.map((c) => ({
@@ -487,16 +501,43 @@ export default function MapaChamadosScreen() {
             </View>
 
             {/* MODAL CALENDÁRIO */}
+            {/* MODAL CALENDÁRIO */}
             {showDatePicker && (
-                <DateTimePicker
-                    value={dataSelecionada}
-                    mode="date"
-                    display={Platform.OS === "ios" ? "inline" : "default"}
-                    onChange={(event, selectedDate) => {
-                        setShowDatePicker(false);
-                        if (selectedDate) setDataSelecionada(selectedDate);
-                    }}
-                />
+                Platform.OS === "ios" ? (
+                    <View
+                        style={{
+                            backgroundColor: theme.card,
+                            borderRadius: 16,
+                            padding: 12,
+                            marginHorizontal: 16,
+                            marginBottom: 12,
+                            borderWidth: 1,
+                            borderColor: theme.border,
+                        }}
+                    >
+                        <DateTimePicker
+                            value={dataSelecionada}
+                            mode="date"
+                            display="inline"
+                            locale="pt-BR"
+                            themeVariant={darkMode ? "dark" : "light"}
+                            onChange={(event, selectedDate) => {
+                                setShowDatePicker(false);
+                                if (selectedDate) setDataSelecionada(selectedDate);
+                            }}
+                        />
+                    </View>
+                ) : (
+                    <DateTimePicker
+                        value={dataSelecionada}
+                        mode="date"
+                        display="default"
+                        onChange={(event, selectedDate) => {
+                            setShowDatePicker(false);
+                            if (selectedDate) setDataSelecionada(selectedDate);
+                        }}
+                    />
+                )
             )}
 
             {/* ÁREA DO MAPA */}
@@ -579,8 +620,9 @@ export default function MapaChamadosScreen() {
                                                     {item.statusTexto}{" "}
                                                     {item.ordemRota ? `• ${item.ordemRota}ª Parada` : ""}
                                                 </Text>
-                                            </View>
 
+
+                                            </View>
                                             <Text style={styles.tituloPino}>{item.cliente}</Text>
                                             <Text style={styles.protocoloPino}>{item.protocolo}</Text>
                                             <Text style={styles.enderecoPino}>{item.endereco}</Text>

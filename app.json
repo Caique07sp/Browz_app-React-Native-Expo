@@ -44,6 +44,12 @@
     "plugins": [
       "expo-router",
       [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "O aplicativo precisa da sua localização para validar o check-in e check-out nos atendimentos."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "O aplicativo precisa de acesso às suas fotos para anexar mídias ao chamado.",

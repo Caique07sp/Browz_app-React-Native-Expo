@@ -11,14 +11,35 @@ import { verificarSessao } from "@/services/session";
 import { sincronizarPendentes } from "@/services/sync";
 import { ThemeProvider, useTheme } from "../theme/ThemeContext";
 
+// BUSCA A CHAVE DO SEU SERVIÇO DE NOTIFICAÇÕES
+// BUSCA A CHAVE DO SEU SERVIÇO DE NOTIFICAÇÕES
+const CHAVE_NOTIFICACAO = "@config_notificacoes_ativadas";
+
 Notifications.setNotificationHandler({
-  handleNotification: async () =>
-  ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  } as Notifications.NotificationBehavior),
+  handleNotification: async (notification) => {
+    try {
+      // Lê o status do switch salvo pelo usuário
+      const salvo = await AsyncStorage.getItem(CHAVE_NOTIFICACAO);
+      // Se for explicitamente 'false', bloqueia a exibição
+      const mostrarNotificacao = salvo !== "false";
+
+      return {
+        shouldPlaySound: mostrarNotificacao,
+        shouldSetBadge: mostrarNotificacao,
+        shouldShowBanner: mostrarNotificacao,
+        shouldShowList: mostrarNotificacao,
+      } as Notifications.NotificationBehavior;
+    } catch {
+      return {
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      } as Notifications.NotificationBehavior;
+    }
+  },
 });
+
 
 function NavigationGuard() {
   const router = useRouter();
@@ -34,7 +55,7 @@ function NavigationGuard() {
       try {
         const logado = await verificarSessao();
         const primeiroSegmento = String(segments?.[0] || "").trim();
-        const estaNaTelaDeLogin = primeiroSegmento === "login" || primeiroSegmento === "";
+        const estaNaTelaDeLogin = primeiroSegmento === "login" || primeiroSegmento === "" || primeiroSegmento === "index";
 
         // O setTimeout joga o redirecionamento para o próximo "tick" do renderizador,
         // garantindo que a Stack/Slot já esteja montada na tela.
@@ -46,7 +67,6 @@ function NavigationGuard() {
           }
         }, 0);
       } catch (e) {
-        console.error("Erro ao validar rotas:", e);
       } finally {
         setCarregandoSessao(false);
       }
@@ -65,7 +85,7 @@ function NavigationGuard() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="login" />
+      <Stack.Screen name="index" />
       <Stack.Screen name="home" />
       <Stack.Screen name="notificacoes" />
       <Stack.Screen name="perfil" />
@@ -108,6 +128,10 @@ function AppContent() {
 
     const subscription = Notifications.addNotificationReceivedListener(async (notification) => {
       try {
+        // 🔴 CHECAGEM CRUCIAL: Se o usuário desativou as notificações, ignora o recebimento por completo
+        const salvo = await AsyncStorage.getItem("@config_notificacoes_ativadas");
+        if (salvo === "false") return;
+
         const { title, body, data } = notification.request.content;
         const tipoNotificacao = data?.tipo || "novo";
         const uniqueId = data?.uniqueId || `push_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
@@ -141,6 +165,7 @@ function AppContent() {
         console.error("❌ Erro ao processar gravação do push:", error);
       }
     });
+
 
     return () => {
       unsubscribeNet();

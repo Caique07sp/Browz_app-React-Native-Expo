@@ -57,7 +57,7 @@ export async function salvarFotoParaSync(
   // Copia para diretório permanente
   await FileSystem.copyAsync({ from: uriOrigem, to: uriDestino });
 
-  console.log(`📁 Foto salva localmente: ${uriDestino}`);
+  //console.log(`📁 Foto salva localmente: ${uriDestino}`);
 
   // Enfileira para sincronização
   await adicionarNaFila({
@@ -70,7 +70,7 @@ export async function salvarFotoParaSync(
     tentativas: 0,
   });
 
-  console.log(`📋 Foto enfileirada para sync — ticket: ${ticketId}`);
+  //console.log(`📋 Foto enfileirada para sync — ticket: ${ticketId}`);
 
   return uriDestino;
 }
@@ -109,8 +109,5 @@ export async function limparFotosOfflineDoTicket(
         console.warn("⚠️ Erro ao remover foto offline:", e)
       )
     )
-  );
-  console.log(
-    `🗑️ ${fotos.length} foto(s) offline removidas para ticket: ${ticketId}`
   );
 }

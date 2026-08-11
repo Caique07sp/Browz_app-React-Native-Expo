@@ -113,7 +113,7 @@ export async function adicionarNaFila(item: QueueItem): Promise<void> {
   const fila = await buscarFila();
   fila.push(item);
   await salvarFila(fila);
-  console.log(`➕ Item adicionado à fila [${item.tipo}] total: ${fila.length}`);
+  //console.log(`➕ Item adicionado à fila [${item.tipo}] total: ${fila.length}`);
 }
 
 /**

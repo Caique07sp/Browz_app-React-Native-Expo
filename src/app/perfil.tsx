@@ -1,3 +1,4 @@
+import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { isOnline } from "@/services/network";
 import { useTheme } from "@/theme/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -21,7 +22,6 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import { ScreenWrapper } from "@/components/ScreenWrapper";
 
 interface DadosTecnico {
   nome: string;
@@ -88,7 +88,7 @@ export default function Perfil() {
         await buscarDadosAPI(representativeId);
       }
     } catch (e) {
-      console.log("Erro ao carregar perfil:", e);
+      //console.log("Erro ao carregar perfil:", e);
     } finally {
       setLoading(false);
     }

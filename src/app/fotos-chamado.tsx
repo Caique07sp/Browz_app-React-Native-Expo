@@ -1,20 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Modal,
-  Platform,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    Modal,
+    Platform,
+    ScrollView,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { styles } from "../styles/photo.styles";
 
 import { adicionarNaFila } from '@/services/offlineQueue';
 import { useTheme } from '@/theme/ThemeContext';
 
+import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { isOnline } from '@/services/network';
 import { sincronizarPendentes } from '@/services/sync';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -22,7 +23,6 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Camera, ChevronLeft, Eye, Image as ImageIcon, Play, Trash2, Video, X } from 'lucide-react-native';
-import { ScreenWrapper } from "@/components/ScreenWrapper";
 
 import { ResizeMode, Video as VideoPlayer } from 'expo-av';
 
@@ -180,8 +180,8 @@ export default function FotosChamado() {
         );
       }
     } catch (e) {
-      console.log("ERRO COMPLETO:");
-      console.log(JSON.stringify(e, null, 2));
+      //console.log("ERRO COMPLETO:");
+      //console.log(JSON.stringify(e, null, 2));
       console.error(e);
 
       Alert.alert(

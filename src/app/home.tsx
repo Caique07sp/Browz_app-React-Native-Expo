@@ -84,23 +84,27 @@ export default function Browz() {
   // LÓGICA 1: VALIDAÇÃO ISOLADA DA SESSÃO LOCAL
   // ==========================================
   async function verificarSessaoValida() {
-    const token = await AsyncStorage.getItem("token");
-    const representativeId = await AsyncStorage.getItem("representative_id");
+  const token = await AsyncStorage.getItem("token");
+  const representativeId = await AsyncStorage.getItem("representative_id");
 
-    if (!token || !representativeId) {
-      console.log("❌ Sessão corrompida localmente. Redirecionando para login...");
-      await logout();
-      router.replace("/");
-      return false;
-    }
-    return true;
+  // 👇 ADICIONE ESSES LOGS PARA TESTAR NO SEU TERMINAL:
+  console.log("🔍 TOKEN:", token);
+  console.log("🔍 REPRESENTATIVE_ID:", representativeId);
+
+  if (!token || !representativeId) {
+    console.log("❌ DESLOGADO POR FALTA DE TOKEN OU REPRESENTATIVE_ID NO ASYNCSTORAGE");
+    await logout();
+    router.replace("/");
+    return false;
   }
+  return true;
+}
 
   // ==========================================
   // LÓGICA 2: CARREGAMENTO DOS DADOS DE APOIO
   // ==========================================
   async function carregarDadosDeApoio() {
-    console.log("⚡ Carregando dados de apoio em paralelo...");
+    //console.log("⚡ Carregando dados de apoio em paralelo...");
     await Promise.all([
       buscarTecnicos(),
       buscarCategorias(),
@@ -113,7 +117,7 @@ export default function Browz() {
   // ==========================================
   async function sincronizarEBuscarChamados() {
     if (estaSincronizando()) {
-      console.log("⏳ Sincronização em andamento por segundo plano...");
+      //console.log("⏳ Sincronização em andamento por segundo plano...");
       return;
     }
 
@@ -169,7 +173,7 @@ export default function Browz() {
           await sincronizarEBuscarChamados();
 
         } catch (error) {
-          console.log("Erro no carregamento modular da home:", error);
+          //console.log("Erro no carregamento modular da home:", error);
         } finally {
           setLoading(false);
         }
@@ -229,13 +233,13 @@ export default function Browz() {
   useEffect(() => {
     // Recebeu notificação com app em foreground — recarrega chamados
     const subRecebida = Notifications.addNotificationReceivedListener(() => {
-      console.log("🔔 Notificação recebida em foreground, recarregando chamados...");
+      //console.log("🔔 Notificação recebida em foreground, recarregando chamados...");
       buscarChamados();
     });
 
     // Usuário tocou na notificação — recarrega chamados e navega se tiver calendar_id
     const subToque = Notifications.addNotificationResponseReceivedListener((response) => {
-      console.log("👆 Notificação tocada:", response.notification.request.content.data);
+      //console.log("👆 Notificação tocada:", response.notification.request.content.data);
       buscarChamados();
     });
 
@@ -262,7 +266,7 @@ export default function Browz() {
       const isOnlineStatus = await isOnline();
 
       if (!isOnlineStatus) {
-        console.log("📴 Sem internet, carregando cache");
+        //console.log("📴 Sem internet, carregando cache");
         const cacheChamados = await AsyncStorage.getItem("@cache_chamados");
 
         if (cacheChamados) {
@@ -330,7 +334,7 @@ export default function Browz() {
       }
 
       if (data.status === "error") {
-        console.log("Erro interno do servidor ao buscar chamados, usando cache local.");
+        //console.log("Erro interno do servidor ao buscar chamados, usando cache local.");
         const cacheChamados = await AsyncStorage.getItem("@cache_chamados");
         if (cacheChamados) {
           const chamadosSalvos = JSON.parse(cacheChamados);
@@ -374,7 +378,7 @@ export default function Browz() {
         aplicarFiltros(chamadosComEstadoLocal);
       }
     } catch (error) {
-      console.log("ERRO AO BUSCAR OS CHAMADOS DA API:", error);
+      //console.log("ERRO AO BUSCAR OS CHAMADOS DA API:", error);
       const cacheChamados = await AsyncStorage.getItem("@cache_chamados");
 
       if (cacheChamados) {
@@ -513,7 +517,7 @@ export default function Browz() {
         await AsyncStorage.setItem("@cache_tecnicos", JSON.stringify(mapa));
       }
     } catch (error) {
-      console.log("ERRO TECNICOS:", error);
+      //console.log("ERRO TECNICOS:", error);
       const cache = await AsyncStorage.getItem("@cache_tecnicos");
       if (cache) setTecnicos(JSON.parse(cache));
     }
@@ -558,7 +562,7 @@ export default function Browz() {
         await AsyncStorage.setItem("@cache_categorias", JSON.stringify(mapa));
       }
     } catch (error) {
-      console.log("ERRO CATEGORIAS:", error);
+      //console.log("ERRO CATEGORIAS:", error);
       const cache = await AsyncStorage.getItem("@cache_categorias");
       if (cache) setCategorias(JSON.parse(cache));
     }
@@ -603,7 +607,7 @@ export default function Browz() {
         await AsyncStorage.setItem("@cache_clientes", JSON.stringify(mapa));
       }
     } catch (error) {
-      console.log("ERRO CLIENTES:", error);
+      //console.log("ERRO CLIENTES:", error);
       const cache = await AsyncStorage.getItem("@cache_clientes");
       if (cache) setClientes(JSON.parse(cache));
     }
@@ -623,7 +627,7 @@ export default function Browz() {
         return novoStatus;
       });
     } catch (error) {
-      console.log("Erro na função toggleStatus:", error);
+      //console.log("Erro na função toggleStatus:", error);
     }
   };
 
@@ -637,7 +641,7 @@ export default function Browz() {
       await AsyncStorage.removeItem("@saved_start_date");
       await AsyncStorage.removeItem("@saved_end_date");
     } catch (error) {
-      console.log("Erro ao limpar filtros no cache:", error);
+      //console.log("Erro ao limpar filtros no cache:", error);
     }
   };
 
@@ -815,11 +819,11 @@ export default function Browz() {
             })
           );
         } catch (e) {
-          console.log(`❌ erro ao salvar checklist do chamado ${id}:`, e);
+          //console.log(`❌ erro ao salvar checklist do chamado ${id}:`, e);
         }
       }
     } catch (error) {
-      console.log("❌ [CHECKLIST] Erro geral:", error);
+      //console.log("❌ [CHECKLIST] Erro geral:", error);
     }
   }
 
@@ -917,7 +921,7 @@ export default function Browz() {
 
                 await sincronizarEBuscarChamados();
               } catch (e) {
-                console.log("Erro no onRefresh:", e);
+                //console.log("Erro no onRefresh:", e);
               } finally {
                 setRefreshing(false);
               }
@@ -989,7 +993,7 @@ export default function Browz() {
               key={calendar.calendar_id || index}
               activeOpacity={0.8}
               onPress={() =>
-                router.push({
+                router.navigate({
                   pathname: "/detalhes",
                   params: { id: calendar.calendar_id },
                 })
@@ -1244,7 +1248,7 @@ export default function Browz() {
                     AsyncStorage.setItem(
                       "@saved_start_date",
                       date.toISOString()
-                    ).catch(console.log);
+                    ).catch();
                   }
                 }}
               />
@@ -1267,7 +1271,7 @@ export default function Browz() {
                     AsyncStorage.setItem(
                       "@saved_end_date",
                       date.toISOString()
-                    ).catch(console.log);
+                    ).catch();
                   }
                 }}
               />
@@ -1300,7 +1304,7 @@ export default function Browz() {
                           AsyncStorage.setItem(
                             "@saved_start_date",
                             date.toISOString()
-                          ).catch(console.log);
+                          ).catch();
                         }
                       }}
                     />
@@ -1345,7 +1349,7 @@ export default function Browz() {
                           AsyncStorage.setItem(
                             "@saved_end_date",
                             date.toISOString()
-                          ).catch(console.log);
+                          ).catch();
                         }
                       }}
                     />

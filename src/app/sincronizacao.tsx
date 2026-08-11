@@ -1,24 +1,24 @@
-import React, { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  RefreshControl,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  CheckCircle2,
-  RefreshCw,
-  Trash2,
-  Wifi,
-  WifiOff,
-} from "lucide-react-native";
 import NetInfo from "@react-native-community/netinfo";
 import { router, useFocusEffect } from "expo-router";
+import {
+    AlertTriangle,
+    ArrowLeft,
+    CheckCircle2,
+    RefreshCw,
+    Trash2,
+    Wifi,
+    WifiOff,
+} from "lucide-react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+    ActivityIndicator,
+    Alert,
+    RefreshControl,
+    ScrollView,
+    Text,
+    TouchableOpacity,
+    View,
+} from "react-native";
 
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { useTheme } from "@/theme/ThemeContext";
@@ -57,7 +57,7 @@ export default function TelaSincronizacao() {
       const fila = await buscarFila();
       setPendencias(fila || []);
     } catch (error) {
-      console.log("Erro ao carregar fila de sincronização:", error);
+      //console.log("Erro ao carregar fila de sincronização:", error);
     } finally {
       setLoading(false);
     }

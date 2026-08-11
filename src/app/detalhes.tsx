@@ -1,3 +1,4 @@
+import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { isOnline } from '@/services/network';
 import { useTheme } from "@/theme/ThemeContext";
 import { FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -6,29 +7,28 @@ import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import {
-    CheckCircle,
-    ChevronLeft,
-    Clock,
-    Copy,
-    Inbox,
-    MapPin,
-    Phone,
-    User,
-    Wrench
+  CheckCircle,
+  ChevronLeft,
+  Clock,
+  Copy,
+  Inbox,
+  MapPin,
+  Phone,
+  User,
+  Wrench
 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Linking,
-    ScrollView,
-    StatusBar,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Linking,
+  ScrollView,
+  StatusBar,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { styles } from "../styles/details.styles";
-import { ScreenWrapper } from "@/components/ScreenWrapper";
 
 type DetailRowProps = {
   icon: React.ReactNode;
@@ -79,31 +79,31 @@ export default function DetalhesChamado() {
 
   async function atualizarCacheChamado(chamadoAtualizado: any) {
 
-  const cache =
-    await AsyncStorage.getItem("@cache_chamados");
+    const cache =
+      await AsyncStorage.getItem("@cache_chamados");
 
-  if (!cache) return;
+    if (!cache) return;
 
-  const chamados = JSON.parse(cache);
+    const chamados = JSON.parse(cache);
 
-  const atualizados = chamados.map((item: any) => {
+    const atualizados = chamados.map((item: any) => {
 
-    if (
-      String(item.calendar_id) ===
-      String(chamadoAtualizado.calendar_id)
-    ) {
-      return chamadoAtualizado;
-    }
+      if (
+        String(item.calendar_id) ===
+        String(chamadoAtualizado.calendar_id)
+      ) {
+        return chamadoAtualizado;
+      }
 
-    return item;
-  });
+      return item;
+    });
 
-  await AsyncStorage.setItem(
-    "@cache_chamados",
-    JSON.stringify(atualizados)
-  );
-}
- 
+    await AsyncStorage.setItem(
+      "@cache_chamados",
+      JSON.stringify(atualizados)
+    );
+  }
+
 
   useEffect(() => {
     carregarCachesOffline();
@@ -121,38 +121,98 @@ export default function DetalhesChamado() {
   }, [calendar]);
 
   async function carregarCachesOffline() {
-  const tecnicosCache =
-    await AsyncStorage.getItem("@cache_tecnicos");
+    const tecnicosCache =
+      await AsyncStorage.getItem("@cache_tecnicos");
 
-  const categoriasCache =
-    await AsyncStorage.getItem("@cache_categorias");
+    const categoriasCache =
+      await AsyncStorage.getItem("@cache_categorias");
 
-  const clientesCache =
-    await AsyncStorage.getItem("@cache_clientes");
+    const clientesCache =
+      await AsyncStorage.getItem("@cache_clientes");
 
-  if (tecnicosCache) {
-    setTecnicos(JSON.parse(tecnicosCache));
+    if (tecnicosCache) {
+      setTecnicos(JSON.parse(tecnicosCache));
+    }
+
+    if (categoriasCache) {
+      setCategorias(JSON.parse(categoriasCache));
+    }
+
+    if (clientesCache) {
+      setClientes(JSON.parse(clientesCache));
+    }
   }
-
-  if (categoriasCache) {
-    setCategorias(JSON.parse(categoriasCache));
-  }
-
-  if (clientesCache) {
-    setClientes(JSON.parse(clientesCache));
-  }
-}
 
   async function buscarDetalhesChamado() {
-  try {
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    const online = await isOnline();
+      const online = await isOnline();
 
-    // OFFLINE
-    if (!online) {
-      console.log("📴 Offline - carregando cache");
+      // OFFLINE
+      if (!online) {
+        //console.log("📴 Offline - carregando cache");
 
+        const cache = await AsyncStorage.getItem("@cache_chamados");
+
+        if (cache) {
+          const chamados = JSON.parse(cache);
+
+          const encontrado = chamados.find(
+            (item: any) =>
+              String(item.calendar_id) === String(id)
+          );
+
+          if (encontrado) {
+            await atualizarCacheChamado(encontrado);
+            setCalendar(encontrado);
+          } else {
+            setCalendar(null);
+          }
+        }
+
+        return;
+      }
+
+      // ONLINE
+      const token = await AsyncStorage.getItem('token');
+
+      const response = await fetch(
+        'https://browz.com.br/rest.php',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            class: 'CalendarService',
+            method: 'loadAll',
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (
+        result.status === 'success' &&
+        Array.isArray(result.data)
+      ) {
+        const encontrado = result.data.find(
+          (item: any) =>
+            String(item.calendar_id) === String(id)
+        );
+
+        if (encontrado) {
+          setCalendar(encontrado);
+        } else {
+          setCalendar(null);
+        }
+      }
+    } catch (error) {
+      //console.log("ERRO DETALHES:", error);
+
+      // FALLBACK CACHE
       const cache = await AsyncStorage.getItem("@cache_chamados");
 
       if (cache) {
@@ -164,75 +224,15 @@ export default function DetalhesChamado() {
         );
 
         if (encontrado) {
-          await atualizarCacheChamado(encontrado);
           setCalendar(encontrado);
-        } else {
-          setCalendar(null);
         }
       }
-
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    // ONLINE
-    const token = await AsyncStorage.getItem('token');
-
-    const response = await fetch(
-      'https://browz.com.br/rest.php',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          class: 'CalendarService',
-          method: 'loadAll',
-        }),
-      }
-    );
-
-    const result = await response.json();
-
-    if (
-      result.status === 'success' &&
-      Array.isArray(result.data)
-    ) {
-      const encontrado = result.data.find(
-        (item: any) =>
-          String(item.calendar_id) === String(id)
-      );
-
-      if (encontrado) {
-        setCalendar(encontrado);
-      } else {
-        setCalendar(null);
-      }
-    }
-  } catch (error) {
-    console.log("ERRO DETALHES:", error);
-
-    // FALLBACK CACHE
-    const cache = await AsyncStorage.getItem("@cache_chamados");
-
-    if (cache) {
-      const chamados = JSON.parse(cache);
-
-      const encontrado = chamados.find(
-        (item: any) =>
-          String(item.calendar_id) === String(id)
-      );
-
-      if (encontrado) {
-        setCalendar(encontrado);
-      }
-    }
-  } finally {
-    setLoading(false);
   }
-}
 
-  
+
   async function buscarTecnicos() {
     try {
       const token = await AsyncStorage.getItem("token");
@@ -251,12 +251,12 @@ export default function DetalhesChamado() {
 
       const data = await response.json();
 
-      //console.log(" TECNICOS:", data);
+      ////console.log(" TECNICOS:", data);
 
       if (data.status === "success") {
         const mapa: any = {};
 
-        console.log("TEC INDIVIDUAL:", data.data[0]);
+        //console.log("TEC INDIVIDUAL:", data.data[0]);
 
         data.data.forEach((usuario: any) => {
           mapa[usuario.id] = usuario.name;
@@ -292,7 +292,7 @@ export default function DetalhesChamado() {
 
       const data = await response.json();
 
-      //console.log("CATEGORIAS:", data);
+      ////console.log("CATEGORIAS:", data);
 
       if (data.status === "success") {
         const mapa: any = {};
@@ -302,17 +302,17 @@ export default function DetalhesChamado() {
             categoria.service_type_name;
         });
 
-        //console.log(" MAPA CATEGORIAS:", mapa);
+        ////console.log(" MAPA CATEGORIAS:", mapa);
 
         setCategorias(mapa);
 
-         await AsyncStorage.setItem(
+        await AsyncStorage.setItem(
           "@cache_categorias",
           JSON.stringify(mapa)
         )
       }
     } catch (error) {
-      // console.log(" ERRO CATEGORIAS:", error);
+      // //console.log(" ERRO CATEGORIAS:", error);
     }
   }
 
@@ -334,7 +334,7 @@ export default function DetalhesChamado() {
 
       const data = await response.json();
 
-      //console.log("🏢 CLIENTES:", data);
+      ////console.log("🏢 CLIENTES:", data);
 
       if (data.status === "success") {
         const mapa: any = {};
@@ -343,17 +343,17 @@ export default function DetalhesChamado() {
           mapa[cliente.customer_id] = cliente.customer_name;
         });
 
-        //console.log("🗺️ MAPA CLIENTES:", mapa);
+        ////console.log("🗺️ MAPA CLIENTES:", mapa);
 
         setClientes(mapa);
 
-         await AsyncStorage.setItem(
+        await AsyncStorage.setItem(
           "@cache_clientes",
           JSON.stringify(mapa)
         )
       }
     } catch (error) {
-      //console.log("🔥 ERRO CLIENTES:", error);
+      ////console.log("🔥 ERRO CLIENTES:", error);
     }
   }
 
@@ -434,22 +434,22 @@ export default function DetalhesChamado() {
 
       const data = await response.json();
 
-      console.log(data);
+      //console.log(data);
 
       if (data.status === 'success') {
         Alert.alert('Sucesso', 'Foto enviada!');
       }
 
     } catch (error) {
-      console.log(error);
+      //console.log(error);
     }
   }
   const nomeCliente =
-    
-    calendar?.calendar_contact_name || 
+
+    calendar?.calendar_contact_name ||
     '';
 
-    console.log(nomeCliente);
+  //console.log(nomeCliente);
 
 
   const ticketId = calendar ? `#${calendar.calendar_id}` : '#---';
@@ -458,7 +458,7 @@ export default function DetalhesChamado() {
     calendar?.calendar_contact_landline_phone ||
     '';
 
-  
+
   const mobileCliente =
     calendar?.calendar_contact_mobile_phone ||
     '';
@@ -602,11 +602,12 @@ export default function DetalhesChamado() {
           <Inbox size={50} color="#64748b" />
           <Text style={styles.loadingText}>Chamado não encontrado.</Text>
 
-          <Link href="/home" asChild>
-            <TouchableOpacity style={styles.backHomeButton}>
-              <Text style={styles.buttonText}>Voltar</Text>
-            </TouchableOpacity>
-          </Link>
+          <TouchableOpacity
+            style={styles.backHomeButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.buttonText}>Voltar</Text>
+          </TouchableOpacity>
         </View>
       </ScreenWrapper>
     );
@@ -638,14 +639,15 @@ export default function DetalhesChamado() {
           },
         ]}
       >
-        <Link href="/home" asChild>
-          <TouchableOpacity style={styles.backButton}>
-            <ChevronLeft
-              color={theme.text}
-              size={26}
-            />
-          </TouchableOpacity>
-        </Link>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <ChevronLeft
+            color={theme.text}
+            size={26}
+          />
+        </TouchableOpacity>
 
         <View style={styles.headerTitleContainer}>
           <TouchableOpacity onPress={copyTicketId} style={styles.ticketCopyBox}>
@@ -666,9 +668,11 @@ export default function DetalhesChamado() {
           <View
             style={[
               styles.statusBadge,
-              { borderColor: getStatusColor(
-                calendar.calendar_status,
-              ) },
+              {
+                borderColor: getStatusColor(
+                  calendar.calendar_status,
+                )
+              },
             ]}
           >
             <Text
@@ -813,7 +817,7 @@ export default function DetalhesChamado() {
               <TouchableOpacity
                 style={styles.finishedButton}
                 onPress={() =>
-                  router.push({
+                  router.replace({
                     pathname: '/visualizar-relatorio',
                     params: {
                       ticketId: calendar.calendar_id,
@@ -833,6 +837,7 @@ export default function DetalhesChamado() {
                     service_type_id: calendar.service_type_id,
                   },
                 }}
+
                 asChild
               >
                 <TouchableOpacity style={styles.checkInButton}>
@@ -841,7 +846,6 @@ export default function DetalhesChamado() {
                 </TouchableOpacity>
               </Link>
             )}
-
             <View style={styles.mapRow}>
               <TouchableOpacity style={styles.mapButton} onPress={openMaps}>
                 <FontAwesome5 name="google" size={20} color="#28bb0bff" />
@@ -885,7 +889,7 @@ export default function DetalhesChamado() {
 
 
           <DetailRow
-            icon={ <Phone size={15} color="#22c55e" />}
+            icon={<Phone size={15} color="#22c55e" />}
             label="Telefone"
             value={telefoneCliente || 'Não informado'}
           />

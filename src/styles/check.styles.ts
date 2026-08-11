@@ -248,4 +248,62 @@ export const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 18,
   },
+modalOverlayPhoto: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContentPhoto: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#1e293b',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor:  '#334155',
+  },
+  modalTitlePhoto: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#f8fafc',
+    marginBottom: 16,
+  },
+  modalButtonsContainer: {
+    width: '100%',
+  },
+  modalText: {
+    fontSize: 15,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  modalButtonCancelText: {
+    color: '#475569',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  modalButtonConfirm: {
+    backgroundColor: '#2563EB',
+  },
+  modalButtonConfirmText: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
 });

@@ -45,6 +45,7 @@ export default function FinalizacaoRelatorio() {
   const { theme, darkMode } = useTheme();
   const [avisoMidiaVisible, setAvisoMidiaVisible] = useState(false);
   const [nomeTecnico, setNomeTecnico] = useState('Técnico');
+  const [mediaCount, setMediaCount] = useState(0);
   ; useFocusEffect(
     React.useCallback(() => {
       let ativo = true;
@@ -54,6 +55,16 @@ export default function FinalizacaoRelatorio() {
         carregarRascunhoRelatorio();
         buscarChecklist();
         carregarNomeTecnico();
+
+        // Checa a quantidade de mídias para exibir no contador do botão
+        AsyncStorage.getItem(`@fotos_chamado_${chamadoId}`).then((fotosStr) => {
+          if (fotosStr) {
+            const lista = JSON.parse(fotosStr);
+            if (Array.isArray(lista)) setMediaCount(lista.length);
+          } else {
+            setMediaCount(0);
+          }
+        });
       }
 
       return () => {
@@ -69,7 +80,7 @@ export default function FinalizacaoRelatorio() {
         setNomeTecnico(nomeSalvo);
       }
     } catch (error) {
-      console.log('Erro ao carregar nome do técnico:', error);
+      //console.log('Erro ao carregar nome do técnico:', error);
     }
   }
 
@@ -108,7 +119,7 @@ export default function FinalizacaoRelatorio() {
 
       // OFFLINE
       if (!online) {
-        console.log("📴 Offline checklist");
+        //console.log("📴 Offline checklist");
         return;
       }
 
@@ -182,7 +193,7 @@ export default function FinalizacaoRelatorio() {
         }
       }
     } catch (error) {
-      console.log('ERRO CHECKLIST:', error);
+      //console.log('ERRO CHECKLIST:', error);
     } finally {
       setLoadingChecklist(false);
     }
@@ -224,7 +235,7 @@ export default function FinalizacaoRelatorio() {
       const data = await response.json();
       return data.status === 'success';
     } catch (error) {
-      console.log('❌ Erro no upload da foto:', error);
+      //console.log('❌ Erro no upload da foto:', error);
       return false;
     }
   } */}
@@ -238,12 +249,12 @@ export default function FinalizacaoRelatorio() {
     try {
       const manipResult = await ImageManipulator.manipulateAsync(
         uri,
-        [{ resize: { width: 1024 } }], // Redimensiona para largura de 1024px (mantém proporção)
-        //{ compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }  70% de qualidade
+        [{ resize: { width: 1024 } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
       );
       return manipResult.uri;
     } catch (error) {
-      console.log("Erro na compressão:", error);
+      //console.log("Erro na compressão:", error);
       return uri; // Se der erro, retorna a original para não travar o fluxo
     }
   };
@@ -308,7 +319,7 @@ export default function FinalizacaoRelatorio() {
 
         const data = await response.json();
 
-        console.log(`RETORNO FOTO ${index + 1}:`, data);
+        //console.log(`RETORNO FOTO ${index + 1}:`, data);
 
         if (data.status !== 'success') {
           return false;
@@ -317,7 +328,7 @@ export default function FinalizacaoRelatorio() {
 
       return true;
     } catch (error) {
-      console.log('ERRO AO ENVIAR FOTOS:', error);
+      //console.log('ERRO AO ENVIAR FOTOS:', error);
       return false;
     }
   }
@@ -437,7 +448,7 @@ text     vira tentry
       const token = await AsyncStorage.getItem('token');
 
       if (!calendarChecklistId) {
-        console.log('❌ Erro: Nenhum calendar_checklist_id encontrado no estado');
+        //console.log('❌ Erro: Nenhum calendar_checklist_id encontrado no estado');
         return false;
       }
 
@@ -458,7 +469,7 @@ text     vira tentry
       };
 
       // LOG PARA DEBUG - Verifique se o calendar_checklist_id está correto aqui!
-      console.log('🚀 ENVIANDO PARA API:', JSON.stringify(payload, null, 2));
+      //console.log('🚀 ENVIANDO PARA API:', JSON.stringify(payload, null, 2));
 
       const response = await fetch('https://browz.com.br/rest.php', {
         method: 'POST',
@@ -471,11 +482,11 @@ text     vira tentry
 
       const data = await response.json();
 
-      console.log('✅ RETORNO DA API:', data);
+      //console.log('✅ RETORNO DA API:', data);
 
       return data.status === 'success';
     } catch (error) {
-      console.log('BTU - ERRO AO ENVIAR:', error);
+      //console.log('BTU - ERRO AO ENVIAR:', error);
       return false;
     }
   }
@@ -546,10 +557,7 @@ text     vira tentry
         },
       };
 
-      console.log(
-        '🚀 ENVIANDO RELATÓRIO:',
-        JSON.stringify(payload, null, 2)
-      );
+
 
       const response = await fetch(
         'https://browz.com.br/rest.php',
@@ -565,15 +573,10 @@ text     vira tentry
 
       const data = await response.json();
 
-      console.log('✅ RETORNO ENVIO RELATÓRIO:', data);
+      //console.log('✅ RETORNO ENVIO RELATÓRIO:', data);
 
       return data.status === 'success';
     } catch (error) {
-      console.log(
-        '❌ ERRO AO ENVIAR RELATÓRIO:',
-        error
-      );
-
       return false;
     }
   }
@@ -709,7 +712,7 @@ text     vira tentry
 
     const result = await response.json();
 
-    console.log("EVENTO CHECKOUT:", result);
+    //console.log("EVENTO CHECKOUT:", result);
 
     return result.status === "success";
   }
@@ -762,7 +765,7 @@ text     vira tentry
 
     const result = await response.json();
 
-    console.log("EVENTO LINHA DO TEMPO CHECKOUT:", result);
+    //console.log("EVENTO LINHA DO TEMPO CHECKOUT:", result);
 
     return result.status === "success";
   }
@@ -822,7 +825,7 @@ text     vira tentry
             await FileSystem.copyAsync({ from: signatureImg, to: destAssinatura });
           }
           assinaturaPath = destAssinatura;
-          console.log('📝 Assinatura persistida:', assinaturaPath);
+          //console.log('📝 Assinatura persistida:', assinaturaPath);
         }
 
         const fotosPermanentes: string[] = [];
@@ -839,12 +842,12 @@ text     vira tentry
               if (info.exists) {
                 await FileSystem.copyAsync({ from: uri, to: dest });
                 fotosPermanentes.push(dest);
-                console.log(`📸 Mídia ${i + 1} persistida:`, dest);
+                //console.log(`📸 Mídia ${i + 1} persistida:`, dest);
               } else {
-                console.log(`⚠️ Mídia ${i + 1} não encontrada, pulando:`, uri);
+                //console.log(`⚠️ Mídia ${i + 1} não encontrada, pulando:`, uri);
               }
             } catch (e) {
-              console.log(`⚠️ Erro ao copiar mídia ${i + 1}:`, e);
+              //console.log(`⚠️ Erro ao copiar mídia ${i + 1}:`, e);
             }
           }
         }
@@ -869,7 +872,7 @@ text     vira tentry
             criadoEm: new Date().toISOString(),
             tentativas: 0,
           });
-          console.log('📥 Finalização adicionada à fila offline para ticket:', chamadoId);
+          //console.log('📥 Finalização adicionada à fila offline para ticket:', chamadoId);
         }
 
         await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
@@ -888,6 +891,7 @@ text     vira tentry
           'Relatório, fotos e assinatura foram salvos localmente e serão sincronizados automaticamente quando a internet voltar.'
         );
 
+        router.dismissAll();
         router.replace('/home');
         return;
       }
@@ -932,7 +936,13 @@ text     vira tentry
         await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
 
         Alert.alert('Sucesso', 'Atendimento finalizado com sucesso!', [
-          { text: 'OK', onPress: () => router.replace('/home') },
+          {
+            text: 'OK',
+            onPress: () => {
+              router.dismissAll();
+              router.replace('/home');
+            }
+          },
         ]);
       } else {
         Alert.alert(
@@ -948,7 +958,7 @@ text     vira tentry
     }
   };
 
-  // 🌟 ADICIONAR: Nova função handleFinalize que faz as validações e a pergunta inteligente das mídias
+
   const handleFinalize = async () => {
     if (sending) return;
 
@@ -963,28 +973,13 @@ text     vira tentry
     if (!signerName.trim() || !signerContact.trim() || !signatureImg) {
       return Alert.alert('Erro', 'Preencha todos os campos e a assinatura.');
     }
+
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerContact.trim())) {
       return Alert.alert('Erro', 'Por favor, insira um e-mail válido.');
     }
 
-    try {
-      // 2. Busca a lista de mídias salvas localmente para este chamado específico
-      const fotosStr = await AsyncStorage.getItem(`@fotos_chamado_${chamadoId}`);
-      const listaMidias = fotosStr ? JSON.parse(fotosStr) : [];
 
-      // 3. Se NÃO houver mídias vinculadas, abre o nosso Modal Customizado
-      if (!Array.isArray(listaMidias) || listaMidias.length === 0) {
-        setAvisoMidiaVisible(true);
-        return;
-      }
-
-      // Se possuir fotos ou vídeos normais, prossegue direto
-      await executarFinalizacaoReal();
-
-    } catch (e) {
-      console.log('Erro ao checar mídias no encerramento:', e);
-      await executarFinalizacaoReal();
-    }
+    await executarFinalizacaoReal();
   };
   const isFormValid =
     description.trim() &&
@@ -1062,14 +1057,10 @@ text     vira tentry
                 backgroundColor: theme.card,
               },
             ]}
-            onPress={() =>
-              router.push({
-                pathname: '/home',
-                params: {
-                  id: chamadoId,
-                },
-              })
-            }
+            onPress={() => {
+              router.dismissAll();
+              router.replace('/home');
+            }}
           >
             <ChevronLeft
               color={theme.text}
@@ -1417,7 +1408,7 @@ text     vira tentry
                 await salvarRascunhoRelatorio();
 
                 // Mudado de router.push para router.navigate
-                router.navigate({
+                router.push({
                   pathname: '/assinatura-cliente',
                   params: {
                     ticketId: chamadoId
@@ -1439,123 +1430,30 @@ text     vira tentry
           ]}
           onPress={handleFinalize}
         >
-          <Check color="#fff" size={24} />
-          <Text style={styles.submitBtnText}>
-            {sending ? 'Enviando...' : 'Finalizar Atendimento'}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Check color="#fff" size={24} />
+            <Text style={styles.submitBtnText}>
+              {sending ? 'Enviando...' : 'Finalizar Atendimento'}
+            </Text>
+
+            {/* Badge do contador de mídias anexadas */}
+            <View
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 12,
+                marginLeft: 4,
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>
+                📷 {mediaCount}
+              </Text>
+            </View>
+          </View>
         </TouchableOpacity>
       </ScrollView>
 
-      {/* 🌟 MODAL PREMIUM DE AVISO DE MÍDIAS EM FALTA */}
-      <Modal
-        visible={avisoMidiaVisible}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setAvisoMidiaVisible(false)}
-      >
-        <View style={{
-          flex: 1,
-          backgroundColor: 'rgba(15, 23, 42, 0.75)', // Fundo escurecido suave
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: 24
-        }}>
-          <View style={{
-            backgroundColor: theme.card,
-            borderRadius: 24,
-            padding: 24,
-            width: '100%',
-            maxWidth: 340,
-            alignItems: 'center',
-            borderWidth: 1,
-            borderColor: theme.border,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 10 },
-            shadowOpacity: 0.25,
-            shadowRadius: 10,
-            elevation: 10
-          }}>
-            {/* Ícone de Alerta Animado/Estilizado */}
-            <View style={{
-              backgroundColor: '#fef2f2',
-              padding: 16,
-              borderRadius: 99,
-              marginBottom: 16
-            }}>
-              <View style={{ backgroundColor: '#fee2e2', padding: 12, borderRadius: 99 }}>
-                {/* Você pode trocar por um ícone da Lucide como AlertTriangle se preferir */}
-                <Text style={{ fontSize: 28 }}>📸</Text>
-              </View>
-            </View>
-
-            <Text style={{
-              fontSize: 20,
-              fontWeight: 'bold',
-              color: theme.text,
-              marginBottom: 12,
-              textAlign: 'center'
-            }}>
-              Aviso de Mídias
-            </Text>
-
-            <Text style={{
-              fontSize: 15,
-              color: theme.subText || '#94a3b8',
-              textAlign: 'center',
-              lineHeight: 22,
-              marginBottom: 24
-            }}>
-              Olá, <Text style={{ fontWeight: 'bold', color: theme.text }}>{nomeTecnico}</Text>! Notamos que você não anexou nenhuma <Text style={{ fontWeight: '600', color: '#ef4444' }}>FOTO</Text> ou <Text style={{ fontWeight: '600', color: '#ef4444' }}>VÍDEO</Text> para este chamado. Deseja encerrar mesmo assim?
-            </Text>
-
-            {/* Botão Principal: Voltar e Anexar */}
-            <TouchableOpacity
-              style={{
-                width: '100%',
-                padding: 14,
-                borderRadius: 12,
-                borderColor: theme.border,
-                borderWidth: 1,
-                alignItems: 'center',
-                marginBottom: 10
-              }}
-              onPress={() => {
-                // 1. Fecha o modal de aviso
-                setAvisoMidiaVisible(false);
-
-                // 2. Navega para a página de fotos passando o ID do chamado
-                // Ajuste o nome da pasta se a sua rota for um pouco diferente (ex: '/fotos-chamado')
-                router.push(`/fotos-chamado?id=${ticketId}`);
-              }}
-            >
-              <Text style={{ color: '#ef4444', fontSize: 16, fontWeight: 'bold' }}>
-                Voltar e Anexar
-              </Text>
-            </TouchableOpacity>
-
-            {/* Botão Secundário: Sim, Finalizar */}
-            <TouchableOpacity
-              style={{
-                width: '100%',
-                padding: 14,
-                borderRadius: 12,
-                alignItems: 'center',
-                backgroundColor: '#3b82f6',
-                borderWidth: 1,
-                borderColor: theme.border
-              }}
-              onPress={async () => {
-                setAvisoMidiaVisible(false);
-                await executarFinalizacaoReal();
-              }}
-            >
-              <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>
-                Sim, Finalizar Sem Imagens
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
     </ScreenWrapper>
   );

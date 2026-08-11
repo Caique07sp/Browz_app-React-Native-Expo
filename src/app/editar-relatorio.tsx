@@ -98,7 +98,7 @@ export default function EditarRelatorio() {
       // Existe rascunho pendente, então havia alteração não finalizada
       setHasChanges(true);
     } catch (e) {
-      console.log('Erro ao aplicar rascunho salvo:', e);
+      //console.log('Erro ao aplicar rascunho salvo:', e);
     }
   }
 
@@ -151,7 +151,7 @@ export default function EditarRelatorio() {
 
       // OFFLINE
       if (!online) {
-        console.log("📴 Offline relatório");
+        //console.log("📴 Offline relatório");
         return;
       }
 
@@ -223,10 +223,7 @@ export default function EditarRelatorio() {
 
     } catch (error) {
 
-      console.log(
-        'ERRO RELATÓRIO:',
-        error
-      );
+     
     }
   }
 
@@ -263,7 +260,7 @@ export default function EditarRelatorio() {
       const online = await isOnline();
 
       if (!online) {
-        console.log("📴 Offline checklist");
+        //console.log("📴 Offline checklist");
         return;
       }
 
@@ -335,7 +332,7 @@ export default function EditarRelatorio() {
         }
       }
     } catch (error) {
-      console.log('ERRO CHECKLIST:', error);
+      //console.log('ERRO CHECKLIST:', error);
       Alert.alert('Erro', 'Não foi possível carregar o checklist.');
     }
   }
@@ -395,7 +392,7 @@ export default function EditarRelatorio() {
     try {
       const token = await AsyncStorage.getItem('token');
       if (!calendarChecklistId) {
-        console.log('Nenhum calendar_checklist_id encontrado');
+        //console.log('Nenhum calendar_checklist_id encontrado');
         return false;
       }
 
@@ -420,11 +417,11 @@ export default function EditarRelatorio() {
         body: JSON.stringify(payload),
       });
       const data = await response.json();
-      console.log("RETORNO CHECKLIST:", JSON.stringify(data, null, 2));
+      //console.log("RETORNO CHECKLIST:", JSON.stringify(data, null, 2));
       return data.status === 'success';
 
     } catch (error) {
-      console.log('ERRO AO ENVIAR CHECKLIST:', error);
+      //console.log('ERRO AO ENVIAR CHECKLIST:', error);
       return false;
     }
   }
@@ -459,12 +456,12 @@ export default function EditarRelatorio() {
       });
 
       const data = await response.json();
-      console.log("RETORNO CALENDAR:", JSON.stringify(data, null, 2));
+      //console.log("RETORNO CALENDAR:", JSON.stringify(data, null, 2));
       return data.status === 'success';
 
 
     } catch (error) {
-      console.log('ERRO AO ENVIAR RELATÓRIO:', error);
+      //console.log('ERRO AO ENVIAR RELATÓRIO:', error);
       return false;
     }
   }
@@ -520,14 +517,14 @@ export default function EditarRelatorio() {
 
       const resultado = await res.json();
 
-      console.log('UPLOAD ASSINATURA:', resultado);
+      //console.log('UPLOAD ASSINATURA:', resultado);
 
       return {
         success: resultado.status === 'success',
         caminhoBanco,
       };
     } catch (e) {
-      console.log(e);
+      //console.log(e);
 
       return {
         success: false,
@@ -596,7 +593,7 @@ export default function EditarRelatorio() {
       setLoadingMessage('Atualizando checklist...');
       setLoadingDetail('Salvando respostas atualizadas');
       const enviadoChecklist = await enviarChecklistParaApi(relatorioFinal);
-      console.log("Checklist enviado:", enviadoChecklist);
+      //console.log("Checklist enviado:", enviadoChecklist);
       setLoadingMessage('Atualizando relatório...');
       setLoadingDetail('Salvando dados do atendimento');
       setLoadingMessage('Enviando nova assinatura...');
@@ -617,8 +614,8 @@ export default function EditarRelatorio() {
           caminhoAssinatura
         );
 
-      console.log("Relatório enviado:", enviadoRelatorio);
-      console.log(relatorioFinal);
+      //console.log("Relatório enviado:", enviadoRelatorio);
+      //console.log(relatorioFinal);
 
       await AsyncStorage.setItem(
         `@relatorio_final_${chamadoId}`,
@@ -670,7 +667,7 @@ export default function EditarRelatorio() {
         );
       }
     } catch (error) {
-      console.log('ERRO AO SALVAR ALTERAÇÕES:', error);
+      //console.log('ERRO AO SALVAR ALTERAÇÕES:', error);
       Alert.alert('Erro', 'Não foi possível salvar as alterações.');
     } finally {
       setSending(false);
@@ -1108,7 +1105,7 @@ export default function EditarRelatorio() {
               onPress={async () => {
                 await salvarRascunhoRelatorio();
 
-                router.push({
+                router.replace({
                   pathname: '/assinatura-cliente',
                   params: { ticketId: chamadoId },
                 });

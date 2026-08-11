@@ -30,7 +30,7 @@ export default function SobreScreen() {
             <Code color="#fff" size={36} />
           </View>
           <Text style={[styles.appName, { color: theme.text }]}>Browz Mobile</Text>
-          <Text style={[styles.versionText, { color: theme.subText }]}>Versão 1.0.0_250626_1059</Text>
+          <Text style={[styles.versionText, { color: theme.subText }]}>Versão 1.0.0_140726_1336</Text>
         </View>
 
         {/* Card de Propósito e Visão Geral */}
@@ -98,7 +98,7 @@ export default function SobreScreen() {
         {/* Link para Termos de Segurança */}
         <TouchableOpacity 
           style={[styles.linkItem, { backgroundColor: theme.card, borderColor: theme.border }]}
-          onPress={() => router.push("/seguranca")} 
+          onPress={() => router.replace("/seguranca")} 
         >
           <View style={styles.linkLeft}>
             <ShieldCheck color={theme.primary} size={22} />

@@ -18,11 +18,11 @@ import { Platform } from "react-native";
  */
 export async function registrarDispositivo(): Promise<string | null> {
   try {
-    console.log("🔍 [PUSH] Iniciando registro...");
-    console.log("🔍 [PUSH] É dispositivo físico?", Device.isDevice);
+    //console.log("🔍 [PUSH] Iniciando registro...");
+    //console.log("🔍 [PUSH] É dispositivo físico?", Device.isDevice);
 
     if (!Device.isDevice) {
-      console.log("⚠️ [PUSH] Simulador detectado — push não funciona no Expo Go/simulador");
+      //console.log("⚠️ [PUSH] Simulador detectado — push não funciona no Expo Go/simulador");
       return null;
     }
 
@@ -34,21 +34,21 @@ export async function registrarDispositivo(): Promise<string | null> {
         lightColor: "#3b82f6",
         sound: "default",
       });
-      console.log("🔍 [PUSH] Canal Android configurado");
+      //console.log("🔍 [PUSH] Canal Android configurado");
     }
 
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    console.log("🔍 [PUSH] Permissão atual:", existingStatus);
+    //console.log("🔍 [PUSH] Permissão atual:", existingStatus);
     let finalStatus = existingStatus;
 
     if (existingStatus !== "granted") {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
-      console.log("🔍 [PUSH] Permissão solicitada, resultado:", finalStatus);
+      //console.log("🔍 [PUSH] Permissão solicitada, resultado:", finalStatus);
     }
 
     if (finalStatus !== "granted") {
-      console.log("❌ [PUSH] Permissão negada pelo usuário");
+      //console.log("❌ [PUSH] Permissão negada pelo usuário");
       return null;
     }
 
@@ -56,23 +56,23 @@ export async function registrarDispositivo(): Promise<string | null> {
       Constants.expoConfig?.extra?.eas?.projectId ??
       Constants.easConfig?.projectId;
 
-    console.log("🔍 [PUSH] projectId:", projectId);
+    //console.log("🔍 [PUSH] projectId:", projectId);
 
     if (!projectId) {
-      console.log("❌ [PUSH] projectId não encontrado no app.json");
+      //console.log("❌ [PUSH] projectId não encontrado no app.json");
       return null;
     }
 
-    console.log("🔍 [PUSH] Chamando getExpoPushTokenAsync...");
+    //console.log("🔍 [PUSH] Chamando getExpoPushTokenAsync...");
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;
 
-    console.log("📲 [PUSH] Token gerado:", token);
+    //console.log("📲 [PUSH] Token gerado:", token);
     await AsyncStorage.setItem("@expo_push_token", token);
 
     return token;
   } catch (error) {
-    console.log("❌ [PUSH] Erro completo:", JSON.stringify(error));
+    //console.log("❌ [PUSH] Erro completo:", JSON.stringify(error));
     return null;
   }
 }

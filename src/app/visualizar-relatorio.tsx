@@ -4,9 +4,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { ChevronLeft, ClipboardList, Eye, FileText, ImageIcon, PenTool, Play, User, Video as VideoIcon, X } from 'lucide-react-native';
 
+import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { useTheme } from "@/theme/ThemeContext";
 import React, { useEffect, useState } from 'react';
-import { ScreenWrapper } from "@/components/ScreenWrapper";
 
 import { isOnline } from '@/services/network';
 import {
@@ -134,7 +134,7 @@ export default function VisualizarRelatorio() {
         }
 
     } catch (error) {
-        console.log(error);
+        //console.log(error);
     }
 }
 
@@ -165,7 +165,7 @@ export default function VisualizarRelatorio() {
 
             // OFFLINE
             if (!online) {
-                console.log("📴 Offline checklist");
+                //console.log("📴 Offline checklist");
                 return;
             }
 
@@ -240,7 +240,7 @@ export default function VisualizarRelatorio() {
 
         } catch (error) {
 
-            console.log(error);
+            //console.log(error);
         }
     }
 
@@ -822,7 +822,7 @@ export default function VisualizarRelatorio() {
 
                     onPress={() =>
 
-                        router.push({
+                       router.replace({
 
                             pathname: '/editar-relatorio',
 

@@ -90,7 +90,7 @@ export async function validarSessaoDispositivo(): Promise<boolean> {
       return true; 
 
     } catch (error) {
-      console.log("Erro ao validar sessão em tempo real:", error);
+      //console.log("Erro ao validar sessão em tempo real:", error);
       return true; 
     } finally {
       checagemEmAndamento = null; // Libera o semáforo

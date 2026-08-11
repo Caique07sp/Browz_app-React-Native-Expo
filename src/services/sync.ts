@@ -1,9 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
+import { registrarLog } from "./logger";
 import { isOnline } from "./network";
 import { buscarFila, salvarFila } from "./offlineQueue";
 import { deslogarForcado, validarSessaoDispositivo } from "./session";
-import { registrarLog } from "./logger";
 
 const MAX_TENTATIVAS = 5;
 
@@ -31,7 +31,7 @@ export async function sincronizarPendentes() {
     return false;
   }
 
-  console.log("Sessão válida! Iniciando envio da fila offline...");
+  //console.log("Sessão válida! Iniciando envio da fila offline...");
 
   const online = await isOnline();
   if (!online) return;
@@ -46,7 +46,7 @@ export async function sincronizarPendentes() {
 
   try {
     let filaAtual = await buscarFila();
-    console.log("📦 FILA PARA SINCRONIZAR:", filaAtual.length, filaAtual);
+    //console.log("📦 FILA PARA SINCRONIZAR:", filaAtual.length, filaAtual);
 
     if (filaAtual.length === 0) return;
 
@@ -80,13 +80,13 @@ export async function sincronizarPendentes() {
       }
     }
 
-    console.log("📭 Fila após sync:", filaAtual.length, "pendentes");
+    //console.log("📭 Fila após sync:", filaAtual.length, "pendentes");
 
     if (filaAtual.length === 0) {
       await AsyncStorage.setItem("@status_sincronizacao", "concluido");
     }
   } catch (error) {
-    console.log("💥 Erro geral ao sincronizar:", error);
+    //console.log("💥 Erro geral ao sincronizar:", error);
     registrarLog("ERROR", "SYNC", "Erro geral na função sincronizarPendentes", error);
   } finally {
     sincronizando = false;
@@ -117,10 +117,10 @@ async function processarItem(item: any, token: string) {
       return await sincronizarFotoChamado(item, token);
     }
 
-    console.log("⚠️ Tipo desconhecido na fila, removendo:", item.tipo);
+    //console.log("⚠️ Tipo desconhecido na fila, removendo:", item.tipo);
     return true;
   } catch (error) {
-    console.log("💥 Exceção em processarItem:", item.tipo, error);
+    //console.log("💥 Exceção em processarItem:", item.tipo, error);
     registrarLog("ERROR", "PROCESSAR_ITEM", `Exceção ao processar item do tipo ${item.tipo}`, error);
     return false;
   }
@@ -141,7 +141,7 @@ async function sincronizarStatusChamado(item: any, token: string) {
     };
 
     registrarLog("INFO", "SYNC_STATUS", `Enviando status do chamado #${item.ticketId}`, payload);
-    console.log("📤 ENVIANDO STATUS:", JSON.stringify(payload));
+    //console.log("📤 ENVIANDO STATUS:", JSON.stringify(payload));
 
     const response = await fetch("https://browz.com.br/rest.php", {
       method: "POST",
@@ -153,7 +153,7 @@ async function sincronizarStatusChamado(item: any, token: string) {
     });
 
     const result = await response.json();
-    console.log("📥 RETORNO STATUS:", JSON.stringify(result));
+    //console.log("📥 RETORNO STATUS:", JSON.stringify(result));
 
     if (result.status === "success") {
       if (Number(item.extraData?.agenda_pause ?? 0) === 0) {
@@ -167,7 +167,7 @@ async function sincronizarStatusChamado(item: any, token: string) {
       return false;
     }
   } catch (error: any) {
-    console.log("💥 Exceção em sincronizarStatusChamado:", error);
+    //console.log("💥 Exceção em sincronizarStatusChamado:", error);
     registrarLog("ERROR", "SYNC_STATUS", `Falha no chamado #${item.ticketId}`, error?.message || error);
     return false;
   }
@@ -217,7 +217,7 @@ async function sincronizarFinalizacao(item: any, token: string) {
   const ticketId = Number(item.ticketId);
 
   if (!r) {
-    console.log("⚠️ relatorioFinal ausente no item de finalização, removendo da fila");
+    //console.log("⚠️ relatorioFinal ausente no item de finalização, removendo da fila");
     return true;
   }
 

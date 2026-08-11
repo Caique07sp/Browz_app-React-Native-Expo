@@ -37,7 +37,7 @@ export async function registrarLog(
 
     await AsyncStorage.setItem(LOGS_KEY, JSON.stringify(logsLimitados));
   } catch (e) {
-    console.log("Erro ao salvar log local:", e);
+    //console.log("Erro ao salvar log local:", e);
   }
 }
 
@@ -54,6 +54,6 @@ export async function limparLogs(): Promise<void> {
   try {
     await AsyncStorage.removeItem(LOGS_KEY);
   } catch (e) {
-    console.log("Erro ao limpar logs:", e);
+    //console.log("Erro ao limpar logs:", e);
   }
 }

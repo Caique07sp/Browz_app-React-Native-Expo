@@ -1,31 +1,32 @@
+import { ScreenWrapper } from "@/components/ScreenWrapper";
+import { useFocusEffect } from '@react-navigation/native';
 import { adicionarNaFila } from "@/services/offlineQueue";
 import { useTheme } from "@/theme/ThemeContext";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import {
-    Camera as CameraIcon,
-    CheckCircle,
-    Pause,
-    Play,
-    X,
-    MapPin,
-    ShieldCheck,
-    Wifi
+  Camera as CameraIcon,
+  CheckCircle,
+  MapPin,
+  Pause,
+  Play,
+  ShieldCheck,
+  X
 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
-    Modal,
-    StatusBar,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    ActivityIndicator,
-    ScrollView
+  ActivityIndicator,
+  Alert,
+  Modal,
+  ScrollView,
+  StatusBar,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
-import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { styles } from "../styles/check.styles";
 
 import { isOnline } from '@/services/network';
@@ -46,17 +47,43 @@ export default function CheckInScreen() {
   const [reason, setReason] = useState('');
 
   const [categorias, setCategorias] = useState<any>({});
+  const [nomeTecnico, setNomeTecnico] = useState('Técnico');
 
   const { service_type_id } = useLocalSearchParams();
   const serviceTypeId = String(service_type_id);
   const { theme, darkMode } = useTheme();
   const [alertVisible, setAlertVisible] = useState(false);
+  const [avisoMidiaVisible, setAvisoMidiaVisible] = useState(false);
+
 
   const [alertData, setAlertData] = useState({
     titulo: '',
     mensagem: '',
     tipo: 'info',
   });
+
+  const [hasMedia, setHasMedia] = useState(false);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      async function carregarDados() {
+        try {
+          // Checa mídias
+          const fotosStr = await AsyncStorage.getItem(`@fotos_chamado_${ticketId}`);
+          const lista = fotosStr ? JSON.parse(fotosStr) : [];
+          setHasMedia(Array.isArray(lista) && lista.length > 0);
+
+          // Checa nome do técnico
+          const nome = await AsyncStorage.getItem('@nome_tecnico'); // Ajuste a chave se usar outra
+          if (nome) setNomeTecnico(nome);
+        } catch (error) {
+          console.error('Erro ao carregar dados:', error);
+        }
+      }
+
+      carregarDados();
+    }, [ticketId])
+  );
 
   async function atualizarCacheChamado(status: number, agendaPause = 0) {
     const cache = await AsyncStorage.getItem("@cache_chamados");
@@ -69,6 +96,17 @@ export default function CheckInScreen() {
       return item;
     });
     await AsyncStorage.setItem("@cache_chamados", JSON.stringify(atualizados));
+  }
+
+  async function carregarNomeTecnico() {
+    try {
+      const nomeSalvo = await AsyncStorage.getItem('nome');
+      if (nomeSalvo) {
+        setNomeTecnico(nomeSalvo);
+      }
+    } catch (error) {
+      //console.log('Erro ao carregar nome do técnico:', error);
+    }
   }
 
   function getBrazilDateTime() {
@@ -153,7 +191,7 @@ export default function CheckInScreen() {
         await AsyncStorage.setItem("@cache_categorias", JSON.stringify(mapa));
       }
     } catch (error) {
-      console.log(error);
+      //console.log(error);
     }
   }
 
@@ -168,17 +206,33 @@ export default function CheckInScreen() {
       mostrarAlerta('Permissão necessária', 'Permita o acesso à localização para realizar o check-in.');
       return;
     }
+
     try {
-      let loc = await Location.getCurrentPositionAsync({});
-      setLocation(loc);
-      await AsyncStorage.setItem("@ultima_localizacao", JSON.stringify(loc));
-    } catch {
+      // 1ª ETAPA: Pega a última localização salva no sistema do celular (Instântaneo)
+      const ultimaConhecida = await Location.getLastKnownPositionAsync({});
+      if (ultimaConhecida) {
+        setLocation(ultimaConhecida);
+      }
+
+      // 2ª ETAPA: Dispara a busca pela posição exata em segundo plano
+      const localizacaoAtual = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced, // Usa GPS + Wi-Fi/Torres para precisão rápida e precisa
+      });
+
+      // Atualiza o estado e salva o cache persistente com as coordenadas atualizadas
+      setLocation(localizacaoAtual);
+      await AsyncStorage.setItem("@ultima_localizacao", JSON.stringify(localizacaoAtual));
+
+    } catch (error) {
+      // FALLBACK: Caso ocorra timeout no GPS, carrega a última salva no AsyncStorage
       const ultima = await AsyncStorage.getItem("@ultima_localizacao");
-      if (ultima) setLocation(JSON.parse(ultima));
+      if (ultima) {
+        setLocation(JSON.parse(ultima));
+      }
     }
   }
 
-  async function atualizarStatusChamado(status: number, extraData: any = {} ) {
+  async function atualizarStatusChamado(status: number, extraData: any = {}) {
     try {
       const online = await isOnline();
       if (!online) {
@@ -213,7 +267,7 @@ export default function CheckInScreen() {
       }
       return data.status === "success";
     } catch (error) {
-      console.log(error);
+      //console.log(error);
       return false;
     }
   }
@@ -305,7 +359,7 @@ export default function CheckInScreen() {
     setStarted(true);
     setIsActive(true);
 
-    mostrarAlerta('Check-in realizado', 'O check-in foi salvo no celular.');
+    mostrarAlerta('Sucesso!', 'O check-in foi realizado.');
   }
 
   async function handleConfirmAction() {
@@ -363,19 +417,23 @@ export default function CheckInScreen() {
   }
 
   async function handleFinish() {
-    router.push({ pathname: '/finalizacao-relatorio', params: { ticketId } });
-  }
+    if (!hasMedia) {
+      setAvisoMidiaVisible(true);
+      return;
+    }
 
+    router.replace({ pathname: '/finalizacao-relatorio', params: { ticketId } });
+  }
   return (
     <ScreenWrapper style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={darkMode ? "light-content" : "dark-content"} />
 
       <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
-        <Link href="/home" asChild>
-          <TouchableOpacity style={[styles.closeButton, { backgroundColor: theme.background }]}>
+        
+          <TouchableOpacity style={[styles.closeButton, { backgroundColor: theme.background }]} onPress={() => router.back()}>
             <X color={theme.subText} size={24} />
           </TouchableOpacity>
-        </Link>
+  
         <Text style={[styles.headerTitle, { color: theme.text }]}>
           {started ? 'Atendimento em Curso' : 'Check-in'}
         </Text>
@@ -385,7 +443,7 @@ export default function CheckInScreen() {
       {/* Colocando uma ScrollView interna para garantir que o preenchimento role bonito em telas menores */}
       <ScrollView contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
-          
+
           <View style={[styles.mapContainer, { borderColor: theme.border }]}>
             {location ? (
               <MapView
@@ -419,7 +477,7 @@ export default function CheckInScreen() {
           {!started && (
             <View style={[styles.infoCardPreCheckin, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <Text style={[styles.infoCardTitle, { color: theme.text }]}>Requisitos de Atendimento</Text>
-              
+
               <View style={styles.infoRow}>
                 <MapPin size={18} color={location ? "#22c55e" : "#ef4444"} />
                 <Text style={[styles.infoRowText, { color: theme.subText }]}>
@@ -460,8 +518,8 @@ export default function CheckInScreen() {
 
           {/* ÁREA DE BOTÕES INTERATIVOS */}
           {!started ? (
-            <TouchableOpacity 
-              style={[styles.startBtn, !location && styles.btnDesabilitado]} 
+            <TouchableOpacity
+              style={[styles.startBtn, !location && styles.btnDesabilitado]}
               onPress={handleStart}
               disabled={!location} // Bloqueia o clique nativamente se for nulo
             >
@@ -482,7 +540,7 @@ export default function CheckInScreen() {
               <View style={styles.actionGrid}>
                 <TouchableOpacity
                   style={[styles.secondaryBtn, { flex: 1, backgroundColor: theme.card, borderColor: theme.border }]}
-                  onPress={() => router.push({ pathname: '/fotos-chamado', params: { id: ticketId } })}
+                  onPress={() => router.replace({ pathname: '/fotos-chamado', params: { id: ticketId } })}
                 >
                   <CameraIcon color={theme.text} size={20} />
                   <Text style={[styles.btnText, { color: theme.text }]}>Enviar Imagens</Text>
@@ -536,6 +594,147 @@ export default function CheckInScreen() {
         </View>
       </Modal>
 
+
+      <Modal
+        visible={avisoMidiaVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setAvisoMidiaVisible(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 24,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: theme.card,
+              borderRadius: 24,
+              padding: 24,
+              width: '100%',
+              maxWidth: 340,
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: theme.border,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.25,
+              shadowRadius: 10,
+              elevation: 10,
+            }}
+          >
+            {/* Ícone */}
+            <View
+              style={{
+                backgroundColor: '#fef2f2',
+                padding: 16,
+                borderRadius: 99,
+                marginBottom: 16,
+              }}
+            >
+              <View
+                style={{
+                  backgroundColor: '#fee2e2',
+                  padding: 12,
+                  borderRadius: 99,
+                }}
+              >
+                <Text style={{ fontSize: 28 }}>📸</Text>
+              </View>
+            </View>
+
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: 'bold',
+                color: theme.text,
+                marginBottom: 12,
+                textAlign: 'center',
+              }}
+            >
+              Aviso de Mídias
+            </Text>
+
+            <Text
+              style={{
+                fontSize: 15,
+                color: theme.subText || '#94a3b8',
+                textAlign: 'center',
+                lineHeight: 22,
+                marginBottom: 24,
+              }}
+            >
+              Olá,{' '}
+              <Text style={{ fontWeight: 'bold', color: theme.text }}>
+                {nomeTecnico || 'Técnico'}
+              </Text>
+              ! Notamos que você não anexou nenhuma{' '}
+              <Text style={{ fontWeight: '600', color: '#ef4444' }}>FOTO</Text> ou{' '}
+              <Text style={{ fontWeight: '600', color: '#ef4444' }}>VÍDEO</Text> para
+              este chamado. Deseja encerrar mesmo assim?
+            </Text>
+
+            <TouchableOpacity
+              style={{
+                width: '100%',
+                padding: 14,
+                borderRadius: 12,
+                borderColor: theme.border,
+                borderWidth: 1,
+                alignItems: 'center',
+                marginBottom: 10,
+              }}
+              onPress={() => {
+                setAvisoMidiaVisible(false);
+                router.replace(`/fotos-chamado?id=${ticketId}`);
+              }}
+            >
+              <Text
+                style={{
+                  color: '#ef4444',
+                  fontSize: 16,
+                  fontWeight: 'bold',
+                }}
+              >
+                Voltar e Anexar
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                width: '100%',
+                padding: 14,
+                borderRadius: 12,
+                alignItems: 'center',
+                backgroundColor: '#3b82f6',
+                borderWidth: 1,
+                borderColor: theme.border,
+              }}
+              onPress={async () => {
+                setAvisoMidiaVisible(false);
+                router.replace({
+                  pathname: '/finalizacao-relatorio',
+                  params: { ticketId },
+                });
+              }}
+            >
+              <Text
+                style={{
+                  color: '#fff',
+                  fontSize: 15,
+                  fontWeight: '600',
+                }}
+              >
+                Sim, Finalizar Sem Imagens
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       {/* MODAL DE ALERTA PERSONALIZADO */}
       <Modal transparent visible={alertVisible} animationType="fade">
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>

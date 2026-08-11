@@ -7,14 +7,14 @@ export async function sincronizarChamados() {
     const online = await isOnline();
 
     if (!online) {
-      console.log("📴 Offline - usando cache");
+      //console.log("📴 Offline - usando cache");
       return;
     }
 
     const fila = await buscarFila();
 
     if (fila.length > 0) {
-      console.log("⏳ Existem pendências offline. Não vou atualizar chamados ainda.");
+      //console.log("⏳ Existem pendências offline. Não vou atualizar chamados ainda.");
       return;
     }
 
@@ -66,9 +66,9 @@ export async function sincronizarChamados() {
         JSON.stringify(chamadosTratados)
       );
 
-      console.log("✅ Chamados sincronizados:", chamadosTratados.length);
+      //console.log("✅ Chamados sincronizados:", chamadosTratados.length);
     }
   } catch (error) {
-    console.log("❌ Erro sincronizando chamados:", error);
+    //console.log("❌ Erro sincronizando chamados:", error);
   }
 }
