@@ -1,10 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { isOnline } from "./network";
 import { sincronizarPendentes } from "./sync";
+import { getApiUrl } from "./api";
 
 const SESSION_LIMIT = 7 * 24 * 60 * 60 * 1000;
-
-// CONTROLE DE CONCORRÊNCIA: Impede chamadas simultâneas
 let checagemEmAndamento: Promise<boolean> | null = null;
 
 export async function salvarSessaoOnline(token: string, login: string, senha: string) {
@@ -33,7 +32,6 @@ export async function verificarSessao(): Promise<boolean> {
 
   if (online) {
     await AsyncStorage.setItem("@ultimo_login_online", String(Date.now()));
-    // Executa em background sem dar await travando o fluxo da tela
     sincronizarPendentes().catch(e => console.log("Erro sync background:", e));
   }
 
@@ -41,8 +39,6 @@ export async function verificarSessao(): Promise<boolean> {
 }
 
 export async function validarSessaoDispositivo(): Promise<boolean> {
-  // Se já houver uma validação idêntica voando via HTTP, reaproveita a mesma promessa
-  // Isso evita o atropelo de tokens idênticos sendo enviados seguidamente
   if (checagemEmAndamento) {
     return checagemEmAndamento;
   }
@@ -57,7 +53,7 @@ export async function validarSessaoDispositivo(): Promise<boolean> {
 
       if (!tokenSalvo) return false;
 
-      const response = await fetch("https://browz.com.br/rest.php", {
+      const response = await fetch(await getApiUrl(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -81,50 +77,45 @@ export async function validarSessaoDispositivo(): Promise<boolean> {
         return true;
       }
 
-      // Se o backend explicitamente barrou por SESSION_TERMINATED
       if (data.data?.code === "SESSION_TERMINATED") {
         return false;
       }
 
-      // Para qualquer outro erro de rede instável ou timeout, não desloga o usuário direto
       return true; 
 
     } catch (error) {
-      //console.log("Erro ao validar sessão em tempo real:", error);
       return true; 
     } finally {
-      checagemEmAndamento = null; // Libera o semáforo
+      checagemEmAndamento = null; 
     }
   })();
 
   return checagemEmAndamento;
 }
 
-export async function deslogarForcado() {
-  await AsyncStorage.multiRemove([
-    "token",
-    "login",
-    "senha",
-    "name",
-    "perfil",
-    "representative_id",
-    "@ultimo_login_online",
-    "@cache_chamados",
-    "@offline_queue",
-    "device_id"
-  ]);
+// NOVA FUNÇÃO: Limpeza profunda que varre todas as chaves dinamicamente
+export async function limparDadosEmpresaCompleto() {
+  const todasAsChaves = await AsyncStorage.getAllKeys();
+  
+  // Array com configurações GLOBAIS do app que pertencem ao dispositivo e não à empresa
+  const chavesParaManter = [
+    "device_id", 
+    "@lembrar_login"
+    // Nota: A chave que armazena o próprio domínio não entra aqui porque 
+    // a api cuidará de atualizá-la, mas o cache da empresa antiga vai sumir.
+  ];
+
+  const chavesParaRemover = todasAsChaves.filter(chave => !chavesParaManter.includes(chave));
+  
+  if (chavesParaRemover.length > 0) {
+    await AsyncStorage.multiRemove(chavesParaRemover);
+  }
 }
+
+export async function deslogarForcado() {
+  await limparDadosEmpresaCompleto();
+}
+
 export async function logout() {
-  await AsyncStorage.multiRemove([
-    "token",
-    "login",
-    "senha",
-    "name",
-    "perfil",
-    "representative_id",
-    "@ultimo_login_online",
-    "@cache_chamados",
-    "@offline_queue",
-    "device_id"
-  ]);
+  await limparDadosEmpresaCompleto();
 }

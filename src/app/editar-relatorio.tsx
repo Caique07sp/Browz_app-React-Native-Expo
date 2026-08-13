@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { styles } from "../styles/edit-report.styles";
+import { getApiUrl } from "@/services/api";
 
 
 
@@ -159,7 +160,7 @@ export default function EditarRelatorio() {
       const token = await AsyncStorage.getItem('token');
 
       const response = await fetch(
-        'https://browz.com.br/rest.php',
+       await getApiUrl(),
         {
           method: 'POST',
           headers: {
@@ -264,7 +265,7 @@ export default function EditarRelatorio() {
         return;
       }
 
-      const response = await fetch('https://browz.com.br/rest.php', {
+      const response = await fetch( await getApiUrl(), {
 
         method: 'POST',
         headers: {
@@ -408,7 +409,7 @@ export default function EditarRelatorio() {
           ),
         },
       };
-      const response = await fetch('https://browz.com.br/rest.php', {
+      const response = await fetch( await getApiUrl(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -444,7 +445,7 @@ export default function EditarRelatorio() {
         },
       };
 
-      const response = await fetch('https://browz.com.br/rest.php', {
+      const response = await fetch( await getApiUrl(), {
 
         method: 'POST',
 
@@ -505,7 +506,7 @@ export default function EditarRelatorio() {
       } as any);
 
       const res = await fetch(
-        'https://browz.com.br/rest.php',
+         await getApiUrl(),
         {
           method: 'POST',
           headers: {

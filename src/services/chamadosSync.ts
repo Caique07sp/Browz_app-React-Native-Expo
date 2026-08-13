@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { isOnline } from "./network";
 import { buscarFila } from "./offlineQueue";
+import { getApiUrl } from "./api";
 
 export async function sincronizarChamados() {
   try {
@@ -23,7 +24,7 @@ export async function sincronizarChamados() {
 
     if (!token || !representativeId) return;
 
-    const response = await fetch("https://browz.com.br/rest.php", {
+    const response = await fetch(await getApiUrl(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -4,6 +4,7 @@ import { registrarLog } from "./logger";
 import { isOnline } from "./network";
 import { buscarFila, salvarFila } from "./offlineQueue";
 import { deslogarForcado, validarSessaoDispositivo } from "./session";
+import { getApiUrl } from "@/services/api";
 
 const MAX_TENTATIVAS = 5;
 
@@ -143,7 +144,7 @@ async function sincronizarStatusChamado(item: any, token: string) {
     registrarLog("INFO", "SYNC_STATUS", `Enviando status do chamado #${item.ticketId}`, payload);
     //console.log("📤 ENVIANDO STATUS:", JSON.stringify(payload));
 
-    const response = await fetch("https://browz.com.br/rest.php", {
+    const response = await fetch(await getApiUrl(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -188,7 +189,7 @@ async function sincronizarCheckin(item: any, token: string) {
 
     registrarLog("INFO", "SYNC_CHECKIN", `Enviando Check-in do chamado #${item.ticketId}`, payload);
 
-    const response = await fetch("https://browz.com.br/rest.php", {
+    const response = await fetch(await getApiUrl(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -236,7 +237,7 @@ async function sincronizarFinalizacao(item: any, token: string) {
         calendar_checklist_response: JSON.stringify(r.checklist_response),
       },
     };
-    const resChecklist = await fetch("https://browz.com.br/rest.php", {
+    const resChecklist = await fetch(await getApiUrl(), {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(payloadChecklist),
@@ -266,7 +267,7 @@ async function sincronizarFinalizacao(item: any, token: string) {
         type: "image/png",
       } as any);
 
-      const resAssinatura = await fetch("https://browz.com.br/rest.php", {
+      const resAssinatura = await fetch(await getApiUrl(), {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formDataAssinatura,
@@ -305,7 +306,7 @@ async function sincronizarFinalizacao(item: any, token: string) {
         type: "image/jpeg",
       } as any);
 
-      const resFoto = await fetch("https://browz.com.br/rest.php", {
+      const resFoto = await fetch(await getApiUrl(), {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formDataFoto,
@@ -343,7 +344,7 @@ async function sincronizarFinalizacao(item: any, token: string) {
     },
   };
 
-  const resRelatorio = await fetch("https://browz.com.br/rest.php", {
+  const resRelatorio = await fetch(await getApiUrl(), {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify(payloadRelatorio),
@@ -399,7 +400,7 @@ async function sincronizarEventoLinhaTempo(item: any, token: string) {
       data: item.data,
     };
 
-    const response = await fetch("https://browz.com.br/rest.php", {
+    const response = await fetch(await getApiUrl(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -423,7 +424,7 @@ async function sincronizarEventoCheckin(item: any, token: string) {
       data: item.data,
     };
 
-    const response = await fetch("https://browz.com.br/rest.php", {
+    const response = await fetch(await getApiUrl(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -459,7 +460,7 @@ async function sincronizarFotoChamado(item: any, token: string) {
       type: "image/jpeg",
     } as any);
 
-    const response = await fetch("https://browz.com.br/rest.php", {
+    const response = await fetch(await getApiUrl(), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -496,7 +497,7 @@ async function sincronizarPausaChamado(item: any, token: string) {
       },
     };
 
-    const response = await fetch("https://browz.com.br/rest.php", {
+    const response = await fetch(await getApiUrl(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

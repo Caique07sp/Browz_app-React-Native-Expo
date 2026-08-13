@@ -29,6 +29,7 @@ import {
   View
 } from 'react-native';
 import { styles } from "../styles/details.styles";
+import { getApiUrl } from "@/services/api";
 
 type DetailRowProps = {
   icon: React.ReactNode;
@@ -178,7 +179,7 @@ export default function DetalhesChamado() {
       const token = await AsyncStorage.getItem('token');
 
       const response = await fetch(
-        'https://browz.com.br/rest.php',
+       await getApiUrl(),
         {
           method: 'POST',
           headers: {
@@ -237,7 +238,7 @@ export default function DetalhesChamado() {
     try {
       const token = await AsyncStorage.getItem("token");
 
-      const response = await fetch("https://browz.com.br/rest.php", {
+      const response = await fetch(await getApiUrl(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -278,7 +279,7 @@ export default function DetalhesChamado() {
     try {
       const token = await AsyncStorage.getItem("token");
 
-      const response = await fetch("https://browz.com.br/rest.php", {
+      const response = await fetch(await getApiUrl(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -320,7 +321,7 @@ export default function DetalhesChamado() {
     try {
       const token = await AsyncStorage.getItem("token");
 
-      const response = await fetch("https://browz.com.br/rest.php", {
+      const response = await fetch(await getApiUrl(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -424,7 +425,7 @@ export default function DetalhesChamado() {
         type: 'image/jpeg',
       } as any);
 
-      const response = await fetch('https://browz.com.br/rest.php', {
+      const response = await fetch(await getApiUrl(), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

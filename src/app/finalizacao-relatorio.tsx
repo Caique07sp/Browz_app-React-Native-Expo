@@ -8,6 +8,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Check, ChevronLeft, PenTool, Trash2 } from 'lucide-react-native';
+import { getApiUrl } from "@/services/api";
 
 import React, { useState } from 'react';
 import {
@@ -127,7 +128,7 @@ export default function FinalizacaoRelatorio() {
       const token = await AsyncStorage.getItem('token');
 
       const response = await fetch(
-        'https://browz.com.br/rest.php',
+         await getApiUrl(),
         {
           method: 'POST',
           headers: {
@@ -309,7 +310,7 @@ export default function FinalizacaoRelatorio() {
           type: ehVideo ? 'video/mp4' : 'image/jpeg'
         } as any);
 
-        const response = await fetch('https://browz.com.br/rest.php', {
+        const response = await fetch(await getApiUrl(), {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -362,7 +363,7 @@ export default function FinalizacaoRelatorio() {
       } as any);
 
 
-      const res = await fetch('https://browz.com.br/rest.php', {
+      const res = await fetch(await getApiUrl(), {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -471,7 +472,7 @@ text     vira tentry
       // LOG PARA DEBUG - Verifique se o calendar_checklist_id está correto aqui!
       //console.log('🚀 ENVIANDO PARA API:', JSON.stringify(payload, null, 2));
 
-      const response = await fetch('https://browz.com.br/rest.php', {
+      const response = await fetch(await getApiUrl(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -560,7 +561,7 @@ text     vira tentry
 
 
       const response = await fetch(
-        'https://browz.com.br/rest.php',
+        await getApiUrl(),
         {
           method: 'POST',
           headers: {
@@ -697,7 +698,7 @@ text     vira tentry
 
     const token = await AsyncStorage.getItem("token");
 
-    const response = await fetch("https://browz.com.br/rest.php", {
+    const response = await fetch(await getApiUrl(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -750,7 +751,7 @@ text     vira tentry
 
     const token = await AsyncStorage.getItem("token");
 
-    const response = await fetch("https://browz.com.br/rest.php", {
+    const response = await fetch(await getApiUrl(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

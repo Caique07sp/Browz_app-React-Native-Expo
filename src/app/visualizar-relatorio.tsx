@@ -7,6 +7,7 @@ import { ChevronLeft, ClipboardList, Eye, FileText, ImageIcon, PenTool, Play, Us
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { useTheme } from "@/theme/ThemeContext";
 import React, { useEffect, useState } from 'react';
+import { getApiUrl } from "@/services/api";
 
 import { isOnline } from '@/services/network';
 import {
@@ -89,7 +90,7 @@ export default function VisualizarRelatorio() {
             const token = await AsyncStorage.getItem('token');
 
             const response = await fetch(
-                'https://browz.com.br/rest.php',
+               await getApiUrl(),
                 {
                     method: 'POST',
                     headers: {
@@ -173,7 +174,7 @@ export default function VisualizarRelatorio() {
             const token = await AsyncStorage.getItem('token');
 
             const response = await fetch(
-                'https://browz.com.br/rest.php',
+                await getApiUrl(),
                 {
                     method: 'POST',
                     headers: {

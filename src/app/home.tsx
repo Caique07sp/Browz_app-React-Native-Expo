@@ -44,6 +44,7 @@ import { estaSincronizando, sincronizarPendentes } from "@/services/sync";
 
 import { isOnline } from '@/services/network';
 import { logout } from "@/services/session";
+import { getApiUrl } from "@/services/api";
 import { router } from "expo-router";
 
 let alertaDeslogarVisivel = false;
@@ -281,7 +282,7 @@ export default function Browz() {
       const token = await AsyncStorage.getItem("token");
 
       const response = await fetch(
-        "https://browz.com.br/rest.php",
+        await getApiUrl(),
         {
           method: "POST",
           headers: {
@@ -491,7 +492,7 @@ export default function Browz() {
       const token = await AsyncStorage.getItem("token");
 
       const response = await fetch(
-        "https://browz.com.br/rest.php",
+        await getApiUrl(),
         {
           method: "POST",
           headers: {
@@ -536,7 +537,7 @@ export default function Browz() {
       const token = await AsyncStorage.getItem("token");
 
       const response = await fetch(
-        "https://browz.com.br/rest.php",
+        await getApiUrl(),
         {
           method: "POST",
           headers: {
@@ -581,7 +582,7 @@ export default function Browz() {
       const token = await AsyncStorage.getItem("token");
 
       const response = await fetch(
-        "https://browz.com.br/rest.php",
+        await getApiUrl(),
         {
           method: "POST",
           headers: {
@@ -786,7 +787,7 @@ export default function Browz() {
 
       if (semCache.length === 0) return;
 
-      const response = await fetch("https://browz.com.br/rest.php", {
+      const response = await fetch(await getApiUrl(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

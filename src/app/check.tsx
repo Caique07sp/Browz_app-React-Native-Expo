@@ -5,6 +5,7 @@ import { useTheme } from "@/theme/ThemeContext";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
+import { getApiUrl } from "@/services/api";
 import {
   Camera as CameraIcon,
   CheckCircle,
@@ -43,6 +44,9 @@ export default function CheckInScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [checkInTime, setCheckInTime] = useState<string | null>(null);
 
+  // NOVO ESTADO: Controle de carregamento no botão de Iniciar Atendimento
+  const [isStarting, setIsStarting] = useState(false);
+
   const [modalType, setModalType] = useState<'pause' | null>(null);
   const [reason, setReason] = useState('');
 
@@ -54,7 +58,6 @@ export default function CheckInScreen() {
   const { theme, darkMode } = useTheme();
   const [alertVisible, setAlertVisible] = useState(false);
   const [avisoMidiaVisible, setAvisoMidiaVisible] = useState(false);
-
 
   const [alertData, setAlertData] = useState({
     titulo: '',
@@ -74,7 +77,7 @@ export default function CheckInScreen() {
           setHasMedia(Array.isArray(lista) && lista.length > 0);
 
           // Checa nome do técnico
-          const nome = await AsyncStorage.getItem('@nome_tecnico'); // Ajuste a chave se usar outra
+          const nome = await AsyncStorage.getItem('@nome_tecnico');
           if (nome) setNomeTecnico(nome);
         } catch (error) {
           console.error('Erro ao carregar dados:', error);
@@ -135,14 +138,7 @@ export default function CheckInScreen() {
     const ticketStatus = await AsyncStorage.getItem(`@ticket_${ticketId}_status`);
     const ticketPausado = await AsyncStorage.getItem(`@ticket_${ticketId}_pausado`);
 
-    if (ticketPausado === "1") {
-      setStarted(false);
-      setIsActive(false);
-      setCheckInTime(null);
-      return;
-    }
-
-    if (ticketStatus === 'concluido' || ticketStatus === 'finalizado') {
+    if (ticketPausado === "1" || ticketStatus === 'concluido' || ticketStatus === 'finalizado') {
       setStarted(false);
       setIsActive(false);
       setCheckInTime(null);
@@ -160,6 +156,33 @@ export default function CheckInScreen() {
       setCheckInTime(data.horario_formatado);
       setStarted(true);
       setIsActive(data.ativo ?? true);
+      return;
+    }
+
+    const cacheChamados = await AsyncStorage.getItem("@cache_chamados");
+    if (cacheChamados) {
+      const chamados = JSON.parse(cacheChamados);
+      const chamadoAtual = chamados.find((item: any) => String(item.calendar_id) === String(ticketId));
+
+      if (chamadoAtual && Number(chamadoAtual.calendar_status) === 1 && Number(chamadoAtual.agenda_pause) !== 1) {
+        const dataFormatada = chamadoAtual.calendar_last_checkin_date
+          ? new Date(chamadoAtual.calendar_last_checkin_date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+          : "Realizado";
+
+        const checkinData = {
+          calendar_id: ticketId,
+          horario_formatado: dataFormatada,
+          status: 'checkin_realizado',
+          ativo: true,
+        };
+
+        await AsyncStorage.setItem(`@checkin_${ticketId}`, JSON.stringify(checkinData));
+        await AsyncStorage.setItem(`@ticket_${ticketId}_status`, "em_atendimento");
+
+        setCheckInTime(dataFormatada);
+        setStarted(true);
+        setIsActive(true);
+      }
     }
   }
 
@@ -172,7 +195,7 @@ export default function CheckInScreen() {
       if (!online) return;
 
       const token = await AsyncStorage.getItem("token");
-      const response = await fetch("https://browz.com.br/rest.php", {
+      const response = await fetch(await getApiUrl(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -208,23 +231,19 @@ export default function CheckInScreen() {
     }
 
     try {
-      // 1ª ETAPA: Pega a última localização salva no sistema do celular (Instântaneo)
       const ultimaConhecida = await Location.getLastKnownPositionAsync({});
       if (ultimaConhecida) {
         setLocation(ultimaConhecida);
       }
 
-      // 2ª ETAPA: Dispara a busca pela posição exata em segundo plano
       const localizacaoAtual = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced, // Usa GPS + Wi-Fi/Torres para precisão rápida e precisa
+        accuracy: Location.Accuracy.Balanced,
       });
 
-      // Atualiza o estado e salva o cache persistente com as coordenadas atualizadas
       setLocation(localizacaoAtual);
       await AsyncStorage.setItem("@ultima_localizacao", JSON.stringify(localizacaoAtual));
 
     } catch (error) {
-      // FALLBACK: Caso ocorra timeout no GPS, carrega a última salva no AsyncStorage
       const ultima = await AsyncStorage.getItem("@ultima_localizacao");
       if (ultima) {
         setLocation(JSON.parse(ultima));
@@ -249,7 +268,7 @@ export default function CheckInScreen() {
       }
 
       const token = await AsyncStorage.getItem("token");
-      const response = await fetch("https://browz.com.br/rest.php", {
+      const response = await fetch(await getApiUrl(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -267,7 +286,6 @@ export default function CheckInScreen() {
       }
       return data.status === "success";
     } catch (error) {
-      //console.log(error);
       return false;
     }
   }
@@ -288,7 +306,7 @@ export default function CheckInScreen() {
       return true;
     }
     const token = await AsyncStorage.getItem("token");
-    const response = await fetch("https://browz.com.br/rest.php", {
+    const response = await fetch(await getApiUrl(), {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ class: "CalendarEventService", method: "store", data: evento }),
@@ -318,7 +336,7 @@ export default function CheckInScreen() {
     }
 
     const token = await AsyncStorage.getItem("token");
-    const response = await fetch("https://browz.com.br/rest.php", {
+    const response = await fetch(await getApiUrl(), {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ class: "CalendarCheckinService", method: "store", data: evento }),
@@ -328,38 +346,50 @@ export default function CheckInScreen() {
   }
 
   async function handleStart() {
-    if (!location) return; // Segurança extra caso tente disparar o clique maliciosamente
+    if (!location || isStarting) return;
 
-    const now = new Date();
-    const checkinData = {
-      calendar_id: ticketId,
-      horario: now.toISOString(),
-      horario_formatado: now.toLocaleTimeString('PT-br', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-      status: 'checkin_realizado',
-      ativo: true,
-      pausas: [],
-      enviado_api: false,
-    };
+    // Ativa o estado de carregamento
+    setIsStarting(true);
 
-    await AsyncStorage.setItem(`@checkin_${ticketId}`, JSON.stringify(checkinData));
-    await salvarEventoLinhaTempo("Check-In", "Check-In realizado.", "fa:arrow-right bg-primary");
-    await salvarEventoCheckin(1);
+    try {
+      const now = new Date();
+      const checkinData = {
+        calendar_id: ticketId,
+        horario: now.toISOString(),
+        horario_formatado: now.toLocaleTimeString('PT-br', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        status: 'checkin_realizado',
+        ativo: true,
+        pausas: [],
+        enviado_api: false,
+      };
 
-    await atualizarStatusChamado(1, {
-      agenda_pause: 0,
-      calendar_last_checkin_date: now.toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'),
-      calendar_last_checkin_geo: `${location.coords.latitude},${location.coords.longitude}`,
-    });
+      await AsyncStorage.setItem(`@checkin_${ticketId}`, JSON.stringify(checkinData));
 
-    await AsyncStorage.removeItem(`@ticket_${ticketId}_pausado`);
+      await AsyncStorage.setItem(`@ticket_${ticketId}_status`, "em_atendimento");
+      await salvarEventoLinhaTempo("Check-In", "Check-In realizado.", "fa:arrow-right bg-primary");
+      await salvarEventoCheckin(1);
 
-    setCheckInTime(checkinData.horario_formatado);
-    setStarted(true);
-    setIsActive(true);
+      await atualizarStatusChamado(1, {
+        agenda_pause: 0,
+        calendar_last_checkin_date: now.toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'),
+        calendar_last_checkin_geo: `${location.coords.latitude},${location.coords.longitude}`,
+      });
 
-    mostrarAlerta('Sucesso!', 'O check-in foi realizado.');
+      await AsyncStorage.removeItem(`@ticket_${ticketId}_pausado`);
+
+      setCheckInTime(checkinData.horario_formatado);
+      setStarted(true);
+      setIsActive(true);
+
+      mostrarAlerta('Sucesso!', 'O check-in foi realizado.', 'success');
+    } catch (error) {
+      mostrarAlerta('Erro', 'Não foi possível registrar o check-in. Tente novamente.');
+    } finally {
+      // Finaliza o carregamento após todo o fluxo
+      setIsStarting(false);
+    }
   }
 
   async function handleConfirmAction() {
@@ -424,23 +454,22 @@ export default function CheckInScreen() {
 
     router.replace({ pathname: '/finalizacao-relatorio', params: { ticketId } });
   }
+
   return (
     <ScreenWrapper style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={darkMode ? "light-content" : "dark-content"} />
 
       <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
-        
-          <TouchableOpacity style={[styles.closeButton, { backgroundColor: theme.background }]} onPress={() => router.back()}>
-            <X color={theme.subText} size={24} />
-          </TouchableOpacity>
-  
+        <TouchableOpacity style={[styles.closeButton, { backgroundColor: theme.background }]} onPress={() => router.back()}>
+          <X color={theme.subText} size={24} />
+        </TouchableOpacity>
+
         <Text style={[styles.headerTitle, { color: theme.text }]}>
           {started ? 'Atendimento em Curso' : 'Check-in'}
         </Text>
         <View style={{ width: 24 }} />
       </View>
 
-      {/* Colocando uma ScrollView interna para garantir que o preenchimento role bonito em telas menores */}
       <ScrollView contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
 
@@ -473,7 +502,6 @@ export default function CheckInScreen() {
             </Text>
           </View>
 
-          {/* CARD DE INFORMAÇÕES ANTES DO CHECKIN (Preenche o espaço em branco) */}
           {!started && (
             <View style={[styles.infoCardPreCheckin, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <Text style={[styles.infoCardTitle, { color: theme.text }]}>Requisitos de Atendimento</Text>
@@ -494,7 +522,6 @@ export default function CheckInScreen() {
             </View>
           )}
 
-          {/* CARD DE TEMPO (Aparece em destaque após o check-in ou mostrando hora atual) */}
           <View style={[styles.timeCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={[styles.timeLabel, { color: theme.subText }]}>HORA ATUAL</Text>
             <Text style={[styles.timeValue, { color: theme.text }]}>
@@ -519,11 +546,19 @@ export default function CheckInScreen() {
           {/* ÁREA DE BOTÕES INTERATIVOS */}
           {!started ? (
             <TouchableOpacity
-              style={[styles.startBtn, !location && styles.btnDesabilitado]}
+              style={[
+                styles.startBtn, 
+                (!location || isStarting) && styles.btnDesabilitado
+              ]}
               onPress={handleStart}
-              disabled={!location} // Bloqueia o clique nativamente se for nulo
+              disabled={!location || isStarting}
             >
-              {location ? (
+              {isStarting ? (
+                <>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={styles.btnMainText}>Processando...</Text>
+                </>
+              ) : location ? (
                 <>
                   <Play color="#fff" size={24} fill="#fff" />
                   <Text style={styles.btnMainText}>Confirmar e Iniciar Atendimento</Text>
@@ -594,7 +629,7 @@ export default function CheckInScreen() {
         </View>
       </Modal>
 
-
+      {/* MODAL AVISO DE MÍDIAS */}
       <Modal
         visible={avisoMidiaVisible}
         animationType="fade"
@@ -627,7 +662,6 @@ export default function CheckInScreen() {
               elevation: 10,
             }}
           >
-            {/* Ícone */}
             <View
               style={{
                 backgroundColor: '#fef2f2',
@@ -735,6 +769,7 @@ export default function CheckInScreen() {
           </View>
         </View>
       </Modal>
+
       {/* MODAL DE ALERTA PERSONALIZADO */}
       <Modal transparent visible={alertVisible} animationType="fade">
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>

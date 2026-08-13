@@ -3,6 +3,7 @@ import { isOnline } from "@/services/network";
 import { useTheme } from "@/theme/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useRouter } from "expo-router";
+import { getApiUrl } from "@/services/api";
 import {
     Building2,
     ChevronLeft,
@@ -99,7 +100,7 @@ export default function Perfil() {
       const token = await AsyncStorage.getItem("token");
       if (!token) return;
 
-      const response = await fetch("https://browz.com.br/rest.php", {
+      const response = await fetch(await getApiUrl(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
