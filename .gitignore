@@ -30,8 +30,10 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# Environment / Chaves de API (IMPORTANTE)
+.env
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo
@@ -39,6 +41,3 @@ yarn-error.*
 # generated native folders
 /ios
 /android
-
-# Ignorar o arquivo principal do Reac
-App.tsx

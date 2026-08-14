@@ -108,7 +108,7 @@ export default function App() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: "Basic 94ru30984rvnh4r2rjo",
+            Authorization: process.env.EXPO_PUBLIC_API_BASIC_AUTH,
           },
           body: JSON.stringify({
             class: "ApplicationAuthenticationRestService",
@@ -265,7 +265,7 @@ export default function App() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: "Basic 94ru30984rvnh4r2rjo",
+          Authorization: process.env.EXPO_PUBLIC_API_BASIC_AUTH,
         },
         body: JSON.stringify({
           class: "ApplicationAuthenticationRestService",
