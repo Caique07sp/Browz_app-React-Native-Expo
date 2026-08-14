@@ -12,8 +12,7 @@ import {
     MapPinOff,
     Navigation,
     Route,
-    Sparkles,
-    X,
+    Sparkles
 } from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -231,86 +230,117 @@ export default function MapaChamadosScreen() {
 
     const MAX_WAYPOINTS_POR_REQUISICAO = 23;
 
-    async function buscarRotaPorPontos(pontos: { latitude: number; longitude: number }[]) {
-        if (pontos.length < 2 || !GOOGLE_DIRECTIONS_API_KEY) {
-            setCoordenadasRotaReal([]);
-            return;
-        }
+   async function buscarRotaPorPontos(pontos: { latitude: number; longitude: number }[]) {
+    console.log("📱 [DIAGNÓSTICO ROTA] Iniciando busca de rota...");
+    console.log("📱 [DIAGNÓSTICO ROTA] Pontos recebidos:", pontos.length);
+    console.log(
+        "📱 [DIAGNÓSTICO ROTA] API Key disponível?:",
+        GOOGLE_DIRECTIONS_API_KEY ? `Sim (Tamanho: ${GOOGLE_DIRECTIONS_API_KEY.length})` : "NÃO (Vazia/Undefined)"
+    );
 
-        try {
-            const blocos: { latitude: number; longitude: number }[][] = [];
-            let inicioBloco = 0;
-            while (inicioBloco < pontos.length - 1) {
-                const fimBloco = Math.min(inicioBloco + MAX_WAYPOINTS_POR_REQUISICAO + 1, pontos.length - 1);
-                blocos.push(pontos.slice(inicioBloco, fimBloco + 1));
-                inicioBloco = fimBloco;
-            }
-
-            let trajetoCompleto: { latitude: number; longitude: number }[] = [];
-
-            for (const bloco of blocos) {
-                const origem = `${bloco[0].latitude},${bloco[0].longitude}`;
-                const destino = `${bloco[bloco.length - 1].latitude},${bloco[bloco.length - 1].longitude}`;
-                const intermediarios = bloco
-                    .slice(1, -1)
-                    .map((p) => `${p.latitude},${p.longitude}`)
-                    .join("|");
-
-                // 🛠️ MUDANÇA AQUI: Formata a URL escapando caracteres especiais como "|"
-                let url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origem}&destination=${destino}&mode=driving&key=${GOOGLE_DIRECTIONS_API_KEY}`;
-
-                if (intermediarios) {
-                    const waypointsFormatted = encodeURIComponent(`optimize:false|${intermediarios}`);
-                    url += `&waypoints=${waypointsFormatted}`;
-                }
-
-                const resposta = await fetch(url);
-                const json = await resposta.json();
-
-                if (json.status === "OK" && json.routes?.length > 0) {
-                    const pontosPolyline = decodificarPolyline(json.routes[0].overview_polyline.points);
-                    trajetoCompleto = trajetoCompleto.concat(pontosPolyline);
-                }
-            }
-
-            setCoordenadasRotaReal(trajetoCompleto);
-        } catch (error) {
-            setCoordenadasRotaReal([]);
-        }
+    if (pontos.length < 2 || !GOOGLE_DIRECTIONS_API_KEY) {
+        console.warn("⚠️ [DIAGNÓSTICO ROTA] Cancelado: Poucos pontos ou API Key ausente.");
+        setCoordenadasRotaReal([]);
+        return;
     }
+
+    try {
+        const blocos: { latitude: number; longitude: number }[][] = [];
+        let inicioBloco = 0;
+        while (inicioBloco < pontos.length - 1) {
+            const fimBloco = Math.min(inicioBloco + MAX_WAYPOINTS_POR_REQUISICAO + 1, pontos.length - 1);
+            blocos.push(pontos.slice(inicioBloco, fimBloco + 1));
+            inicioBloco = fimBloco;
+        }
+
+        let trajetoCompleto: { latitude: number; longitude: number }[] = [];
+
+        for (let i = 0; i < blocos.length; i++) {
+            const bloco = blocos[i];
+            const origem = `${bloco[0].latitude},${bloco[0].longitude}`;
+            const destino = `${bloco[bloco.length - 1].latitude},${bloco[bloco.length - 1].longitude}`;
+            const intermediarios = bloco
+                .slice(1, -1)
+                .map((p) => `${p.latitude},${p.longitude}`)
+                .join("|");
+
+            let url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origem}&destination=${destino}&mode=driving&key=${GOOGLE_DIRECTIONS_API_KEY}`;
+
+            if (intermediarios) {
+                const waypointsFormatted = encodeURIComponent(`optimize:false|${intermediarios}`);
+                url += `&waypoints=${waypointsFormatted}`;
+            }
+
+            console.log(`🌐 [DIAGNÓSTICO ROTA] Efetuando Request Bloco [${i + 1}/${blocos.length}]...`);
+
+            const resposta = await fetch(url);
+            const json = await resposta.json();
+
+            console.log(`📩 [DIAGNÓSTICO ROTA] Resposta Google Status:`, json.status);
+
+            if (json.status === "OK" && json.routes?.length > 0) {
+                const pontosPolyline = decodificarPolyline(json.routes[0].overview_polyline.points);
+                console.log(`✅ [DIAGNÓSTICO ROTA] Pontos decodificados neste bloco:`, pontosPolyline.length);
+                trajetoCompleto = trajetoCompleto.concat(pontosPolyline);
+            } else {
+                console.error(`❌ [DIAGNÓSTICO ROTA] Falha na resposta da API Google:`, {
+                    status: json.status,
+                    error_message: json.error_message || "Nenhuma mensagem detalhada.",
+                });
+            }
+        }
+
+        console.log(`🏁 [DIAGNÓSTICO ROTA] Total final de pontos para a Polyline:`, trajetoCompleto.length);
+        setCoordenadasRotaReal(trajetoCompleto);
+    } catch (error) {
+        console.error("❌ [DIAGNÓSTICO ROTA] Erro de rede ou de execução no fetch:", error);
+        setCoordenadasRotaReal([]);
+    }
+}
 
     function decodificarPolyline(encoded: string) {
-        let points = [];
-        let index = 0, len = encoded.length;
-        let lat = 0, lng = 0;
+    if (!encoded) return [];
 
-        while (index < len) {
-            let b, shift = 0, result = 0;
-            do {
-                b = encoded.charCodeAt(index++) - 63;
-                result |= (b & 0x1f) << shift;
-                shift += 5;
-            } while (b >= 0x20);
-            let dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
-            lat += dlat;
+    let poly: { latitude: number; longitude: number }[] = [];
+    let index = 0,
+        len = encoded.length;
+    let lat = 0,
+        lng = 0;
 
-            shift = 0;
+    while (index < len) {
+        let b,
+            shift = 0,
             result = 0;
-            do {
-                b = encoded.charCodeAt(index++) - 63;
-                result |= (b & 0x1f) << shift;
-                shift += 5;
-            } while (b >= 0x20);
-            let dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
-            lng += dlng;
 
-            points.push({
-                latitude: lat / 1e5,
-                longitude: lng / 1e5,
-            });
-        }
-        return points;
+        do {
+            b = encoded.charCodeAt(index++) - 63;
+            result |= (b & 0x1f) << shift;
+            shift += 5;
+        } while (b >= 0x20);
+
+        let dlat = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
+        lat += dlat;
+
+        shift = 0;
+        result = 0;
+
+        do {
+            b = encoded.charCodeAt(index++) - 63;
+            result |= (b & 0x1f) << shift;
+            shift += 5;
+        } while (b >= 0x20);
+
+        let dlng = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
+        lng += dlng;
+
+        poly.push({
+            latitude: lat / 1e5,
+            longitude: lng / 1e5,
+        });
     }
+
+    return poly;
+}
 
     function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: number) {
         const R = 6371;
@@ -574,11 +604,12 @@ export default function MapaChamadosScreen() {
                             showsMyLocationButton={true}
                         >
                             {/* 🛣️ DESENHA A ROTA REAL (OU LINHA RETA DE FALLBACK) */}
-                            {coordenadasRotaReal.length > 0 ? (
+                            {coordenadasRotaReal.length > 1 ? (
                                 <Polyline
                                     coordinates={coordenadasRotaReal}
                                     strokeColor={theme.primary}
                                     strokeWidth={5}
+                                    zIndex={99}
                                 />
                             ) : (
                                 coordenadasLinhaReta.length > 1 && (
