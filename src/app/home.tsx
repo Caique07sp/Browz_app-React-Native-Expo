@@ -15,6 +15,7 @@ import {
   LogOut,
   MapPin,
   Menu,
+  Network,
   RefreshCw,
   Search,
   Settings,
@@ -433,7 +434,7 @@ export default function Browz() {
       });
     }
 
-    if (startDate && endDate) {
+   if (startDate && endDate) {
       const inicio = new Date(startDate);
       inicio.setHours(0, 0, 0, 0);
 
@@ -446,25 +447,8 @@ export default function Browz() {
         const dataChamado = new Date(item.calendar_start);
         return dataChamado >= inicio && dataChamado <= fim;
       });
-
-    } else {
-      const hoje = new Date();
-
-      const inicioSemana = new Date(hoje);
-      inicioSemana.setDate(hoje.getDate() - hoje.getDay());
-      inicioSemana.setHours(0, 0, 0, 0);
-
-      const fimSemana = new Date(inicioSemana);
-      fimSemana.setDate(inicioSemana.getDate() + 6);
-      fimSemana.setHours(23, 59, 59, 999);
-
-      lista = lista.filter((item) => {
-        if (!item.calendar_start) return false;
-
-        const dataChamado = new Date(item.calendar_start);
-        return dataChamado >= inicioSemana && dataChamado <= fimSemana;
-      });
     }
+   
 
     lista.sort((a, b) => {
       if (!a.calendar_start) return 1;

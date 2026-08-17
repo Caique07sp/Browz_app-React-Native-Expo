@@ -100,7 +100,8 @@ export async function limparDadosEmpresaCompleto() {
   // Array com configurações GLOBAIS do app que pertencem ao dispositivo e não à empresa
   const chavesParaManter = [
     "device_id", 
-    "@lembrar_login"
+    "@lembrar_login",
+    "@theme"
     // Nota: A chave que armazena o próprio domínio não entra aqui porque 
     // a api cuidará de atualizá-la, mas o cache da empresa antiga vai sumir.
   ];

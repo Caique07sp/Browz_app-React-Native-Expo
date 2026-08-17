@@ -9,7 +9,10 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_BASIC_AUTH": "Basic 94ru30984rvnh4r2rjo"
+      }
     },
     "production": {
       "autoIncrement": true
