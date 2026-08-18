@@ -64,6 +64,8 @@ function DetailRow({ icon, label, value }: DetailRowProps) {
   );
 }
 
+
+
 export default function DetalhesChamado() {
   const { id } = useLocalSearchParams();
 
@@ -179,7 +181,7 @@ export default function DetalhesChamado() {
       const token = await AsyncStorage.getItem('token');
 
       const response = await fetch(
-       await getApiUrl(),
+        await getApiUrl(),
         {
           method: 'POST',
           headers: {
@@ -549,6 +551,13 @@ export default function DetalhesChamado() {
     return '#64748b';
   }
 
+  const statusChamado = Number(calendar?.calendar_status ?? 0);
+  const estaPausado = Boolean(calendar?.pausado || calendar?.calendar_paused);
+
+  const podePreencherChecklist = statusChamado === 1;
+
+
+
   if (loading) {
     return (
       <ScreenWrapper
@@ -812,9 +821,18 @@ export default function DetalhesChamado() {
           </View>
 
           <View style={styles.actionContainer}>
+            <View style={styles.mapRow}>
+              <TouchableOpacity style={styles.mapButton} onPress={openMaps}>
+                <FontAwesome5 name="google" size={20} color="#28bb0bff" />
+                <Text style={styles.buttonTextSmall}>Maps</Text>
+              </TouchableOpacity>
 
-
-            {Number(calendar.calendar_status) === 2 ? (
+              <TouchableOpacity style={styles.wazeButton} onPress={openWaze}>
+                <MaterialCommunityIcons name="waze" size={29} color="#3b82f6" />
+                <Text style={styles.buttonSmall}>Waze</Text>
+              </TouchableOpacity>
+            </View>
+            {statusChamado === 2 ? (
               <TouchableOpacity
                 style={styles.finishedButton}
                 onPress={() =>
@@ -830,34 +848,46 @@ export default function DetalhesChamado() {
                 <Text style={styles.buttonText}>Ver relatório finalizado</Text>
               </TouchableOpacity>
             ) : (
-              <Link
-                href={{
-                  pathname: '/check',
-                  params: {
-                    id: calendar.calendar_id,
-                    service_type_id: calendar.service_type_id,
-                  },
-                }}
+              <View style={styles.grupoBotoesAcao}>
+                {/* Botão de Check-in */}
+                <Link
+                  href={{
+                    pathname: '/check',
+                    params: {
+                      id: calendar.calendar_id,
+                      service_type_id: calendar.service_type_id,
+                    },
+                  }}
+                  asChild
+                >
+                  <TouchableOpacity style={styles.checkInButton}>
+                    <FontAwesome5 name="check" size={20} color="#fff" />
+                    <Text style={styles.buttonText}>Check-in</Text>
+                  </TouchableOpacity>
+                </Link>
 
-                asChild
-              >
-                <TouchableOpacity style={styles.checkInButton}>
-                  <FontAwesome5 name="check" size={20} color="#fff" />
-                  <Text style={styles.buttonText}>Check-in</Text>
-                </TouchableOpacity>
-              </Link>
+
+             
+                {podePreencherChecklist && (
+                  <Link
+                    href={{
+                      pathname: '/checklist', 
+                      params: {
+                        id: calendar.calendar_id,
+                        service_type_id: calendar.service_type_id,
+                      },
+                    }}
+                    asChild
+                  >
+                    <TouchableOpacity style={styles.botaoFinalizar}>
+                      <FontAwesome5 name="clipboard-check" size={20} color="#fff" />
+                      <Text style={styles.textoBotao}>Preencher Checklist</Text>
+                    </TouchableOpacity>
+                  </Link>
+                )}
+              </View>
             )}
-            <View style={styles.mapRow}>
-              <TouchableOpacity style={styles.mapButton} onPress={openMaps}>
-                <FontAwesome5 name="google" size={20} color="#28bb0bff" />
-                <Text style={styles.buttonTextSmall}>Maps</Text>
-              </TouchableOpacity>
 
-              <TouchableOpacity style={styles.wazeButton} onPress={openWaze}>
-                <MaterialCommunityIcons name="waze" size={29} color="#3b82f6" />
-                <Text style={styles.buttonSmall}>Waze</Text>
-              </TouchableOpacity>
-            </View>
 
           </View>
         </View>

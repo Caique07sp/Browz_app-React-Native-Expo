@@ -15,11 +15,11 @@ import {
   LogOut,
   MapPin,
   Menu,
-  Network,
   RefreshCw,
   Search,
   Settings,
   SlidersHorizontal,
+  Network,
   User,
   X
 } from "lucide-react-native";
@@ -86,27 +86,21 @@ export default function Browz() {
   // LÓGICA 1: VALIDAÇÃO ISOLADA DA SESSÃO LOCAL
   // ==========================================
   async function verificarSessaoValida() {
-  const token = await AsyncStorage.getItem("token");
-  const representativeId = await AsyncStorage.getItem("representative_id");
+    const token = await AsyncStorage.getItem("token");
+    const representativeId = await AsyncStorage.getItem("representative_id");
 
-  // 👇 ADICIONE ESSES LOGS PARA TESTAR NO SEU TERMINAL:
-  console.log("🔍 TOKEN:", token);
-  console.log("🔍 REPRESENTATIVE_ID:", representativeId);
-
-  if (!token || !representativeId) {
-    console.log("❌ DESLOGADO POR FALTA DE TOKEN OU REPRESENTATIVE_ID NO ASYNCSTORAGE");
-    await logout();
-    router.replace("/");
-    return false;
+    if (!token || !representativeId) {
+      await logout();
+      router.replace("/");
+      return false;
+    }
+    return true;
   }
-  return true;
-}
 
   // ==========================================
   // LÓGICA 2: CARREGAMENTO DOS DADOS DE APOIO
   // ==========================================
   async function carregarDadosDeApoio() {
-    //console.log("⚡ Carregando dados de apoio em paralelo...");
     await Promise.all([
       buscarTecnicos(),
       buscarCategorias(),
@@ -119,20 +113,16 @@ export default function Browz() {
   // ==========================================
   async function sincronizarEBuscarChamados() {
     if (estaSincronizando()) {
-      //console.log("⏳ Sincronização em andamento por segundo plano...");
       return;
     }
 
-    // Executa sincronização de pendências
     await sincronizarPendentes();
     const qtd = await contarPendencias();
     setPendencias(qtd);
 
-    // Se não há pendências na fila offline, busca do servidor online
     if (qtd === 0) {
       await buscarChamados();
     } else {
-      // Se possui pendência offline ativa, preserva o cache local de chamados na tela
       const cacheChamados = await AsyncStorage.getItem("@cache_chamados");
       if (cacheChamados) {
         const chamadosSalvos = JSON.parse(cacheChamados);
@@ -148,14 +138,11 @@ export default function Browz() {
         try {
           setLoading(true);
 
-          // Atualiza a badge sempre que a tela Home ganha foco (ex: ao voltar da tela de notificações)
           await carregarQuantidadeNotificacoes();
 
-          // PASSO 1: Valida a sessão local prioritariamente. Se falhar, interrompe o resto.
           const sessaoOk = await verificarSessaoValida();
           if (!sessaoOk) return;
 
-          // Carrega os filtros persistidos na memória interna
           const filtrosSalvos = await AsyncStorage.getItem("@saved_selected_status");
           if (filtrosSalvos) setSelectedStatus(JSON.parse(filtrosSalvos));
 
@@ -167,15 +154,11 @@ export default function Browz() {
 
           await carregarUsuario();
           await carregarQuantidadeNotificacoes();
-
-          // PASSO 2: Carrega dados leves e estáticos na memória
           await carregarDadosDeApoio();
-
-          // PASSO 3: Realiza a sincronização e busca das ordens de serviço (Processo pesado de rede)
           await sincronizarEBuscarChamados();
 
         } catch (error) {
-          //console.log("Erro no carregamento modular da home:", error);
+          // Erro no carregamento modular da home
         } finally {
           setLoading(false);
         }
@@ -186,9 +169,7 @@ export default function Browz() {
   );
 
   useEffect(() => {
-    // Escuta a chegada de notificações enquanto você está com a Home aberta
     const subscription = Notifications.addNotificationReceivedListener(() => {
-      // Sempre que chegar uma notificação, recarrega a contagem da badge imediatamente
       carregarQuantidadeNotificacoes();
     });
 
@@ -224,7 +205,6 @@ export default function Browz() {
     async function iniciarNotificacoes() {
       const ativadaPeloUsuario = await obterStatusNotificacaoSalva();
       if (ativadaPeloUsuario) {
-        // Dispara o fluxo de ativação / pedido se for um novo dispositivo
         await requisitarEPersistirPermissao(true);
       }
     }
@@ -233,15 +213,11 @@ export default function Browz() {
 
   // Listeners de notificação push
   useEffect(() => {
-    // Recebeu notificação com app em foreground — recarrega chamados
     const subRecebida = Notifications.addNotificationReceivedListener(() => {
-      //console.log("🔔 Notificação recebida em foreground, recarregando chamados...");
       buscarChamados();
     });
 
-    // Usuário tocou na notificação — recarrega chamados e navega se tiver calendar_id
     const subToque = Notifications.addNotificationResponseReceivedListener((response) => {
-      //console.log("👆 Notificação tocada:", response.notification.request.content.data);
       buscarChamados();
     });
 
@@ -268,7 +244,6 @@ export default function Browz() {
       const isOnlineStatus = await isOnline();
 
       if (!isOnlineStatus) {
-        //console.log("📴 Sem internet, carregando cache");
         const cacheChamados = await AsyncStorage.getItem("@cache_chamados");
 
         if (cacheChamados) {
@@ -279,7 +254,6 @@ export default function Browz() {
         return;
       }
 
-      // ONLINE
       const token = await AsyncStorage.getItem("token");
 
       const response = await fetch(
@@ -300,20 +274,16 @@ export default function Browz() {
       const data = await response.json();
 
       if (response.status === 401 || data.data?.code === "SESSION_TERMINATED") {
-        // 1. Desativa os loadings imediatamente para não travar a interface visual
         setLoading(false);
         setRefreshing(false);
 
-        // 2. Executa o logout local imediatamente para limpar o AsyncStorage
         await logout();
 
-        // Se o alerta JÁ ESTIVER sendo exibido, ignora as próximas chamadas paralelas
         if (alertaDeslogarVisivel) {
           router.replace("/");
           return;
         }
 
-        // Ativa a trava para os próximos disparos paralelos não entrarem aqui
         alertaDeslogarVisivel = true;
 
         Alert.alert(
@@ -323,20 +293,18 @@ export default function Browz() {
             {
               text: "OK",
               onPress: () => {
-                // Destrava a flag apenas quando o usuário clicar em OK
                 alertaDeslogarVisivel = false;
                 router.replace("/");
               },
             },
           ],
-          { cancelable: false } // Impede o usuário de fechar clicando fora (no Android)
+          { cancelable: false }
         );
 
         return;
       }
 
       if (data.status === "error") {
-        //console.log("Erro interno do servidor ao buscar chamados, usando cache local.");
         const cacheChamados = await AsyncStorage.getItem("@cache_chamados");
         if (cacheChamados) {
           const chamadosSalvos = JSON.parse(cacheChamados);
@@ -380,7 +348,6 @@ export default function Browz() {
         aplicarFiltros(chamadosComEstadoLocal);
       }
     } catch (error) {
-      //console.log("ERRO AO BUSCAR OS CHAMADOS DA API:", error);
       const cacheChamados = await AsyncStorage.getItem("@cache_chamados");
 
       if (cacheChamados) {
@@ -393,7 +360,6 @@ export default function Browz() {
       setRefreshing(false);
     }
   }
-
 
   function aplicarFiltros(listaOriginal = todosChamados) {
     let lista = [...listaOriginal];
@@ -434,7 +400,7 @@ export default function Browz() {
       });
     }
 
-   if (startDate && endDate) {
+    if (startDate && endDate) {
       const inicio = new Date(startDate);
       inicio.setHours(0, 0, 0, 0);
 
@@ -448,7 +414,6 @@ export default function Browz() {
         return dataChamado >= inicio && dataChamado <= fim;
       });
     }
-   
 
     lista.sort((a, b) => {
       if (!a.calendar_start) return 1;
@@ -502,7 +467,6 @@ export default function Browz() {
         await AsyncStorage.setItem("@cache_tecnicos", JSON.stringify(mapa));
       }
     } catch (error) {
-      //console.log("ERRO TECNICOS:", error);
       const cache = await AsyncStorage.getItem("@cache_tecnicos");
       if (cache) setTecnicos(JSON.parse(cache));
     }
@@ -547,7 +511,6 @@ export default function Browz() {
         await AsyncStorage.setItem("@cache_categorias", JSON.stringify(mapa));
       }
     } catch (error) {
-      //console.log("ERRO CATEGORIAS:", error);
       const cache = await AsyncStorage.getItem("@cache_categorias");
       if (cache) setCategorias(JSON.parse(cache));
     }
@@ -592,7 +555,6 @@ export default function Browz() {
         await AsyncStorage.setItem("@cache_clientes", JSON.stringify(mapa));
       }
     } catch (error) {
-      //console.log("ERRO CLIENTES:", error);
       const cache = await AsyncStorage.getItem("@cache_clientes");
       if (cache) setClientes(JSON.parse(cache));
     }
@@ -612,7 +574,7 @@ export default function Browz() {
         return novoStatus;
       });
     } catch (error) {
-      //console.log("Erro na função toggleStatus:", error);
+      // Erro na função toggleStatus
     }
   };
 
@@ -626,7 +588,7 @@ export default function Browz() {
       await AsyncStorage.removeItem("@saved_start_date");
       await AsyncStorage.removeItem("@saved_end_date");
     } catch (error) {
-      //console.log("Erro ao limpar filtros no cache:", error);
+      // Erro ao limpar filtros no cache
     }
   };
 
@@ -697,7 +659,6 @@ export default function Browz() {
     let ids = savedIds ? JSON.parse(savedIds) : [];
     let chamadosCarregados = jaCarregados ? JSON.parse(jaCarregados) : [];
 
-    // Evita duplicar se o uniqueId já existir nos IDs ou na lista
     if (ids.includes(uniqueId) || lista.some((item: any) => item.uniqueId === uniqueId)) {
       return;
     }
@@ -714,7 +675,7 @@ export default function Browz() {
       mensagem,
       tipo,
       uniqueId,
-      lida: false, // Inicia como não lida
+      lida: false,
       data: new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
       timestamp: new Date().toISOString(),
     });
@@ -722,7 +683,6 @@ export default function Browz() {
     await AsyncStorage.setItem("@notificacoes", JSON.stringify(lista));
     await AsyncStorage.setItem("@notificacoes_ids", JSON.stringify(ids));
 
-    // Conta apenas as não lidas e únicas
     const naoLidas = lista.filter((item: any) => !item.lida);
     setQuantidadeNotificacoes(naoLidas.length);
   }
@@ -731,19 +691,16 @@ export default function Browz() {
     const chamadosSalvosStr = await AsyncStorage.getItem("@ultimos_chamados_sync");
     const ultimosSalvos = chamadosSalvosStr ? JSON.parse(chamadosSalvosStr) : [];
 
-    // 1. Se for a primeira inicialização do app, atualiza o cache local e encerra
     if (ultimosSalvos.length === 0 && novosChamados.length > 0) {
       await AsyncStorage.setItem("@ultimos_chamados_sync", JSON.stringify(novosChamados));
       return;
     }
 
-    // 2. Compara apenas MUDANÇAS DE STATUS em chamados já existentes
     for (const novo of novosChamados) {
       const antigo = ultimosSalvos.find(
         (item: any) => String(item.calendar_id) === String(novo.calendar_id)
       );
 
-      // Se o chamado já existia na lista e mudou para finalizado
       if (antigo && Number(antigo.calendar_status) !== Number(novo.calendar_status)) {
         if (Number(novo.calendar_status) === 2) {
           await salvarNotificacao(
@@ -757,19 +714,13 @@ export default function Browz() {
       }
     }
 
-    // Atualiza o cache local para a próxima verificação
     await AsyncStorage.setItem("@ultimos_chamados_sync", JSON.stringify(novosChamados));
   }
 
   async function cachearChecklistsNovos(token: string, chamados: any[]) {
     try {
-      const semCache: any[] = [];
-      for (const chamado of chamados) {
-        const cached = await AsyncStorage.getItem(`@checklist_${chamado.calendar_id}`);
-        if (!cached) semCache.push(chamado);
-      }
-
-      if (semCache.length === 0) return;
+      // Se não houver chamados, não há o que buscar
+      if (chamados.length === 0) return;
 
       const response = await fetch(await getApiUrl(), {
         method: "POST",
@@ -787,7 +738,9 @@ export default function Browz() {
 
       if (data.status !== "success" || !Array.isArray(data.data)) return;
 
-      for (const chamado of semCache) {
+      // Atualiza o template de TODOS os chamados para garantir que se o 
+      // servidor mudar o formulário, ele reflita localmente (as respostas não serão perdidas)
+      for (const chamado of chamados) {
         const id = chamado.calendar_id;
         const item = data.data.find((c: any) => String(c.calendar_id) === String(id));
 
@@ -796,6 +749,7 @@ export default function Browz() {
         try {
           const template = JSON.parse(item.calendar_checklist_template);
           const ordenado = template.sort((a: any, b: any) => Number(a.order) - Number(b.order));
+          
           await AsyncStorage.setItem(
             `@checklist_${id}`,
             JSON.stringify({
@@ -804,11 +758,11 @@ export default function Browz() {
             })
           );
         } catch (e) {
-          //console.log(`❌ erro ao salvar checklist do chamado ${id}:`, e);
+          // console.log(`❌ erro ao salvar checklist do chamado ${id}:`, e);
         }
       }
     } catch (error) {
-      //console.log("❌ [CHECKLIST] Erro geral:", error);
+      // console.log("❌ [CHECKLIST] Erro geral:", error);
     }
   }
 
@@ -817,10 +771,7 @@ export default function Browz() {
 
     if (saved) {
       const lista: any[] = JSON.parse(saved);
-
-      // Filtra apenas as notificações que ainda NÃO foram lidas
       const naoLidas = lista.filter((item) => !item.lida);
-
       setQuantidadeNotificacoes(naoLidas.length);
     } else {
       setQuantidadeNotificacoes(0);
@@ -836,7 +787,6 @@ export default function Browz() {
         },
       ]}
     >
-
       <StatusBar style={darkMode ? "light" : "dark"} />
 
       {/* HEADER */}
@@ -853,21 +803,19 @@ export default function Browz() {
         </View>
 
         <View style={styles.headerIcons}>
-
           <TouchableOpacity
             style={[styles.iconButton, { marginRight: 4, position: 'relative' }]}
             onPress={() => router.push("/notificacoes")}
           >
             <Bell size={24} color={theme.text} />
 
-            {/* BADGE COM CONTADOR DE NOTIFICAÇÕES */}
             {quantidadeNotificacoes > 0 && (
               <View
                 style={{
                   position: 'absolute',
                   right: -2,
                   top: -2,
-                  backgroundColor: '#ef4444', // Vermelho ativo
+                  backgroundColor: '#ef4444',
                   borderRadius: 10,
                   minWidth: 18,
                   height: 18,
@@ -906,7 +854,7 @@ export default function Browz() {
 
                 await sincronizarEBuscarChamados();
               } catch (e) {
-                //console.log("Erro no onRefresh:", e);
+                // Erro no onRefresh
               } finally {
                 setRefreshing(false);
               }
@@ -941,12 +889,10 @@ export default function Browz() {
             />
           </View>
 
-
           <TouchableOpacity style={styles.filterButton} onPress={() => setFilterVisible(true)}>
             <SlidersHorizontal size={20} color="#fff" />
           </TouchableOpacity>
         </View>
-
 
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -971,7 +917,6 @@ export default function Browz() {
               ↓ Arraste para baixo para sincronizar
             </Text>
           </View>
-
         ) : (
           filteredChamados.map((calendar, index) => (
             <TouchableOpacity
@@ -1068,7 +1013,6 @@ export default function Browz() {
                   {
                     backgroundColor: selectedStatus.includes("aberto") ? "#ffaa0088" : theme.background,
                     borderColor: "#ffa200",
-                    // 👇 Adicione essas duas linhas abaixo para centralizar o conteúdo
                     justifyContent: 'center',
                     alignItems: 'center'
                   }
@@ -1081,7 +1025,6 @@ export default function Browz() {
                     {
                       color: selectedStatus.includes("aberto") ? "#ffffff" : theme.text,
                       fontWeight: selectedStatus.includes("aberto") ? "700" : "400",
-                      // Opcional: garante que o texto interno também se comporte como centralizado
                       textAlign: 'center'
                     }
                   ]}
@@ -1357,7 +1300,6 @@ export default function Browz() {
       </Modal>
 
       {/* MODAL MENU HAMBÚRGUER */}
-      {/* MODAL MENU HAMBÚRGUER */}
       <Modal
         transparent
         visible={menuVisible}
@@ -1365,25 +1307,18 @@ export default function Browz() {
         onRequestClose={() => setMenuVisible(false)}
       >
         <View style={styles.menuOverlay}>
-          {/* Área escura externa para fechar ao clicar fora */}
           <TouchableOpacity
             style={styles.menuCloseOverlayTouch}
             activeOpacity={1}
             onPress={() => setMenuVisible(false)}
           />
 
-          {/* Caixa do Menu Lateral */}
           <View style={[styles.menuBox, { backgroundColor: theme.card }]}>
-
-            {/* SafeAreaView garante que o menu não fique embaixo da Dynamic Island / Notch no iPhone */}
             <SafeAreaView style={{ flex: 1 }}>
-
-              {/* CABEÇALHO DO MENU */}
               <View style={styles.menuHeaderAdjusted}>
                 <Text style={[styles.menuTitle, { color: theme.text }]}>Menu</Text>
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  {/* Indicador de Status de Conexão */}
                   <View
                     style={{
                       backgroundColor: darkMode ? "#1E293B" : "#F1F5F9",
@@ -1403,16 +1338,13 @@ export default function Browz() {
                     </Text>
                   </View>
 
-                  {/* Botão Fechar */}
                   <TouchableOpacity onPress={() => setMenuVisible(false)} style={styles.menuCloseBtnClickable}>
                     <X size={24} color={theme.text} />
                   </TouchableOpacity>
                 </View>
               </View>
 
-              {/* CONTEÚDO DO MENU (Perfil e Links) */}
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
-
                 <TouchableOpacity
                   style={styles.profileBox}
                   onPress={() => { setMenuVisible(false); router.push("/perfil"); }}
@@ -1458,11 +1390,12 @@ export default function Browz() {
                   <Text style={[styles.menuText, { color: theme.text }]}>Configurações</Text>
                 </TouchableOpacity>
 
+                
+
                 <TouchableOpacity style={styles.logoutBtn} onPress={fazerLogout}>
                   <LogOut size={18} color="#fff" />
                   <Text style={styles.logoutText}>Sair</Text>
                 </TouchableOpacity>
-
               </ScrollView>
             </SafeAreaView>
           </View>

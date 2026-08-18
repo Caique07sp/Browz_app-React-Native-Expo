@@ -338,4 +338,22 @@ export const styles = StyleSheet.create({
     height: 55,
     borderRadius: 16,
   },
+  grupoBotoesAcao: {
+    gap: 12, 
+    marginBottom: 15,
+  },
+  botaoFinalizar: {
+    backgroundColor: '#10b981', 
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 14,
+    borderRadius: 8,
+    gap: 8,
+  },
+  textoBotao: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
 });

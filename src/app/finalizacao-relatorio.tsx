@@ -57,7 +57,7 @@ export default function FinalizacaoRelatorio() {
         buscarChecklist();
         carregarNomeTecnico();
 
-        // Checa a quantidade de mídias para exibir no contador do botão
+ 
         AsyncStorage.getItem(`@fotos_chamado_${chamadoId}`).then((fotosStr) => {
           if (fotosStr) {
             const lista = JSON.parse(fotosStr);
@@ -81,7 +81,7 @@ export default function FinalizacaoRelatorio() {
         setNomeTecnico(nomeSalvo);
       }
     } catch (error) {
-      //console.log('Erro ao carregar nome do técnico:', error);
+
     }
   }
 
@@ -95,112 +95,33 @@ export default function FinalizacaoRelatorio() {
   }
 
 
-  //Vamos com calma que a gente consegue essa é função para comecar a pegar os dados da API
+
   async function buscarChecklist() {
     try {
       setLoadingChecklist(true);
 
-      // CACHE PRIMEIRO
-      const cache =
-        await AsyncStorage.getItem(
-          `@checklist_${chamadoId}`
-        );
+     
+      const cache = await AsyncStorage.getItem(`@checklist_${chamadoId}`);
 
       if (cache) {
         const checklist = JSON.parse(cache);
 
         setChecklistTemplate(checklist.template || []);
-
-        setCalendarChecklistId(
-          checklist.calendar_checklist_id
-        );
+        setCalendarChecklistId(checklist.calendar_checklist_id);
+      } else {
+        setChecklistTemplate([]);
       }
 
-      const online = await isOnline();
+      
 
-      // OFFLINE
-      if (!online) {
-        //console.log("📴 Offline checklist");
-        return;
-      }
-
-      // ONLINE
-      const token = await AsyncStorage.getItem('token');
-
-      const response = await fetch(
-         await getApiUrl(),
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            class: 'CalendarChecklistService',
-            method: 'loadAll',
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (
-        data.status === 'success' &&
-        Array.isArray(data.data)
-      ) {
-        const itemChecklist = data.data.find(
-          (item: any) =>
-            String(item.calendar_id) ===
-            String(chamadoId)
-        );
-
-        if (!itemChecklist) {
-
-          if (!cache) {
-            setChecklistTemplate([]);
-
-          }
-
-          return;
-        }
-
-        setCalendarChecklistId(
-          itemChecklist.calendar_checklist_id
-        );
-
-        if (
-          itemChecklist?.calendar_checklist_template
-        ) {
-          const template = JSON.parse(
-            itemChecklist.calendar_checklist_template
-          );
-
-          const ordenado = template.sort(
-            (a: any, b: any) =>
-              Number(a.order) - Number(b.order)
-          );
-
-          setChecklistTemplate(ordenado);
-
-          // SALVA CACHE
-          await AsyncStorage.setItem(
-            `@checklist_${chamadoId}`,
-            JSON.stringify({
-              calendar_checklist_id:
-                itemChecklist.calendar_checklist_id,
-              template: ordenado,
-            })
-          );
-        }
-      }
     } catch (error) {
-      //console.log('ERRO CHECKLIST:', error);
+      // console.log('ERRO CHECKLIST:', error);
     } finally {
       setLoadingChecklist(false);
     }
   }
 
-
+  
   {/*async function enviarFotoParaApi() {
     try {
       const token = await AsyncStorage.getItem('token');
@@ -410,15 +331,25 @@ text     vira tentry
 } isso é um exemplo viu
   
   */
-  function handleChecklistChange(field: any, value: any) {
-    setChecklistResponses((old: any) => ({
-      ...old,
-      [field.id]: {
-        field_id: field.id,
-        field_type: getFieldType(field.type),
-        field_value: value,
-      },
-    }));
+ function handleChecklistChange(field: any, value: any) {
+    setChecklistResponses((old: any) => {
+      const novasRespostas = {
+        ...old,
+        [field.id]: {
+          field_id: field.id,
+          field_type: getFieldType(field.type),
+          field_value: value,
+        },
+      };
+
+      AsyncStorage.getItem(`@rascunho_relatorio_${chamadoId}`).then((saved) => {
+        const rascunho = saved ? JSON.parse(saved) : {};
+        rascunho.checklistResponses = novasRespostas;
+        AsyncStorage.setItem(`@rascunho_relatorio_${chamadoId}`, JSON.stringify(rascunho));
+      });
+
+      return novasRespostas;
+    });
   }
 
 
