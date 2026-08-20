@@ -1,36 +1,36 @@
 import { Platform, StyleSheet } from "react-native";
 
-export const styles = StyleSheet.create({
-  container: {
+export const estilos = StyleSheet.create({
+  recipientePrincipal: {
     flex: 1,
     backgroundColor: "#0f172a",
     paddingTop: Platform.OS === 'android' ? 20 : 0,
   },
-  content: {
+  conteudo: {
     paddingHorizontal: 20,
     paddingBottom: 100,
   },
-  header: {
+  cabecalho: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 15,
   },
-  logoContainer: {
+  recipienteLogo: {
     flexDirection: "row",
     alignItems: "center",
   },
-  logoImage: {
+  imagemLogo: {
     width: 120,
     height: 30,
     resizeMode: "contain",
   },
-  headerIcons: {
+  iconesCabecalho: {
     flexDirection: "row",
     alignItems: "center",
   },
-  iconButton: {
+  botaoIcone: {
     marginLeft: 15,
   },
   badge: {
@@ -51,13 +51,14 @@ export const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "bold",
   },
-  searchSection: {
+  secaoPesquisa: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 10,
+    margin:20,
     marginBottom: 25,
   },
-  searchBar: {
+  barraPesquisa: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
@@ -68,13 +69,13 @@ export const styles = StyleSheet.create({
     borderColor: "#334155",
     paddingHorizontal: 12,
   },
-  input: {
+  entradaTexto: {
     flex: 1,
     color: "#fff",
     paddingHorizontal: 10,
     fontSize: 16,
   },
-  filterButton: {
+  botaoFiltro: {
     backgroundColor: "#3b82f6",
     width: 50,
     height: 50,
@@ -101,53 +102,53 @@ export const styles = StyleSheet.create({
     marginBottom: 15,
     borderWidth: 2,
   },
-  cardHeader: {
+  cabecalhoCartao: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 12,
   },
-  idBadge: {
+  crachaId: {
     backgroundColor: "#334155",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  idText: {
+  textoId: {
     color: "#94a3b8",
     fontSize: 12,
     fontWeight: "700",
   },
-  statusBadge: {
+  crachaStatus: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
   },
-  statusDot: {
+  pontoStatus: {
     width: 6,
     height: 6,
     borderRadius: 3,
     marginRight: 6,
   },
-  statusText: {
+  textoStatus: {
     color: "#fff",
     fontSize: 11,
     fontWeight: "600",
   },
-  cardTitle: {
+  tituloCartao: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 6,
   },
-  cardDescription: {
+  descricaoCartao: {
     color: "#94a3b8",
     fontSize: 14,
     marginBottom: 15,
   },
-  cardFooter: {
+  rodapeCartao: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -155,55 +156,44 @@ export const styles = StyleSheet.create({
     borderTopColor: "#334155",
     paddingTop: 12,
   },
-  footerInfo: {
+  informacaoRodape: {
     flexDirection: "row",
     alignItems: "center",
   },
-  footerText: {
+  textoRodape: {
     color: "#64748b",
     fontSize: 12,
     marginLeft: 6,
   },
-  footerDate: {
+  dataRodape: {
     color: "#64748b",
     fontSize: 14,
     marginBottom: 10,
   },
-  overlay: {
+  sobreposicao: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.7)",
     justifyContent: "center",
     alignItems: "center",
   },
-  modalBox: {
+  caixaModal: {
     width: "92%",
     maxWidth: 450,
     maxHeight: "85%",
-
     backgroundColor: "#1e293b",
     padding: 24,
-
     borderRadius: 24,
-
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,
     shadowRadius: 16,
     elevation: 20,
-
-     ...Platform.select({
-        android: {
-        
-      },
-      ios: {
-       width: "92%",  // Mantém o padrão no iOS
-      },
-      }),
+    ...Platform.select({
+      android: {},
+      ios: { width: "92%" },
+    }),
   },
-  modalHeader: {
+  cabecalhoModal: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
@@ -212,12 +202,12 @@ export const styles = StyleSheet.create({
     borderBottomColor: "#33415550",
     paddingBottom: 18,
   },
-  modalTitle: {
+  tituloModal: {
     color: "#fff",
     fontSize: 24,
     fontWeight: "700",
   },
-  modalLabel: {
+  rotuloModal: {
     color: "#94a3b8",
     marginBottom: 12,
     marginTop: 18,
@@ -229,22 +219,24 @@ export const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 10,
   },
-  optionBtn: {
-    backgroundColor: "#0f172a",
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 10,
+  botaoOpcaoFiltro: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#334155",
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    gap: 8,
+    ...Platform.select({
+      android: { width: "48.5%" },
+      ios: { width: "48.0%" },
+    }),
   },
   optionBtnActive: {
     backgroundColor: "#2563eb",
     borderColor: "#60a5fa",
     elevation: 3,
   },
-  optionText: {
+  textoOpcao: {
     color: "#fff",
     fontWeight: "600",
   },
@@ -259,20 +251,18 @@ export const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
   },
-
-
   menuHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 40,
     marginBottom: 30,
   },
-  menuTitle: {
+  tituloMenu: {
     color: "#fff",
     fontSize: 24,
     fontWeight: "bold",
   },
-  profileBox: {
+  caixaPerfil: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 30,
@@ -289,25 +279,25 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 12,
   },
-  userName: {
+  nomeUsuario: {
     color: "#fff",
     fontWeight: "bold",
   },
-  userSub: {
+  subtituloUsuario: {
     color: "#94a3b8",
     fontSize: 12,
   },
-  menuItem: {
+  itemMenu: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 16,
     gap: 12,
   },
-  menuText: {
+  textoMenu: {
     color: "#fff",
     fontSize: 16,
   },
-  logoutBtn: {
+  botaoSair: {
     marginTop: "auto",
     marginBottom: 40,
     backgroundColor: "#ef4444",
@@ -318,21 +308,19 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  logoutText: {
+  textoSair: {
     color: "#fff",
     fontWeight: "bold",
   },
-  emptyContainer: {
+  recipienteVazio: {
     alignItems: "center",
     justifyContent: "center",
     marginTop: 60,
   },
-
-  illustrationContainer: {
+  recipienteIlustracao: {
     marginBottom: 20,
   },
-
-  isometricBox: {
+  caixaIsometrica: {
     width: 100,
     height: 100,
     backgroundColor: "#1e293b",
@@ -342,33 +330,27 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#334155",
   },
-
-  emptyTitle: {
+  tituloVazio: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 5,
   },
-
-  emptySubtitle: {
+  subtituloVazio: {
     color: "#94a3b8",
     textAlign: "center",
   },
-  loadingContainer: {
+  recipienteCarregamento: {
     alignItems: "center",
     justifyContent: "center",
     marginTop: 60,
   },
-
-  loadingText: {
+  textoCarregamento: {
     color: "#94a3b8",
     marginTop: 12,
     fontSize: 14,
   },
-
-
-
   syncBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -377,7 +359,6 @@ export const styles = StyleSheet.create({
     alignSelf: "flex-start",
     marginBottom: 10,
   },
-
   syncText: {
     fontSize: 12,
     fontWeight: "bold",
@@ -388,7 +369,6 @@ export const styles = StyleSheet.create({
     gap: 10,
     marginTop: 25,
   },
-
   clearFilterBtn: {
     flex: 1,
     backgroundColor: "#7f1d1d",
@@ -396,12 +376,10 @@ export const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
   },
-
   clearFilterText: {
     color: "#fff",
     fontWeight: "700",
   },
-
   applyFilterBtn: {
     flex: 1,
     backgroundColor: "#2563eb",
@@ -409,9 +387,7 @@ export const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
   },
-  // Adicione ou substitua estas propriedades no seu styles do CSS:
-
-  modalDragIndicator: {
+  indicadorArrastoModal: {
     width: 50,
     height: 6,
     backgroundColor: "#64748b",
@@ -420,59 +396,41 @@ export const styles = StyleSheet.create({
     marginBottom: 20,
     display: "none",
   },
-  modalCloseButton: {
+  botaoFecharModal: {
     backgroundColor: "#33415540",
     padding: 8,
     borderRadius: 99,
   },
-  statusGrid: {
+  gradeStatus: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
     justifyContent: "space-between",
     marginBottom: 10,
   },
-  filterOptionBtn: {
-  
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    gap: 8,
-
-     ...Platform.select({
-        android: {
-        width: "48.5%", 
-      },
-      ios: {
-         width: "48.0%",  // Mantém o padrão no iOS
-      },
-      }),
-  },
-  dateInput: {
+  entradaData: {
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderWidth: 1,
     justifyContent: "center",
   },
-  clearDateBtn: {
+  botaoLimparData: {
     marginTop: 12,
     alignSelf: "flex-start",
   },
-  clearDateText: {
+  textoLimparData: {
     color: "#f43f5e",
     fontWeight: "600",
     fontSize: 13,
   },
-  filterFooterActions: {
+  acoesRodapeFiltro: {
     flexDirection: "row",
     gap: 12,
     marginTop: 30,
     marginBottom: Platform.OS === "ios" ? 15 : 5,
   },
-  modalPrimaryBtn: {
+  botaoPrimarioModal: {
     flex: 2,
     backgroundColor: "#3b82f6",
     paddingVertical: 15,
@@ -485,12 +443,12 @@ export const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 4,
   },
-  modalPrimaryBtnText: {
+  textoBotaoPrimarioModal: {
     color: "#fff",
     fontWeight: "700",
     fontSize: 16,
   },
-  modalSecondaryBtn: {
+  botaoSecundarioModal: {
     flex: 1,
     paddingVertical: 15,
     borderRadius: 14,
@@ -498,17 +456,17 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  modalSecondaryBtnText: {
+  textoBotaoSecundarioModal: {
     fontWeight: "600",
     fontSize: 15,
   },
-  centeredView: {
+  visaoCentralizada: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.6)", // Fundo escurecido
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
   },
-  calendarModalBox: {
+  caixaModalCalendario: {
     width: "85%",
     maxWidth: 360,
     borderRadius: 20,
@@ -520,7 +478,7 @@ export const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-  calendarCloseBtn: {
+  botaoFecharCalendario: {
     marginTop: 15,
     backgroundColor: "#3b82f6",
     paddingVertical: 10,
@@ -529,46 +487,66 @@ export const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
   },
-  calendarCloseBtnText: {
+  textoBotaoFecharCalendario: {
     color: "#fff",
     fontWeight: "600",
     fontSize: 16,
   },
-  menuOverlay: {
+  sobreposicaoMenu: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
-    flexDirection: "row", // Garante o alinhamento horizontal correto no iOS
-    justifyContent: "flex-end", 
+    flexDirection: "row",
+    justifyContent: "flex-end",
   },
-  menuCloseOverlayTouch: {
+  toqueFecharSobreposicaoMenu: {
     position: "absolute",
     top: 0,
     left: 0,
     bottom: 0,
-    right: "75%", // Cobre exatamente a parte esquerda que sobrou do menu
+    right: "75%",
   },
-  menuBox: {
+  caixaMenu: {
     width: "75%",
     height: "100%",
     backgroundColor: "#1e293b",
     paddingHorizontal: 20,
-    paddingVertical: Platform.OS === "ios" ? 10 : 25, // Reduz o padding vertical no iOS por conta da SafeArea
+    paddingVertical: Platform.OS === "ios" ? 10 : 25,
     shadowColor: "#000",
     shadowOffset: { width: -4, height: 0 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 16,
   },
-  menuHeaderAdjusted: {
+  cabecalhoMenuAjustado: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: Platform.OS === "android" ? 40 : 10, // Margem inteligente para não colar no topo do iPhone
+    marginTop: Platform.OS === "android" ? 40 : 10,
     marginBottom: 25,
     paddingBottom: 10,
   },
-  menuCloseBtnClickable: {
-    padding: 6, // Facilita o clique no iOS
+  botaoFecharMenuClicavel: {
+    padding: 6,
   },
-  
+  recipienteAcoesDeslize: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    marginBottom: 15,
+    marginLeft: 8,
+    gap: 8,
+  },
+  botaoAcaoDeslize: {
+    justifyContent: "center",
+    alignItems: "center",
+    width: 80,
+    borderRadius: 16,
+    paddingHorizontal: 8,
+  },
+  textoAcaoDeslize: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 4,
+    textAlign: "center",
+  },
 });

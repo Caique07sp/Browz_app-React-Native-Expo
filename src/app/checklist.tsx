@@ -1,54 +1,45 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
   ActivityIndicator,
   Alert,
+  ScrollView,
   StatusBar,
   StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { useTheme } from '@/theme/ThemeContext';
-import { ChevronLeft, CheckCircle2, Save, FileText } from 'lucide-react-native';
-
-interface CampoChecklist {
-  id: string | number;
-  label: string;
-  type?: string;
-  options?: string[] | string;
-  required?: boolean;
-}
+import { Check, ChevronLeft } from 'lucide-react-native';
 
 export default function TelaChecklistExclusiva() {
-  const { id } = useLocalSearchParams();
-  const chamadoId = String(id);
   const router = useRouter();
-  const { theme, darkMode } = useTheme();
+  const { id, ticketId } = useLocalSearchParams();
+  const chamadoId = String(id || ticketId);
 
-  const [carregando, setCarregando] = useState(true);
+  const [checklistTemplate, setChecklistTemplate] = useState<any[]>([]);
+  const [checklistResponses, setChecklistResponses] = useState<any>({});
+  const [loadingChecklist, setLoadingChecklist] = useState(true);
   const [salvando, setSalvando] = useState(false);
-  const [templateChecklist, setTemplateChecklist] = useState<CampoChecklist[]>([]);
-  const [respostasChecklist, setRespostasChecklist] = useState<Record<string, any>>({});
+  const { theme, darkMode } = useTheme();
 
   useEffect(() => {
     carregarDadosChecklist();
   }, [chamadoId]);
 
-  // Carrega o template cacheado e as respostas salvas no rascunho do chamado
   async function carregarDadosChecklist() {
     try {
-      setCarregando(true);
+      setLoadingChecklist(true);
 
-      // 1. Carrega o Template salvo previamente pela Home
+      // 1. Carrega o Template salvo pela Home
       const cacheTemplate = await AsyncStorage.getItem(`@checklist_${chamadoId}`);
       if (cacheTemplate) {
-        const dadosParsed = JSON.parse(cacheTemplate);
-        setTemplateChecklist(dadosParsed.template || []);
+        const checklist = JSON.parse(cacheTemplate);
+        setChecklistTemplate(checklist.template || []);
       }
 
       // 2. Carrega as Respostas salvas no Rascunho Compartilhado
@@ -56,65 +47,55 @@ export default function TelaChecklistExclusiva() {
       if (cacheRascunho) {
         const rascunho = JSON.parse(cacheRascunho);
         if (rascunho.checklistResponses) {
-          setRespostasChecklist(rascunho.checklistResponses);
+          setChecklistResponses(rascunho.checklistResponses);
         }
       }
     } catch (erro) {
-      // Alert.alert('Erro', 'Não foi possível carregar os dados do checklist.');
+      // Trata erro silenciosamente
     } finally {
-      setCarregando(false);
+      setLoadingChecklist(false);
     }
   }
 
-  // Mapeia os tipos de campos conforme padronizado no projeto
-  function obterTipoCampo(tipoOriginal?: string) {
-    if (!tipoOriginal) return 'text';
-    const tipo = String(tipoOriginal).toLowerCase();
-    if (tipo.includes('option') || tipo.includes('select') || tipo.includes('radio')) return 'select';
-    if (tipo.includes('check') || tipo.includes('multi')) return 'checkbox';
-    return 'text';
-  }
-
-  // Atualiza o estado local e persiste instantaneamente no Rascunho Compartilhado
-  async function atualizarResposta(campo: CampoChecklist, valor: any) {
-    const campoId = String(campo.id);
-    const tipoFormatado = obterTipoCampo(campo.type);
-
-    const novasRespostas = {
-      ...respostasChecklist,
-      [campoId]: {
-        field_id: campoId,
-        field_type: tipoFormatado,
-        field_value: valor,
-      },
+  function getFieldType(type: string) {
+    const map: any = {
+      select: 'tcombo',
+      text: 'tentry',
+      textarea: 'ttext',
+      radio: 'tradio',
+      checkbox: 'tcheckgroup',
     };
 
-    setRespostasChecklist(novasRespostas);
-
-    // Persistência imediata na fonte única de dados
-    try {
-      const cacheRascunho = await AsyncStorage.getItem(`@rascunho_relatorio_${chamadoId}`);
-      const rascunho = cacheRascunho ? JSON.parse(cacheRascunho) : {};
-
-      rascunho.checklistResponses = novasRespostas;
-
-      await AsyncStorage.setItem(
-        `@rascunho_relatorio_${chamadoId}`,
-        JSON.stringify(rascunho)
-      );
-    } catch (erro) {
-      // Falha silenciosa de salvamento local
-    }
+    return map[type] || type;
   }
 
-  // Salva explicitamente e retorna à tela do chamado
+  function handleChecklistChange(field: any, value: any) {
+    setChecklistResponses((old: any) => {
+      const novasRespostas = {
+        ...old,
+        [field.id]: {
+          field_id: field.id,
+          field_type: getFieldType(field.type),
+          field_value: value,
+        },
+      };
+
+      AsyncStorage.getItem(`@rascunho_relatorio_${chamadoId}`).then((saved) => {
+        const rascunho = saved ? JSON.parse(saved) : {};
+        rascunho.checklistResponses = novasRespostas;
+        AsyncStorage.setItem(`@rascunho_relatorio_${chamadoId}`, JSON.stringify(rascunho));
+      });
+
+      return novasRespostas;
+    });
+  }
+
   async function salvarEVoltar() {
     setSalvando(true);
     try {
       const cacheRascunho = await AsyncStorage.getItem(`@rascunho_relatorio_${chamadoId}`);
       const rascunho = cacheRascunho ? JSON.parse(cacheRascunho) : {};
-
-      rascunho.checklistResponses = respostasChecklist;
+      rascunho.checklistResponses = checklistResponses;
 
       await AsyncStorage.setItem(
         `@rascunho_relatorio_${chamadoId}`,
@@ -131,155 +112,208 @@ export default function TelaChecklistExclusiva() {
     }
   }
 
-  // Normaliza e extrai opções para campos de seleção
-  function obterOpcoesCampo(campo: CampoChecklist): string[] {
-    if (Array.isArray(campo.options)) return campo.options;
-    if (typeof campo.options === 'string' && campo.options.trim() !== '') {
-      return campo.options.split(',').map((op) => op.trim());
-    }
-    return ['Conforme', 'Não Conforme', 'N/A'];
-  }
-
-  if (carregando) {
+  if (loadingChecklist) {
     return (
-      <ScreenWrapper style={[estilos.conteiner, { backgroundColor: theme.background }]}>
+      <ScreenWrapper style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
         <StatusBar barStyle={darkMode ? 'light-content' : 'dark-content'} />
-        <View style={estilos.conteinerCarregamento}>
-          <ActivityIndicator size="large" color="#3b82f6" />
-          <Text style={[estilos.textoCarregando, { color: theme.subText }]}>
-            Carregando checklist...
-          </Text>
-        </View>
+        <ActivityIndicator size="large" color="#3b82f6" />
+        <Text style={[styles.loadingText, { color: theme.subText }]}>Carregando checklist...</Text>
       </ScreenWrapper>
     );
   }
 
   return (
-    <ScreenWrapper style={[estilos.conteiner, { backgroundColor: theme.background }]}>
+    <ScreenWrapper style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={darkMode ? 'light-content' : 'dark-content'} />
 
-      {/* Cabeçalho */}
-      <View
-        style={[
-          estilos.cabecalho,
-          { backgroundColor: theme.card, borderBottomColor: theme.border },
-        ]}
-      >
-        <TouchableOpacity style={estilos.botaoVoltar} onPress={() => router.back()}>
-          <ChevronLeft color={theme.text} size={26} />
-        </TouchableOpacity>
-
-        <View style={estilos.tituloCabecalhoBox}>
-          <Text style={[estilos.tituloCabecalho, { color: theme.text }]}>
-            Checklist do Chamado #{chamadoId}
-          </Text>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Barra Superior */}
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            style={[styles.backButton, { backgroundColor: theme.card }]}
+            onPress={() => router.back()}
+          >
+            <ChevronLeft color={theme.text} size={26} />
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity onPress={salvarEVoltar} disabled={salvando}>
-          {salvando ? (
-            <ActivityIndicator size="small" color="#3b82f6" />
-          ) : (
-            <Save color="#3b82f6" size={24} />
-          )}
-        </TouchableOpacity>
-      </View>
+        <Text style={[styles.title, { color: theme.text }]}>Preencher Checklist</Text>
+        <Text style={styles.subtitle}>Chamado #{chamadoId}</Text>
 
-      <ScrollView contentContainerStyle={estilos.conteudoScroll}>
-        {templateChecklist.length === 0 ? (
-          <View style={[estilos.cartaoVazio, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <FileText size={40} color="#94a3b8" />
-            <Text style={[estilos.textoVazio, { color: theme.subText }]}>
-              Nenhum checklist configurado para este chamado.
+        <View style={styles.section}>
+          {checklistTemplate.length === 0 ? (
+            <Text style={[styles.emptyChecklist, { backgroundColor: theme.card, color: theme.subText }]}>
+              Nenhum checklist encontrado para este serviço.
             </Text>
-          </View>
-        ) : (
-          templateChecklist.map((item, indice) => {
-            const campoId = String(item.id);
-            const tipoCampo = obterTipoCampo(item.type);
-            const respostaAtual = respostasChecklist[campoId]?.field_value;
-            const opcoes = obterOpcoesCampo(item);
-
-            return (
+          ) : (
+            checklistTemplate.map((field: any, index: number) => (
               <View
-                key={campoId || indice}
+                key={`${field.id}-${index}`}
                 style={[
-                  estilos.cartaoItem,
-                  { backgroundColor: theme.card, borderColor: theme.border },
+                  styles.checklistItem,
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: theme.border,
+                  },
                 ]}
               >
-                <Text style={[estilos.rotuloItem, { color: theme.text }]}>
-                  {indice + 1}. {item.label}
-                  {item.required && <Text style={{ color: '#ef4444' }}> *</Text>}
+                <Text style={[styles.checklistLabel, { color: theme.text }]}>
+                  {index + 1}. {field.label} {Number(field.required) === 1 ? '*' : ''}
                 </Text>
 
-                {/* Renderização de opções (Select / Radio / Buttons) */}
-                {tipoCampo === 'select' || tipoCampo === 'checkbox' ? (
-                  <View style={estilos.grupoOpcoes}>
-                    {opcoes.map((opcao) => {
-                      const selecionado = respostaAtual === opcao;
-                      return (
-                        <TouchableOpacity
-                          key={opcao}
-                          style={[
-                            estilos.opcaoChip,
-                            { borderColor: theme.border },
-                            selecionado && estilos.opcaoChipSelecionada,
-                          ]}
-                          onPress={() => atualizarResposta(item, opcao)}
-                        >
-                          <CheckCircle2
-                            size={16}
-                            color={selecionado ? '#ffffff' : theme.subText}
-                          />
-                          <Text
-                            style={[
-                              estilos.textoOpcaoChip,
-                              { color: theme.text },
-                              selecionado && estilos.textoOpcaoChipSelecionada,
-                            ]}
-                          >
-                            {opcao}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                ) : (
-                  /* Renderização de entrada de texto */
+                {/* Se for texto simples */}
+                {field.type === 'text' && (
                   <TextInput
                     style={[
-                      estilos.campoEntradaTexto,
+                      styles.input,
                       {
+                        backgroundColor: theme.background,
                         color: theme.text,
                         borderColor: theme.border,
-                        backgroundColor: darkMode ? '#1e293b' : '#f8fafc',
                       },
                     ]}
-                    placeholder="Digite a resposta..."
+                    placeholder="Digite aqui..."
                     placeholderTextColor={theme.subText}
-                    value={respostaAtual || ''}
-                    onChangeText={(texto) => atualizarResposta(item, texto)}
+                    value={checklistResponses[field.id]?.field_value || ''}
+                    onChangeText={(text) => handleChecklistChange(field, text)}
                   />
                 )}
-              </View>
-            );
-          })
-        )}
 
-        {/* Botão Inferior de Conclusão */}
-        {templateChecklist.length > 0 && (
+                {/* Se for caixa de texto multilinha */}
+                {field.type === 'textarea' && (
+                  <TextInput
+                    style={[
+                      styles.textAreaSmall,
+                      {
+                        backgroundColor: theme.background,
+                        color: theme.text,
+                        borderColor: theme.border,
+                      },
+                    ]}
+                    multiline
+                    placeholder="Digite aqui..."
+                    placeholderTextColor={theme.subText}
+                    value={checklistResponses[field.id]?.field_value || ''}
+                    onChangeText={(text) => handleChecklistChange(field, text)}
+                  />
+                )}
+
+                {/* Se for Select (Botões em Lista Vertical) */}
+                {field.type === 'select' &&
+                  field.options?.split('|').map((option: string, opIndex: number) => (
+                    <TouchableOpacity
+                      key={opIndex}
+                      style={[
+                        styles.optionButton,
+                        {
+                          backgroundColor: theme.background,
+                          borderColor: theme.border,
+                        },
+                        checklistResponses[field.id]?.field_value === opIndex &&
+                          styles.optionButtonSelected,
+                      ]}
+                      onPress={() => handleChecklistChange(field, opIndex)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.optionText,
+                          {
+                            color:
+                              checklistResponses[field.id]?.field_value === opIndex
+                                ? '#fff'
+                                : theme.text,
+                          },
+                        ]}
+                      >
+                        {option}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+
+                {/* Se for Radio (Uma Única Escolha) */}
+                {field.type === 'radio' &&
+                  field.options?.split('|').map((option: string, opIndex: number) => (
+                    <TouchableOpacity
+                      key={opIndex}
+                      style={styles.radioRow}
+                      onPress={() => handleChecklistChange(field, opIndex)}
+                      activeOpacity={0.7}
+                    >
+                      <View
+                        style={[
+                          styles.radioCircle,
+                          checklistResponses[field.id]?.field_value === opIndex &&
+                            styles.radioCircleSelected,
+                        ]}
+                      />
+                      <Text style={[styles.optionText, { color: theme.text }]}>
+                        {option}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+
+                {/* Se for Checkbox (Múltiplas Escolhas) */}
+                {field.type === 'checkbox' &&
+                  field.options?.split('|').map((option: string, opIndex: number) => {
+                    const selected =
+                      checklistResponses[field.id]?.field_value
+                        ?.split(',')
+                        .includes(String(opIndex)) || false;
+
+                    return (
+                      <TouchableOpacity
+                        key={opIndex}
+                        style={styles.radioRow}
+                        onPress={() => {
+                          const current =
+                            checklistResponses[field.id]?.field_value
+                              ?.split(',')
+                              .filter(Boolean) || [];
+
+                          let updated;
+                          if (current.includes(String(opIndex))) {
+                            updated = current.filter(
+                              (i: string) => i !== String(opIndex)
+                            );
+                          } else {
+                            updated = [...current, String(opIndex)];
+                          }
+
+                          handleChecklistChange(field, updated.join(','));
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View
+                          style={[
+                            styles.checkboxBox,
+                            selected && styles.checkboxBoxSelected,
+                          ]}
+                        />
+                        <Text style={[styles.optionText, { color: theme.text }]}>
+                          {option}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+              </View>
+            ))
+          )}
+        </View>
+
+        {checklistTemplate.length > 0 && (
           <TouchableOpacity
-            style={estilos.botaoSalvarFlutuante}
-            onPress={salvarEVoltar}
             disabled={salvando}
+            style={[styles.submitBtn, salvando && styles.submitBtnDisabled]}
+            onPress={salvarEVoltar}
           >
             {salvando ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <>
-                <Save size={20} color="#fff" />
-                <Text style={estilos.textoBotaoSalvar}>Salvar Checklist</Text>
-              </>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Check color="#fff" size={24} />
+                <Text style={styles.submitBtnText}>Salvar Checklist</Text>
+              </View>
             )}
           </TouchableOpacity>
         )}
@@ -288,111 +322,134 @@ export default function TelaChecklistExclusiva() {
   );
 }
 
-const estilos = StyleSheet.create({
-  conteiner: {
+const styles = StyleSheet.create({
+  container: {
     flex: 1,
   },
-  conteinerCarregamento: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  textoCarregando: {
-    marginTop: 12,
-    fontSize: 14,
-  },
-  cabecalho: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-  },
-  botaoVoltar: {
-    padding: 4,
-  },
-  tituloCabecalhoBox: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  tituloCabecalho: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  conteudoScroll: {
-    padding: 16,
+  scrollContent: {
+    padding: 20,
     paddingBottom: 40,
   },
-  cartaoVazio: {
-    padding: 30,
+  topBar: {
+    marginBottom: 15,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
     borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
+    alignItems: 'center',
   },
-  textoVazio: {
-    marginTop: 12,
+  title: {
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
+  subtitle: {
+    color: '#3b82f6',
+    marginBottom: 20,
     fontSize: 15,
-    textAlign: 'center',
   },
-  cartaoItem: {
-    padding: 16,
+  section: {
+    marginBottom: 25,
+  },
+  checklistItem: {
     borderRadius: 12,
-    borderWidth: 1,
+    padding: 14,
     marginBottom: 14,
+    borderWidth: 1,
   },
-  rotuloItem: {
+  checklistLabel: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: 'bold',
     marginBottom: 12,
   },
-  grupoOpcoes: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+  input: {
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 8,
+    fontSize: 16,
+    borderWidth: 1,
   },
-  opcaoChip: {
+  textAreaSmall: {
+    borderRadius: 12,
+    padding: 15,
+    minHeight: 100,
+    textAlignVertical: 'top',
+    borderWidth: 1,
+    fontSize: 15,
+  },
+  optionButton: {
+    padding: 13,
+    borderRadius: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+  },
+  optionButtonSelected: {
+    borderColor: '#3b82f6',
+    backgroundColor: '#1d4ed8',
+  },
+  optionText: {
+    fontSize: 14,
+  },
+  radioRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 6,
+    gap: 10,
+    marginBottom: 12,
+    paddingVertical: 4,
   },
-  opcaoChipSelecionada: {
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#64748b',
+  },
+  radioCircleSelected: {
     backgroundColor: '#3b82f6',
     borderColor: '#3b82f6',
   },
-  textoOpcaoChip: {
-    fontSize: 14,
-    fontWeight: '500',
+  checkboxBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: '#64748b',
   },
-  textoOpcaoChipSelecionada: {
-    color: '#ffffff',
+  checkboxBoxSelected: {
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
   },
-  campoEntradaTexto: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-  },
-  botaoSalvarFlutuante: {
-    backgroundColor: '#10b981',
-    flexDirection: 'row',
-    alignItems: 'center',
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
-    padding: 16,
-    borderRadius: 10,
-    gap: 10,
-    marginTop: 10,
+    alignItems: 'center',
+    padding: 25,
   },
-  textoBotaoSalvar: {
-    color: '#ffffff',
-    fontSize: 16,
+  loadingText: {
+    marginTop: 8,
+    fontSize: 14,
+  },
+  emptyChecklist: {
+    padding: 15,
+    borderRadius: 12,
+  },
+  submitBtn: {
+    backgroundColor: '#10b981',
+    height: 60,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 30,
+  },
+  submitBtnDisabled: {
+    backgroundColor: '#334155',
+  },
+  submitBtnText: {
+    color: '#fff',
     fontWeight: 'bold',
+    fontSize: 16,
   },
 });

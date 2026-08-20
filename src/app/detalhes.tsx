@@ -867,7 +867,7 @@ export default function DetalhesChamado() {
                 </Link>
 
 
-             
+                {/*
                 {podePreencherChecklist && (
                   <Link
                     href={{
@@ -885,6 +885,7 @@ export default function DetalhesChamado() {
                     </TouchableOpacity>
                   </Link>
                 )}
+                  */}
               </View>
             )}
 

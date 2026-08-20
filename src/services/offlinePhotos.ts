@@ -1,20 +1,3 @@
-/**
- * offlinePhotos.ts
- *
- * Gerencia o armazenamento persistente de fotos para envio offline.
- *
- * Fluxo:
- * 1. Ao tirar uma foto offline, `salvarFotoParaSync` copia o arquivo para um
- *    diretório permanente (fora do cache) e enfileira o item no offlineQueue.
- * 2. Quando a internet voltar, `sincronizarPendentes` (sync.ts) processa a fila
- *    e chama `sincronizarFotoChamado`, que já lida com upload + remoção local.
- *
- * Por que copiar o arquivo?
- * - Fotos tiradas pela câmera ficam em diretórios temporários que o SO pode
- *   limpar. Copiar para `documentDirectory` garante que o arquivo sobreviva
- *   ao fechamento e reabertura do app.
- */
-
 
 import { adicionarNaFila } from "./offlineQueue";
 import * as ImagePicker from 'expo-image-picker';
