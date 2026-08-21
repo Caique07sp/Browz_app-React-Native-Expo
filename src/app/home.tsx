@@ -25,7 +25,8 @@ import {
   Play,
   Pause,
   ClipboardCheck,
-  FileCheck
+  FileCheck,
+  Calendar
 } from "lucide-react-native";
 import React, { useEffect, useState, useRef, useCallback, memo } from "react";
 import {
@@ -56,14 +57,17 @@ import { getApiUrl } from "@/services/api";
 
 let alertaDeslogarVisivel = false;
 
-// ==========================================
+/// ==========================================
 // COMPONENTE ISOLADO DE CARD (OTIMIZADO)
 // ==========================================
 const saoIguais = (propsAnteriores: any, proximasProps: any) => {
   return (
     propsAnteriores.chamado.calendar_status === proximasProps.chamado.calendar_status &&
     propsAnteriores.chamado.agenda_pause === proximasProps.chamado.agenda_pause &&
-    propsAnteriores.chamado.calendar_id === proximasProps.chamado.calendar_id
+    propsAnteriores.chamado.calendar_id === proximasProps.chamado.calendar_id &&
+    propsAnteriores.tema.card === proximasProps.tema.card &&
+    propsAnteriores.tema.background === proximasProps.tema.background &&
+    propsAnteriores.tema.text === proximasProps.tema.text
   );
 };
 
@@ -78,8 +82,9 @@ const CartaoChamado = memo(({
   aoAbrirDeslize,
   aoRegistrarRef,
   aoNavegarDetalhes,
-  aoNavegarChecklist,
-  aoNavegarDetalhesChamado
+  aoNavegarEditarRelatorio,
+  aoNavegarDetalhesChamados,
+  aoNavegarChecklist
 }: any) => {
   const status = Number(chamado.calendar_status);
   const pausado = Number(chamado.agenda_pause) === 1;
@@ -89,28 +94,28 @@ const CartaoChamado = memo(({
       <View style={estilos.recipienteAcoesDeslize}>
         {status === 0 && (
           <TouchableOpacity
-            style={[estilos.botaoAcaoDeslize, { backgroundColor:"#e9ae37e5" }]}
-            onPress={() => aoNavegarDetalhes(chamado.calendar_id)}
+            style={[estilos.botaoAcaoDeslize, { backgroundColor: "rgba(255, 162, 0, 0.58)" }]}
+            onPress={() => aoNavegarDetalhes(chamado.calendar_id, chamado.service_type_id)}
           >
-            <Play size={20} color="#fff" />
+            <CheckCircle2 size={20} color="#fff" />
             <Text style={estilos.textoAcaoDeslize}>Check-in</Text>
           </TouchableOpacity>
         )}
 
         {status === 1 && !pausado && (
           <TouchableOpacity
-            style={[estilos.botaoAcaoDeslize, { backgroundColor: "#3b82f6" }]}
-            onPress={() => aoNavegarDetalhes(chamado.calendar_id)}
+            style={[estilos.botaoAcaoDeslize, { backgroundColor: "#3b83f6a8" }]}
+            onPress={() => aoNavegarDetalhes(chamado.calendar_id, chamado.service_type_id)}
           >
-            <CheckCircle2 size={20} color="#fff" />
+            <Play size={20} color="#fff" />
             <Text style={estilos.textoAcaoDeslize}>Check-out</Text>
           </TouchableOpacity>
         )}
 
         {status === 1 && pausado && (
           <TouchableOpacity
-            style={[estilos.botaoAcaoDeslize, { backgroundColor: "#e67399" }]}
-            onPress={() => aoNavegarDetalhes(chamado.calendar_id)}
+            style={[estilos.botaoAcaoDeslize, { backgroundColor: "#e67399c9" }]}
+            onPress={() => aoNavegarDetalhes(chamado.calendar_id, chamado.service_type_id)}
           >
             <Pause size={20} color="#fff" />
             <Text style={estilos.textoAcaoDeslize}>Retomar</Text>
@@ -119,17 +124,17 @@ const CartaoChamado = memo(({
 
         {status === 2 && (
           <TouchableOpacity
-            style={[estilos.botaoAcaoDeslize, { backgroundColor: "#22c55e" }]}
-            onPress={() => aoNavegarDetalhes(chamado.calendar_id)}
+            style={[estilos.botaoAcaoDeslize, { backgroundColor: "#22c55eb2" }]}
+            onPress={() => aoNavegarEditarRelatorio(chamado.calendar_id, chamado.service_type_id)}
           >
             <FileCheck size={20} color="#fff" />
-            <Text style={estilos.textoAcaoDeslize}>Ver Detalhes</Text>
+            <Text style={estilos.textoAcaoDeslize}>Detalhes</Text>
           </TouchableOpacity>
         )}
 
         {status === 1 && (
           <TouchableOpacity
-            style={[estilos.botaoAcaoDeslize, { backgroundColor: "#8b5cf6" }]}
+            style={[estilos.botaoAcaoDeslize, { backgroundColor: "#8a5cf6bd" }]}
             onPress={() => aoNavegarChecklist(chamado.calendar_id)}
           >
             <ClipboardCheck size={20} color="#fff" />
@@ -150,7 +155,7 @@ const CartaoChamado = memo(({
     >
       <TouchableOpacity
         activeOpacity={0.8}
-        onPress={() => aoNavegarDetalhesChamado(chamado.calendar_id)}
+        onPress={() => aoNavegarDetalhesChamados(chamado.calendar_id, chamado.service_type_id)}
       >
         <View
           style={{
@@ -196,7 +201,7 @@ const CartaoChamado = memo(({
 
             <View style={estilos.rodapeCartao}>
               <View style={estilos.informacaoRodape}>
-                <Inbox size={14} color="#64748b" />
+                <Inbox size={14} color={tema.subText} />
                 <Text style={[estilos.textoRodape, { color: tema.subText }]}>
                   {textoCategoria}
                 </Text>
@@ -208,7 +213,6 @@ const CartaoChamado = memo(({
     </Swipeable>
   );
 }, saoIguais);
-
 
 // ==========================================
 // COMPONENTE PRINCIPAL
@@ -268,14 +272,29 @@ export default function Browz() {
     idAbertoAtualmente.current = id;
   }, []);
 
-  const navegarDetalhes = useCallback((id: string) => {
-    if (idAbertoAtualmente.current) {
-      const ref = refsDeslize.current.get(idAbertoAtualmente.current);
-      if (ref) ref.close();
-    }
-    router.navigate({ pathname: "/check", params: { id } });
-  }, []);
-  const aoNavegarDetalhesChamado = useCallback((id: string) => {
+  const navegarEditarRelatorio= useCallback((id: string, service_type_id?: any) => {
+  if (idAbertoAtualmente.current) {
+    const ref = refsDeslize.current.get(idAbertoAtualmente.current);
+    if (ref) ref.close();
+  }
+  router.navigate({
+    pathname: "/visualizar-relatorio",
+    params: { id, service_type_id, ticketId: id },
+  });
+}, []);
+
+
+ const navegarDetalhes = useCallback((id: string, service_type_id?: any) => {
+  if (idAbertoAtualmente.current) {
+    const ref = refsDeslize.current.get(idAbertoAtualmente.current);
+    if (ref) ref.close();
+  }
+  router.navigate({
+    pathname: "/check",
+    params: { id, service_type_id },
+  });
+}, []);
+  const aoNavegarDetalhesChamados = useCallback((id: string) => {
     if (idAbertoAtualmente.current) {
       const ref = refsDeslize.current.get(idAbertoAtualmente.current);
       if (ref) ref.close();
@@ -902,6 +921,7 @@ export default function Browz() {
         {/* LISTA DE CHAMADOS OTMIZADA */}
         <FlatList
           data={filteredChamados}
+          extraData={theme}
           keyExtractor={(item) => String(item.calendar_id)}
           initialNumToRender={10}
           maxToRenderPerBatch={10}
@@ -956,8 +976,9 @@ export default function Browz() {
               aoAbrirDeslize={lidarComAberturaDeslize}
               aoRegistrarRef={registrarRefDeslize}
               aoNavegarDetalhes={navegarDetalhes}
+              aoNavegarEditarRelatorio={navegarEditarRelatorio}
               aoNavegarChecklist={navegarChecklist}
-              aoNavegarDetalhesChamado={aoNavegarDetalhesChamado}
+              aoNavegarDetalhesChamados={aoNavegarDetalhesChamados}
             />
           )}
         />
@@ -1109,10 +1130,7 @@ export default function Browz() {
                     <ChevronRight size={16} color={theme.subText} />
                   </TouchableOpacity>
 
-                  <TouchableOpacity style={estilos.itemMenu} onPress={() => { setMenuVisible(false); router.push("/home"); }}>
-                    <LayoutDashboard size={20} color="#3b82f6" />
-                    <Text style={[estilos.textoMenu, { color: theme.text }]}>Home</Text>
-                  </TouchableOpacity>
+                
 
                   <TouchableOpacity style={estilos.itemMenu} onPress={() => { setMenuVisible(false); router.push("/mapa-chamados"); }}>
                     <MapPin size={20} color="#3b82f6" />

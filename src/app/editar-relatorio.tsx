@@ -1106,7 +1106,7 @@ export default function EditarRelatorio() {
               onPress={async () => {
                 await salvarRascunhoRelatorio();
 
-                router.replace({
+                router.push({
                   pathname: '/assinatura-cliente',
                   params: { ticketId: chamadoId },
                 });

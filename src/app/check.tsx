@@ -460,7 +460,7 @@ export default function CheckInScreen() {
       <StatusBar barStyle={darkMode ? "light-content" : "dark-content"} />
 
       <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
-        <TouchableOpacity style={[styles.closeButton, { backgroundColor: theme.background }]} onPress={() => router.back()}>
+        <TouchableOpacity style={[styles.closeButton, { backgroundColor: theme.background }]} onPress={() => router.replace('/home')}>
           <X color={theme.subText} size={24} />
         </TouchableOpacity>
 
