@@ -1,7 +1,11 @@
 import { Platform, StyleSheet } from "react-native";
 
 export const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a', paddingTop: Platform.OS === 'android' ? 5 : 0, },
+  container: {
+    flex: 1,
+    backgroundColor: '#0f172a',
+    paddingTop: Platform.OS === 'android' ? 5 : 0,
+  },
 
   header: {
     flexDirection: 'row',
@@ -124,6 +128,25 @@ export const styles = StyleSheet.create({
     marginBottom: 15,
   },
 
+  /* --- ESTILOS DOS BOTÕES DA GRADE (ORÇAMENTO, FOTOS, PAUSA) --- */
+  actionButton: {
+    flex: 1,
+    backgroundColor: '#1e293b',
+    height: 75,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
+    gap: 6,
+  },
+
+  actionText: {
+    color: '#f8fafc',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
   secondaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -154,6 +177,7 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 12,
   },
+  
 
   finishBtn: {
     backgroundColor: '#10b981',
@@ -163,6 +187,41 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
+  },
+
+  btnDesabilitado: {
+    backgroundColor: '#334155',
+    borderColor: '#475569',
+    opacity: 0.7,
+  },
+
+  infoCardPreCheckin: {
+    borderWidth: 1,
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 20,
+  },
+
+  infoCardTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 14,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    opacity: 0.9,
+  },
+
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+
+  infoRowText: {
+    fontSize: 13,
+    flex: 1,
+    lineHeight: 18,
   },
 
   modalOverlay: {
@@ -217,44 +276,15 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // Adicione estes novos estilos no final do seu arquivo de estilização:
-  btnDesabilitado: {
-    backgroundColor: '#334155', // Cor de fundo cinza escuro opaco indicando bloqueio
-    borderColor: '#475569',
-    opacity: 0.7,
-  },
-  infoCardPreCheckin: {
-    borderWidth: 1,
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 20,
-  },
-  infoCardTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 14,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    opacity: 0.9,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-  },
-  infoRowText: {
-    fontSize: 13,
-    flex: 1,
-    lineHeight: 18,
-  },
-modalOverlayPhoto: {
+
+  modalOverlayPhoto: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
+
   modalContentPhoto: {
     width: '100%',
     maxWidth: 380,
@@ -263,17 +293,20 @@ modalOverlayPhoto: {
     padding: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor:  '#334155',
+    borderColor: '#334155',
   },
+
   modalTitlePhoto: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#f8fafc',
     marginBottom: 16,
   },
+
   modalButtonsContainer: {
     width: '100%',
   },
+
   modalText: {
     fontSize: 15,
     color: '#475569',
@@ -281,6 +314,7 @@ modalOverlayPhoto: {
     lineHeight: 22,
     marginBottom: 24,
   },
+
   modalButton: {
     flex: 1,
     paddingVertical: 12,
@@ -288,19 +322,23 @@ modalOverlayPhoto: {
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   modalButtonCancel: {
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#CBD5E1',
   },
+
   modalButtonCancelText: {
     color: '#475569',
     fontWeight: '600',
     fontSize: 14,
   },
+
   modalButtonConfirm: {
     backgroundColor: '#2563EB',
   },
+
   modalButtonConfirmText: {
     color: '#FFF',
     fontWeight: '600',

@@ -9,6 +9,7 @@ import { getApiUrl } from "@/services/api";
 import {
   Camera as CameraIcon,
   CheckCircle,
+  DollarSign,
   MapPin,
   Pause,
   Play,
@@ -547,7 +548,7 @@ export default function CheckInScreen() {
           {!started ? (
             <TouchableOpacity
               style={[
-                styles.startBtn, 
+                styles.startBtn,
                 (!location || isStarting) && styles.btnDesabilitado
               ]}
               onPress={handleStart}
@@ -572,27 +573,39 @@ export default function CheckInScreen() {
             </TouchableOpacity>
           ) : (
             <>
+              {/* Exemplo de integração dentro de CheckInScreen.tsx */}
               <View style={styles.actionGrid}>
+                {/* Novo Botão de Orçamento */}
                 <TouchableOpacity
-                  style={[styles.secondaryBtn, { flex: 1, backgroundColor: theme.card, borderColor: theme.border }]}
-                  onPress={() => router.replace({ pathname: '/fotos-chamado', params: { id: ticketId } })}
+                  style={styles.actionButton}
+                  onPress={() => router.push({ pathname: '/OrcamentoChamado', params: { id: ticketId } })}
                 >
-                  <CameraIcon color={theme.text} size={20} />
-                  <Text style={[styles.btnText, { color: theme.text }]}>Enviar Imagens</Text>
+                  <DollarSign color="#0284c7" size={24} />
+                  <Text style={styles.actionText}>Orçamento</Text>
                 </TouchableOpacity>
 
+                {/* Botão de Câmera/Fotos já existente */}
                 <TouchableOpacity
-                  style={[styles.secondaryBtn, { flex: 1, backgroundColor: theme.card, borderColor: '#f59e0b' }]}
+                  style={styles.actionButton}
+                  onPress={() => router.replace({ pathname: '/fotos-chamado', params: { id: ticketId } })}
+                >
+                  <CameraIcon color={theme.text} size={24} />
+                  <Text style={styles.actionText}>Enviar Imagens</Text>
+                </TouchableOpacity>
+
+                {/* Botão de Pausa */}
+                <TouchableOpacity
+                  style={styles.actionButton}
                   onPress={() => setModalType('pause')}
                 >
-                  <Pause color="#f59e0b" size={20} fill="#f59e0b" />
-                  <Text style={[styles.btnText, { color: '#f59e0b' }]}>Pausar</Text>
+                  <Pause color="#f59e0b" size={24} />
+                  <Text style={styles.actionText}>Pausar</Text>
                 </TouchableOpacity>
               </View>
 
               <TouchableOpacity style={styles.finishBtn} onPress={handleFinish}>
                 <CheckCircle color="#fff" size={24} />
-                <Text style={styles.btnMainText}>Finalizar Chamado</Text>
+                <Text style={styles.btnMainText}>Control z Never</Text>
               </TouchableOpacity>
             </>
           )}
