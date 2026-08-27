@@ -250,8 +250,8 @@ export default function Browz() {
   const refsDeslize = useRef(new Map());
   const idAbertoAtualmente = useRef<string | null>(null);
 
-  const logoLight = require("../assets/browz.png");
-  const logoDark = require("../assets/logo-white.png");
+  const logoLight = require("../assets/new_logo_horizontal_black.png");
+  const logoDark = require("../assets/new_logo_horizontal_white.png");
 
   // ==========================================
   // FUNÇÕES DE CALLBACK PARA OS CARDS

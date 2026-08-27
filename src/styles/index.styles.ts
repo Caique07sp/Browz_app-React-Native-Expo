@@ -41,8 +41,8 @@ export const styles = StyleSheet.create({
     marginBottom: 32,
   },
   logoImage: {
-    width: 220,
-    height: 60,
+    width: 1000,
+    height: 100,
     marginBottom: 20,
   },
   subtitleText: {

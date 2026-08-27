@@ -22,8 +22,8 @@ export const estilos = StyleSheet.create({
     alignItems: "center",
   },
   imagemLogo: {
-    width: 120,
-    height: 30,
+    width: 200,
+    height: 70,
     resizeMode: "contain",
   },
   iconesCabecalho: {
@@ -54,7 +54,7 @@ export const estilos = StyleSheet.create({
   secaoPesquisa: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 10,
+    marginTop: -1,
     margin:20,
     marginBottom: 25,
   },

@@ -1,8 +1,8 @@
 import { useTheme } from "@/theme/ThemeContext";
 import { useRouter } from "expo-router";
-import { ArrowLeft, CheckCircle2, Code, Cpu, Heart, Layers, ShieldCheck } from "lucide-react-native";
+import { ArrowLeft, CheckCircle2, Cpu, Heart, Layers, ShieldCheck } from "lucide-react-native";
 import React from "react";
-import { Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 
 export default function SobreScreen() {
@@ -26,9 +26,12 @@ export default function SobreScreen() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.logoContainer}>
-          <View style={[styles.logoPlaceholder, { backgroundColor: theme.primary }]}>
-            <Code color="#fff" size={36} />
-          </View>
+          {/* Substitua o caminho do require pelo local real da sua imagem da logo */}
+          <Image
+            source={require("@/assets/new_logo_square.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <Text style={[styles.appName, { color: theme.text }]}>Browz Mobile</Text>
           <Text style={[styles.versionText, { color: theme.subText }]}>Versão 1.0.0_140726_1336</Text>
         </View>
@@ -123,7 +126,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: "bold" },
   content: { padding: 20, gap: 16 },
   logoContainer: { alignItems: "center", marginTop: 10, marginBottom: 20, gap: 6 },
-  logoPlaceholder: { width: 76, height: 76, borderRadius: 20, justifyContent: "center", alignItems: "center", elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+  logo: { width: 80, height: 80, borderRadius: 16 },
   appName: { fontSize: 22, fontWeight: "bold" },
   versionText: { fontSize: 13, fontWeight: "500" },
   card: { borderRadius: 16, padding: 16, borderWidth: 1, gap: 12 },

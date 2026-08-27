@@ -325,7 +325,7 @@ export default function App() {
         <View style={styles.background}>
           <View style={styles.card}>
             <View style={styles.logoContainer}>
-              <Image source={require("@/assets/browz.png")} style={styles.logoImage} resizeMode="contain" />
+              <Image source={require("@/assets/new_logo_horizontal_black.png")} style={{ ...styles.logoImage, width: 1000 }} resizeMode="contain" />
               <Text style={styles.subtitleText}>
                 Gestão de <Text style={styles.boldBlueText}>serviços</Text> na palma da sua <Text style={styles.boldBlueText}>mão.</Text>
               </Text>
