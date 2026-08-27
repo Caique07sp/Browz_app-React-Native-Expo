@@ -3,18 +3,29 @@ import { useTheme } from "@/theme/ThemeContext";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Check, ChevronLeft, PenTool, Trash2 } from 'lucide-react-native';
+import { 
+  Check, 
+  CheckCircle2, // <-- Adicione este
+  ChevronLeft, 
+  Clock,        // <-- Adicione este
+  PenTool, 
+  Trash2, 
+  XCircle       // <-- Adicione este
+} from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
     Image,
+    Modal,
     ScrollView,
     Text,
     TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
+
+
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { styles } from "../styles/edit-report.styles";
 import { getApiUrl } from "@/services/api";
@@ -42,6 +53,25 @@ export default function EditarRelatorio() {
   const { theme, darkMode } = useTheme();
 
   const [carregouUmaVez, setCarregouUmaVez] = useState(false);
+
+  // Estados do Modal de Alerta Personalizado
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertData, setAlertData] = useState({
+    titulo: '',
+    mensagem: '',
+    tipo: 'success' as 'success' | 'warning' | 'error',
+    onClose: () => {},
+  });
+
+  function mostrarAlerta(
+    titulo: string,
+    mensagem: string,
+    tipo: 'success' | 'warning' | 'error' = 'success',
+    onCloseAction: () => void = () => {}
+  ) {
+    setAlertData({ titulo, mensagem, tipo, onClose: onCloseAction });
+    setAlertVisible(true);
+  }
 
   useFocusEffect(
     React.useCallback(() => {
@@ -382,7 +412,7 @@ export default function EditarRelatorio() {
         resposta.field_value === null ||
         String(resposta.field_value).trim() === ''
       ) {
-        Alert.alert('Checklist obrigatório', `Responda o campo: ${field.label}`);
+        mostrarAlerta('Checklist obrigatório', `Responda o campo: ${field.label}`, 'warning');
         return false;
       }
     }
@@ -560,25 +590,22 @@ export default function EditarRelatorio() {
   async function handleSaveChanges() {
     if (sending) return;
     if (!description.trim()) {
-      return Alert.alert('Erro', 'Descreva o serviço.');
+     return mostrarAlerta('Erro', 'Descreva o serviço.', 'error');
     }
     if (!validarChecklistObrigatorio()) {
       return;
     }
     if (!signerName.trim()) {
-      return Alert.alert('Erro', 'Informe o nome de quem assinou.');
+      return mostrarAlerta('Erro', 'Informe o nome de quem assinou.', 'error');
     }
     if (!signerContact.trim()) {
-      return Alert.alert('Erro', 'Informe o e-mail de quem assinou.');
+      return mostrarAlerta('Erro', 'Informe o e-mail de quem assinou.', 'error');
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerContact.trim())) {
-      return Alert.alert('Erro', 'Por favor, insira um e-mail válido.');
+      return mostrarAlerta('Erro', 'Por favor, insira um e-mail válido.', 'error');
     }
     if (hasChanges && !signatureImg) {
-      return Alert.alert(
-        'Nova assinatura necessária',
-        'Como houve alteração no relatório, é necessário coletar uma nova assinatura.'
-      );
+      return mostrarAlerta('Nova assinatura necessária', 'Como houve alteração no relatório, é necessário coletar uma nova assinatura.', 'warning');
     }
     try {
       setSending(true);
@@ -651,22 +678,24 @@ export default function EditarRelatorio() {
           `@rascunho_relatorio_${chamadoId}`
         );
 
-        Alert.alert('Sucesso', 'Relatório atualizado com sucesso!', [
-          {
-            text: 'OK',
-            onPress: () =>
-              router.replace({
-                pathname: '/visualizar-relatorio',
-                params: { ticketId: chamadoId },
-              }),
-          },
-        ]);
-      } else {
-        Alert.alert(
-          'Atenção',
-          'Alguns dados podem não ter sido atualizados. Verifique a conexão.'
-        );
-      }
+       mostrarAlerta(
+        'Sucesso!',
+        'Relatório atualizado com sucesso!',
+        'success',
+        () =>
+          router.replace({
+            pathname: '/visualizar-relatorio',
+            params: { ticketId: chamadoId },
+          })
+      );
+    } else {
+      mostrarAlerta(
+        'Atenção',
+        'Alguns dados podem não ter sido atualizados. Verifique a conexão.',
+        'warning'
+      );
+    }
+  
     } catch (error) {
       //console.log('ERRO AO SALVAR ALTERAÇÕES:', error);
       Alert.alert('Erro', 'Não foi possível salvar as alterações.');
@@ -1144,6 +1173,116 @@ export default function EditarRelatorio() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* MODAL DE ALERTA PERSONALIZADO */}
+      <Modal
+        transparent
+        visible={alertVisible}
+        animationType="fade"
+        onRequestClose={() => {
+          setAlertVisible(false);
+          alertData.onClose();
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.75)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 24,
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 340,
+              backgroundColor: theme.card,
+              borderRadius: 24,
+              padding: 24,
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: theme.border,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.25,
+              shadowRadius: 15,
+              elevation: 10,
+            }}
+          >
+            {/* Ícone Indicador de Status */}
+            <View
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 32,
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 16,
+                backgroundColor:
+                  alertData.tipo === 'success'
+                    ? 'rgba(34, 197, 94, 0.15)'
+                    : alertData.tipo === 'warning'
+                    ? 'rgba(245, 158, 11, 0.15)'
+                    : 'rgba(239, 68, 68, 0.15)',
+              }}
+            >
+              {alertData.tipo === 'success' && <CheckCircle2 size={36} color="#22c55e" />}
+              {alertData.tipo === 'warning' && <Clock size={36} color="#f59e0b" />}
+              {alertData.tipo === 'error' && <XCircle size={36} color="#ef4444" />}
+            </View>
+
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: '800',
+                color: theme.text,
+                textAlign: 'center',
+                marginBottom: 8,
+              }}
+            >
+              {alertData.titulo}
+            </Text>
+
+            <Text
+              style={{
+                fontSize: 14,
+                color: theme.subText,
+                textAlign: 'center',
+                lineHeight: 20,
+                marginBottom: 24,
+              }}
+            >
+              {alertData.mensagem}
+            </Text>
+
+            <TouchableOpacity
+              style={{
+                width: '100%',
+                paddingVertical: 14,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor:
+                  alertData.tipo === 'success'
+                    ? '#22c55e'
+                    : alertData.tipo === 'warning'
+                    ? '#f59e0b'
+                    : '#ef4444',
+              }}
+              onPress={() => {
+                setAlertVisible(false);
+                alertData.onClose();
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 15 }}>
+                OK, Entendido
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScreenWrapper>
   );
 }

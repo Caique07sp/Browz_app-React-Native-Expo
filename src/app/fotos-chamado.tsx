@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Modal,
-    Platform,
-    ScrollView,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Platform,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { styles } from "../styles/photo.styles";
 
@@ -22,7 +22,19 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Camera, ChevronLeft, Eye, Image as ImageIcon, Play, Trash2, Video, X } from 'lucide-react-native';
+import {
+  Camera,
+  CheckCircle2,
+  ChevronLeft,
+  Clock,
+  Eye,
+  Image as ImageIcon,
+  Play,
+  Trash2,
+  Video,
+  X,
+  XCircle,
+} from 'lucide-react-native';
 
 import { ResizeMode, Video as VideoPlayer } from 'expo-av';
 
@@ -52,6 +64,24 @@ export default function FotosChamado() {
   const [fotoUriSelecionada, setFotoUriSelecionada] = useState<string | null>(null);
 
   const { theme } = useTheme();
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertData, setAlertData] = useState({
+    titulo: '',
+    mensagem: '',
+    tipo: 'success' as 'success' | 'warning' | 'error',
+    onClose: () => {},
+  });
+
+
+  function mostrarAlerta(
+    titulo: string,
+    mensagem: string,
+    tipo: 'success' | 'warning' | 'error' = 'success',
+    onCloseAction: () => void = () => {}
+  ) {
+    setAlertData({ titulo, mensagem, tipo, onClose: onCloseAction });
+    setAlertVisible(true);
+  }
 
   useEffect(() => {
     carregarFotosSalvas();
@@ -78,7 +108,7 @@ export default function FotosChamado() {
         setFotos(validas);
       }
     } catch (e) {
-      Alert.alert('Erro', 'Não foi possível carregar as mídias.');
+      mostrarAlerta('Erro', 'Não foi possível carregar as mídias.', 'error');
     } finally {
       setLoading(false);
     }
@@ -102,15 +132,15 @@ export default function FotosChamado() {
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permissao.granted) {
-      Alert.alert(
+      mostrarAlerta(
         'Atenção',
-        `Precisamos de permissão para acessar a ${precisaCamera ? 'câmera' : 'galeria'}.`
+        `Precisamos de permissão para acessar a ${precisaCamera ? 'câmera' : 'galeria'}.`,
+        'warning'
       );
       return;
     }
 
     try {
-      // Configuração separada por tipo para garantir compatibilidade
       let resultado: ImagePicker.ImagePickerResult;
 
       if (origem === 'camera_foto') {
@@ -121,7 +151,7 @@ export default function FotosChamado() {
       } else if (origem === 'camera_video') {
         resultado = await ImagePicker.launchCameraAsync({
           mediaTypes: ['videos'],
-          videoMaxDuration: 120, // máximo de 2 minutos
+          videoMaxDuration: 120,
           quality: 0.4,
         });
       } else {
@@ -172,21 +202,20 @@ export default function FotosChamado() {
         sincronizarPendentes().catch((e) =>
           console.warn('⚠️ Sync em background falhou:', e)
         );
-        Alert.alert('Sucesso', `${novasURIs.length} arquivo(s) salvo(s) e enviado(s).`);
+        mostrarAlerta('Sucesso', `${novasURIs.length} arquivo(s) salvo(s) e enviado(s).`, 'success');
       } else {
-        Alert.alert(
+        mostrarAlerta(
           'Modo Offline',
-          `${novasURIs.length} arquivo(s) salvo(s) no celular.\nSerão enviados automaticamente quando houver conexão.`
+          `${novasURIs.length} arquivo(s) salvo(s) no celular.\nSerão enviados automaticamente quando houver conexão.`,
+          'warning'
         );
       }
     } catch (e) {
-      //console.log("ERRO COMPLETO:");
-      //console.log(JSON.stringify(e, null, 2));
       console.error(e);
-
-      Alert.alert(
+      mostrarAlerta(
         "Erro",
-        e instanceof Error ? e.stack ?? e.message : JSON.stringify(e)
+        e instanceof Error ? e.message : 'Falha ao processar mídia.',
+        'error'
       );
     } finally {
       setAdicionando(false);
@@ -243,7 +272,7 @@ export default function FotosChamado() {
         <View style={{ width: 26 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.grid}>
           {fotos.map((uri, index) => {
             const ehVideo = uri.toLowerCase().endsWith('.mp4');
@@ -381,7 +410,6 @@ export default function FotosChamado() {
         <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#fff', borderColor: '#3b82f6', borderWidth: 2 }, adicionando && styles.actionBtnDisabled]} onPress={() => adicionarMidia('galeria')} disabled={adicionando}>
           {adicionando ? <ActivityIndicator size="small" color="#3b82f6" /> : <ImageIcon size={20} color="#3b82f6" />}
           <Text style={[styles.btnText, { color: '#3b82f6' }]}>Galeria</Text>
-
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -394,6 +422,7 @@ export default function FotosChamado() {
         </TouchableOpacity>
       </View>
 
+      {/* MENU DE OPÇÕES DA CÂMERA */}
       <Modal
         visible={menuCameraVisible}
         animationType="fade"
@@ -496,6 +525,116 @@ export default function FotosChamado() {
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* MODAL DE ALERTA PERSONALIZADO */}
+      <Modal
+        transparent
+        visible={alertVisible}
+        animationType="fade"
+        onRequestClose={() => {
+          setAlertVisible(false);
+          alertData.onClose();
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.75)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 24,
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 340,
+              backgroundColor: theme.card,
+              borderRadius: 24,
+              padding: 24,
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: theme.border,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.25,
+              shadowRadius: 15,
+              elevation: 10,
+            }}
+          >
+            {/* Ícone do Status */}
+            <View
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 32,
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 16,
+                backgroundColor:
+                  alertData.tipo === 'success'
+                    ? 'rgba(34, 197, 94, 0.15)'
+                    : alertData.tipo === 'warning'
+                    ? 'rgba(245, 158, 11, 0.15)'
+                    : 'rgba(239, 68, 68, 0.15)',
+              }}
+            >
+              {alertData.tipo === 'success' && <CheckCircle2 size={36} color="#22c55e" />}
+              {alertData.tipo === 'warning' && <Clock size={36} color="#f59e0b" />}
+              {alertData.tipo === 'error' && <XCircle size={36} color="#ef4444" />}
+            </View>
+
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: '800',
+                color: theme.text,
+                textAlign: 'center',
+                marginBottom: 8,
+              }}
+            >
+              {alertData.titulo}
+            </Text>
+
+            <Text
+              style={{
+                fontSize: 14,
+                color: theme.subText,
+                textAlign: 'center',
+                lineHeight: 20,
+                marginBottom: 24,
+              }}
+            >
+              {alertData.mensagem}
+            </Text>
+
+            <TouchableOpacity
+              style={{
+                width: '100%',
+                paddingVertical: 14,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor:
+                  alertData.tipo === 'success'
+                    ? '#22c55e'
+                    : alertData.tipo === 'warning'
+                    ? '#f59e0b'
+                    : '#ef4444',
+              }}
+              onPress={() => {
+                setAlertVisible(false);
+                alertData.onClose();
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 15 }}>
+                OK, Entendido
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </ScreenWrapper>
   );

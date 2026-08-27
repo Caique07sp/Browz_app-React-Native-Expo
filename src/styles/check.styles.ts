@@ -3,7 +3,6 @@ import { Platform, StyleSheet } from "react-native";
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
     paddingTop: Platform.OS === 'android' ? 5 : 0,
   },
 
@@ -14,19 +13,15 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 15,
     paddingTop: Platform.OS === 'android' ? 45 : 10,
-    backgroundColor: '#1e293b',
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
   },
 
   headerTitle: {
-    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },
 
   closeButton: {
-    backgroundColor: '#0f172a',
     padding: 8,
     borderRadius: 12,
   },
@@ -43,64 +38,60 @@ export const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#334155',
   },
 
   map: { flex: 1 },
 
   mapLoading: {
     flex: 1,
-    backgroundColor: '#1e293b',
     justifyContent: 'center',
     alignItems: 'center',
   },
 
-  mapText: { color: '#94a3b8' },
+  mapText: { fontSize: 13 },
 
   ticketBrief: {
     marginBottom: 20,
     alignItems: 'center',
+    paddingHorizontal: 10,
   },
 
   ticketId: {
     color: '#3b82f6',
     fontWeight: 'bold',
+    fontSize: 14,
+    marginBottom: 2,
   },
 
   ticketTitle: {
-    color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
     textAlign: 'center',
   },
 
   timeCard: {
-    backgroundColor: '#1e293b',
-    padding: 25,
+    padding: 20,
     borderRadius: 24,
     alignItems: 'center',
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#334155',
   },
 
   timeLabel: {
-    color: '#64748b',
     fontSize: 12,
     letterSpacing: 1,
   },
 
   timeValue: {
-    color: '#fff',
-    fontSize: 40,
+    fontSize: 36,
     fontWeight: 'bold',
+    marginVertical: 4,
   },
 
   checkInBadge: {
-    marginTop: 10,
-    backgroundColor: '#0f172a',
+    marginTop: 8,
     paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 8,
   },
 
@@ -111,7 +102,7 @@ export const styles = StyleSheet.create({
   },
 
   statusWorkBadge: {
-    marginTop: 10,
+    marginTop: 8,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 999,
@@ -124,75 +115,85 @@ export const styles = StyleSheet.create({
 
   actionGrid: {
     flexDirection: 'row',
-    gap: 12,
+    flexWrap: 'wrap',
+    gap: 10,
     marginBottom: 15,
-  },
-
-  /* --- ESTILOS DOS BOTÕES DA GRADE (ORÇAMENTO, FOTOS, PAUSA) --- */
-  actionButton: {
-    flex: 1,
-    backgroundColor: '#1e293b',
-    height: 75,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
-    gap: 6,
-  },
-
-  actionText: {
-    color: '#f8fafc',
-    fontSize: 12,
-    fontWeight: '600',
+    width: '100%',
   },
 
   secondaryBtn: {
+    flex: 1,
+    minWidth: 100,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    height: 60,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    height: 52,
     borderRadius: 16,
     borderWidth: 1,
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
 
   btnText: {
-    color: '#fff',
     fontWeight: '600',
+    fontSize: 13,
+    flexShrink: 1,
   },
 
   btnMainText: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 15,
+    flexShrink: 1,
+    textAlign: 'center',
   },
 
   startBtn: {
     backgroundColor: '#3b82f6',
-    height: 65,
-    borderRadius: 20,
+    minHeight: 56,
+    borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  
 
   finishBtn: {
     backgroundColor: '#10b981',
-    height: 65,
-    borderRadius: 20,
+    minHeight: 56,
+    borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
 
   btnDesabilitado: {
-    backgroundColor: '#334155',
+    backgroundColor: '#64748b',
     borderColor: '#475569',
-    opacity: 0.7,
+    opacity: 0.6,
+    shadowOpacity: 0,
+    elevation: 0,
   },
 
   infoCardPreCheckin: {
@@ -203,7 +204,7 @@ export const styles = StyleSheet.create({
   },
 
   infoCardTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 'bold',
     marginBottom: 14,
     letterSpacing: 0.5,
@@ -226,34 +227,30 @@ export const styles = StyleSheet.create({
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: 'rgba(0,0,0,0.75)',
     justifyContent: 'center',
     padding: 20,
   },
 
   modalContent: {
-    backgroundColor: '#1e293b',
     borderRadius: 24,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#334155',
   },
 
   modalTitle: {
-    color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 15,
   },
 
   reasonInput: {
-    backgroundColor: '#0f172a',
     borderRadius: 12,
-    color: '#fff',
     padding: 15,
     height: 100,
     textAlignVertical: 'top',
     marginBottom: 20,
+    borderWidth: 1,
   },
 
   modalButtons: {
@@ -263,85 +260,20 @@ export const styles = StyleSheet.create({
 
   cancelBtn: {
     flex: 1,
-    height: 50,
+    height: 48,
     justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
   },
 
   confirmBtn: {
     flex: 2,
     backgroundColor: '#3b82f6',
-    height: 50,
+    height: 48,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-
-  modalOverlayPhoto: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-
-  modalContentPhoto: {
-    width: '100%',
-    maxWidth: 380,
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-
-  modalTitlePhoto: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#f8fafc',
-    marginBottom: 16,
-  },
-
-  modalButtonsContainer: {
-    width: '100%',
-  },
-
-  modalText: {
-    fontSize: 15,
-    color: '#475569',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  modalButtonCancel: {
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-  },
-
-  modalButtonCancelText: {
-    color: '#475569',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-
-  modalButtonConfirm: {
-    backgroundColor: '#2563EB',
-  },
-
-  modalButtonConfirmText: {
-    color: '#FFF',
-    fontWeight: '600',
-    fontSize: 14,
+    paddingHorizontal: 12,
   },
 });

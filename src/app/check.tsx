@@ -4,22 +4,23 @@ import { adicionarNaFila } from "@/services/offlineQueue";
 import { useTheme } from "@/theme/ThemeContext";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
-import { Link, useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getApiUrl } from "@/services/api";
 import {
   Camera as CameraIcon,
   CheckCircle,
+  CheckCircle2,
   DollarSign,
   MapPin,
   Pause,
   Play,
   ShieldCheck,
-  X
+  X,
+  XCircle 
 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   StatusBar,
@@ -45,7 +46,6 @@ export default function CheckInScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [checkInTime, setCheckInTime] = useState<string | null>(null);
 
-  // NOVO ESTADO: Controle de carregamento no botão de Iniciar Atendimento
   const [isStarting, setIsStarting] = useState(false);
 
   const [modalType, setModalType] = useState<'pause' | null>(null);
@@ -72,12 +72,10 @@ export default function CheckInScreen() {
     React.useCallback(() => {
       async function carregarDados() {
         try {
-          // Checa mídias
           const fotosStr = await AsyncStorage.getItem(`@fotos_chamado_${ticketId}`);
           const lista = fotosStr ? JSON.parse(fotosStr) : [];
           setHasMedia(Array.isArray(lista) && lista.length > 0);
 
-          // Checa nome do técnico
           const nome = await AsyncStorage.getItem('@nome_tecnico');
           if (nome) setNomeTecnico(nome);
         } catch (error) {
@@ -100,17 +98,6 @@ export default function CheckInScreen() {
       return item;
     });
     await AsyncStorage.setItem("@cache_chamados", JSON.stringify(atualizados));
-  }
-
-  async function carregarNomeTecnico() {
-    try {
-      const nomeSalvo = await AsyncStorage.getItem('nome');
-      if (nomeSalvo) {
-        setNomeTecnico(nomeSalvo);
-      }
-    } catch (error) {
-      //console.log('Erro ao carregar nome do técnico:', error);
-    }
   }
 
   function getBrazilDateTime() {
@@ -215,7 +202,7 @@ export default function CheckInScreen() {
         await AsyncStorage.setItem("@cache_categorias", JSON.stringify(mapa));
       }
     } catch (error) {
-      //console.log(error);
+      // Ignore
     }
   }
 
@@ -349,7 +336,6 @@ export default function CheckInScreen() {
   async function handleStart() {
     if (!location || isStarting) return;
 
-    // Ativa o estado de carregamento
     setIsStarting(true);
 
     try {
@@ -388,7 +374,6 @@ export default function CheckInScreen() {
     } catch (error) {
       mostrarAlerta('Erro', 'Não foi possível registrar o check-in. Tente novamente.');
     } finally {
-      // Finaliza o carregamento após todo o fluxo
       setIsStarting(false);
     }
   }
@@ -498,7 +483,7 @@ export default function CheckInScreen() {
 
           <View style={styles.ticketBrief}>
             <Text style={styles.ticketId}>#{ticketId}</Text>
-            <Text style={[styles.ticketTitle, { color: theme.text }]}>
+            <Text style={[styles.ticketTitle, { color: theme.text }]} numberOfLines={2} adjustsFontSizeToFit>
               {categorias[serviceTypeId] || 'Carregando categoria...'}
             </Text>
           </View>
@@ -536,7 +521,7 @@ export default function CheckInScreen() {
             )}
 
             {started && (
-              <View style={[styles.statusWorkBadge, { backgroundColor: '#fff' }]}>
+              <View style={[styles.statusWorkBadge, { backgroundColor: darkMode ? '#334155' : '#e2e8f0' }]}>
                 <Text style={[styles.statusWorkText, { color: isActive ? '#22c55e' : '#f59e0b' }]}>
                   {isActive ? 'Em atendimento' : 'Pausado'}
                 </Text>
@@ -553,59 +538,70 @@ export default function CheckInScreen() {
               ]}
               onPress={handleStart}
               disabled={!location || isStarting}
+              activeOpacity={0.8}
             >
               {isStarting ? (
                 <>
                   <ActivityIndicator size="small" color="#fff" />
-                  <Text style={styles.btnMainText}>Processando...</Text>
+                  <Text style={styles.btnMainText} numberOfLines={1} adjustsFontSizeToFit>Processando...</Text>
                 </>
               ) : location ? (
                 <>
-                  <Play color="#fff" size={24} fill="#fff" />
-                  <Text style={styles.btnMainText}>Confirmar e Iniciar Atendimento</Text>
+                  <Play color="#fff" size={22} fill="#fff" />
+                  <Text style={styles.btnMainText} numberOfLines={1} adjustsFontSizeToFit>Confirmar e Iniciar Atendimento</Text>
                 </>
               ) : (
                 <>
                   <ActivityIndicator size="small" color="#94a3b8" />
-                  <Text style={[styles.btnMainText, { color: '#94a3b8' }]}>Aguardando Localização...</Text>
+                  <Text style={[styles.btnMainText, { color: '#94a3b8' }]} numberOfLines={1} adjustsFontSizeToFit>Aguardando Localização...</Text>
                 </>
               )}
             </TouchableOpacity>
           ) : (
             <>
-              {/* Exemplo de integração dentro de CheckInScreen.tsx */}
               <View style={styles.actionGrid}>
-                {/* Novo Botão de Orçamento */}
+                {/* Botão de Orçamento */}
                 <TouchableOpacity
-                  style={styles.actionButton}
+                  style={[styles.secondaryBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
                   onPress={() => router.push({ pathname: '/OrcamentoChamado', params: { id: ticketId } })}
+                  activeOpacity={0.7}
                 >
-                  <DollarSign color="#0284c7" size={24} />
-                  <Text style={styles.actionText}>Orçamento</Text>
+                  <DollarSign color="#0284c7" size={20} />
+                  <Text style={[styles.btnText, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
+                    Orçamento
+                  </Text>
                 </TouchableOpacity>
 
-                {/* Botão de Câmera/Fotos já existente */}
+                {/* Botão de Câmera/Fotos */}
                 <TouchableOpacity
-                  style={styles.actionButton}
+                  style={[styles.secondaryBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
                   onPress={() => router.replace({ pathname: '/fotos-chamado', params: { id: ticketId } })}
+                  activeOpacity={0.7}
                 >
-                  <CameraIcon color={theme.text} size={24} />
-                  <Text style={styles.actionText}>Enviar Imagens</Text>
+                  <CameraIcon color={theme.text} size={20} />
+                  <Text style={[styles.btnText, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
+                    Imagens
+                  </Text>
                 </TouchableOpacity>
 
                 {/* Botão de Pausa */}
                 <TouchableOpacity
-                  style={styles.actionButton}
+                  style={[styles.secondaryBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
                   onPress={() => setModalType('pause')}
+                  activeOpacity={0.7}
                 >
-                  <Pause color="#f59e0b" size={24} />
-                  <Text style={styles.actionText}>Pausar</Text>
+                  <Pause color="#f59e0b" size={20} />
+                  <Text style={[styles.btnText, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
+                    Pausar
+                  </Text>
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity style={styles.finishBtn} onPress={handleFinish}>
-                <CheckCircle color="#fff" size={24} />
-                <Text style={styles.btnMainText}>Control z Never</Text>
+              <TouchableOpacity style={styles.finishBtn} onPress={handleFinish} activeOpacity={0.8}>
+                <CheckCircle color="#fff" size={22} />
+                <Text style={styles.btnMainText} numberOfLines={1} adjustsFontSizeToFit>
+                  Finalizar Atendimento
+                </Text>
               </TouchableOpacity>
             </>
           )}
@@ -630,12 +626,12 @@ export default function CheckInScreen() {
             />
 
             <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => { setReason(''); setModalType(null); }}>
-                <Text style={[styles.btnText, { color: theme.text }]}>Cancelar</Text>
+              <TouchableOpacity style={[styles.cancelBtn, { borderColor: theme.border }]} onPress={() => { setReason(''); setModalType(null); }}>
+                <Text style={[styles.btnText, { color: theme.text }]} numberOfLines={1}>Cancelar</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirmAction}>
-                <Text style={styles.btnMainText}>Confirmar</Text>
+                <Text style={styles.btnMainText} numberOfLines={1}>Confirmar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -677,7 +673,7 @@ export default function CheckInScreen() {
           >
             <View
               style={{
-                backgroundColor: '#fef2f2',
+                backgroundColor: darkMode ? '#312e81' : '#fef2f2',
                 padding: 16,
                 borderRadius: 99,
                 marginBottom: 16,
@@ -685,7 +681,7 @@ export default function CheckInScreen() {
             >
               <View
                 style={{
-                  backgroundColor: '#fee2e2',
+                  backgroundColor: darkMode ? '#3730a3' : '#fee2e2',
                   padding: 12,
                   borderRadius: 99,
                 }}
@@ -746,6 +742,7 @@ export default function CheckInScreen() {
                   fontSize: 16,
                   fontWeight: 'bold',
                 }}
+                numberOfLines={1}
               >
                 Voltar e Anexar
               </Text>
@@ -775,6 +772,7 @@ export default function CheckInScreen() {
                   fontSize: 15,
                   fontWeight: '600',
                 }}
+                numberOfLines={1}
               >
                 Sim, Finalizar Sem Imagens
               </Text>
@@ -784,17 +782,72 @@ export default function CheckInScreen() {
       </Modal>
 
       {/* MODAL DE ALERTA PERSONALIZADO */}
-      <Modal transparent visible={alertVisible} animationType="fade">
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-          <View style={{ width: '90%', maxWidth: 400, backgroundColor: theme.card, borderRadius: 24, padding: 24, alignItems: 'center' }}>
-            <Text style={{ fontSize: 22, fontWeight: '700', color: alertData.tipo === 'success' ? '#22c55e' : alertData.tipo === 'warning' ? '#f59e0b' : '#3b82f6', marginBottom: 12 }}>
+      {/* MODAL DE ALERTA PERSONALIZADO */}
+      <Modal transparent visible={alertVisible} animationType="fade" onRequestClose={() => setAlertVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View 
+            style={{ 
+              width: '100%', 
+              maxWidth: 340, 
+              backgroundColor: theme.card, 
+              borderRadius: 24, 
+              padding: 24, 
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: theme.border,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.25,
+              shadowRadius: 15,
+              elevation: 10,
+            }}
+          >
+            {/* Ícone Indicador de Status */}
+            <View 
+              style={{ 
+                width: 64,
+                height: 64,
+                borderRadius: 32,
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 16,
+                backgroundColor: alertData.tipo === 'success' 
+                  ? 'rgba(34, 197, 94, 0.15)' 
+                  : alertData.tipo === 'warning' 
+                  ? 'rgba(245, 158, 11, 0.15)' 
+                  : 'rgba(59, 130, 246, 0.15)'
+              }}
+            >
+              {alertData.tipo === 'success' && <CheckCircle2 size={36} color="#22c55e" />}
+              {alertData.tipo === 'warning' && <Pause size={36} color="#f59e0b" />}
+              {alertData.tipo !== 'success' && alertData.tipo !== 'warning' && <XCircle size={36} color="#3b82f6" />}
+            </View>
+
+            <Text style={{ fontSize: 20, fontWeight: '800', color: theme.text, textAlign: 'center', marginBottom: 8 }}>
               {alertData.titulo}
             </Text>
-            <Text style={{ color: theme.text, textAlign: 'center', fontSize: 15, lineHeight: 22, marginBottom: 24 }}>
+
+            <Text style={{ fontSize: 14, color: theme.subText, textAlign: 'center', lineHeight: 20, marginBottom: 24 }}>
               {alertData.mensagem}
             </Text>
-            <TouchableOpacity style={{ backgroundColor: '#3b82f6', paddingVertical: 14, borderRadius: 14, width: '100%', alignItems: 'center' }} onPress={() => setAlertVisible(false)}>
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>OK</Text>
+
+            <TouchableOpacity 
+              style={{ 
+                width: '100%', 
+                paddingVertical: 14, 
+                borderRadius: 14, 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                backgroundColor: alertData.tipo === 'success' 
+                  ? '#22c55e' 
+                  : alertData.tipo === 'warning' 
+                  ? '#f59e0b' 
+                  : '#3b82f6'
+              }} 
+              onPress={() => setAlertVisible(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 15 }}>OK, Entendido</Text>
             </TouchableOpacity>
           </View>
         </View>

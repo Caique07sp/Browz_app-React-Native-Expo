@@ -1,37 +1,38 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  DollarSign,
+  PackageOpen,
+  Plus,
+  Save,
+  Search,
+  Trash2,
+  X,
+  Clock,
+  XCircle
+} from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
-  TextInput,
-  StyleSheet,
   ScrollView,
-  Alert,
-  ActivityIndicator,
-  StatusBar
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useLocalSearchParams } from 'expo-router';
-import {
-  Plus,
-  Trash2,
-  DollarSign,
-  Wrench,
-  CheckCircle2,
-  Clock,
-  XCircle,
-  X,
-  Search,
-  Save,
-  PackageOpen
-} from 'lucide-react-native';
 
 import { getApiUrl } from '@/services/api';
 import { isOnline } from '@/services/network';
 import { adicionarNaFila } from '@/services/offlineQueue';
 import { useTheme } from '@/theme/ThemeContext';
+
 
 interface ProdutoAPI {
   product_id: number;
@@ -55,6 +56,7 @@ export default function OrcamentoChamado() {
   const { id } = useLocalSearchParams();
   const chamadoId = String(id);
   const { theme, darkMode } = useTheme();
+  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -77,6 +79,13 @@ export default function OrcamentoChamado() {
   const subtotalPecas = itens.reduce((acc, item) => acc + (Number(item.proposal_item_total) || 0), 0);
   const valorTotal = subtotalPecas + (Number(valorMaoDeObra) || 0);
 
+  const [alertaModalVisible, setAlertaModalVisible] = useState(false);
+  const [alertaModalData, setAlertaModalData] = useState({
+    titulo: '',
+    mensagem: '',
+    tipo: 'success' as 'success' | 'warning' | 'error',
+  });
+
   useEffect(() => {
     carregarDados();
   }, [chamadoId]);
@@ -91,6 +100,11 @@ export default function OrcamentoChamado() {
       );
     }
   }, [buscaProduto, catalogoProdutos]);
+
+  function exibirAlerta(titulo: string, mensagem: string, tipo: 'success' | 'warning' | 'error' = 'success') {
+    setAlertaModalData({ titulo, mensagem, tipo });
+    setAlertaModalVisible(true);
+  }
 
   async function carregarDados() {
     setLoading(true);
@@ -368,7 +382,7 @@ export default function OrcamentoChamado() {
           tentativas: 0,
         } as any);
       }
-      Alert.alert('Modo Offline', 'As alterações foram salvas localmente e estão na fila de sincronização.');
+      exibirAlerta('Modo Offline', 'As alterações foram salvas localmente e estão na fila de sincronização.', 'warning');
       setSalvando(false);
       return;
     }
@@ -400,7 +414,7 @@ export default function OrcamentoChamado() {
       }
 
       if (!idDoOrcamento) {
-         Alert.alert('Erro', 'Não foi possível gerar um número de orçamento válido no sistema.');
+       exibirAlerta('Erro', 'Não foi possível gerar um número de orçamento válido no sistema.', 'error');
          setSalvando(false);
          return;
       }
@@ -433,16 +447,18 @@ export default function OrcamentoChamado() {
       }
 
       if (falhouAlgumItem) {
-        Alert.alert('Atenção', 'O cabeçalho foi salvo, mas alguns itens falharam ao enviar.');
+       exibirAlerta('Atenção', 'O cabeçalho foi salvo, mas alguns itens falharam ao enviar.', 'warning');
       } else {
-        const listaAtualizada = itens.map(i => ({ ...i, is_local_only: false }));
+       const listaAtualizada = itens.map(i => ({ ...i, is_local_only: false }));
         setItens(listaAtualizada);
         await salvarLocalmente(listaAtualizada, valorMaoDeObra, status, idDoOrcamento, numOrc);
-        Alert.alert('Sucesso', 'Orçamento salvo no sistema com sucesso!');
+        
+        // MENSAGEM DE SUCESSO PRINCIPAL
+        exibirAlerta('Orçamento Salvo!', 'O orçamento foi registrado com sucesso no sistema.', 'success');
       }
 
-    } catch (e) {
-      Alert.alert('Erro', 'Falha na comunicação com o servidor.');
+   } catch (e) {
+      exibirAlerta('Erro de Conexão', 'Falha na comunicação com o servidor. Tente novamente.', 'error');
     } finally {
       setSalvando(false);
     }
@@ -476,9 +492,11 @@ export default function OrcamentoChamado() {
             }),
           });
         } catch (e) {
+          exibirAlerta('Erro', 'Falha ao tentar remover o item do orçamento.', 'error');
           enfileirarDelete(itemRemovido.proposal_item_id);
         }
       } else {
+        exibirAlerta('Modo Offline', 'O item foi removido localmente e está na fila de sincronização.', 'warning');
         enfileirarDelete(itemRemovido.proposal_item_id);
       }
     }
@@ -562,92 +580,76 @@ export default function OrcamentoChamado() {
     }
   }
 
-  const renderStatusBadge = () => {
-    switch (status) {
-      case 'aprovado':
-        return (
-          <View style={[styles.badgeContainer, { backgroundColor: darkMode ? 'rgba(22, 163, 74, 0.2)' : '#dcfce7', borderColor: '#22c55e' }]}>
-            <CheckCircle2 size={14} color="#22c55e" />
-            <Text style={[styles.badgeText, { color: '#22c55e' }]}>Aprovado</Text>
-          </View>
-        );
-      case 'recusado':
-        return (
-          <View style={[styles.badgeContainer, { backgroundColor: darkMode ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2', borderColor: '#ef4444' }]}>
-            <XCircle size={14} color="#ef4444" />
-            <Text style={[styles.badgeText, { color: '#ef4444' }]}>Recusado</Text>
-          </View>
-        );
-      default:
-        return (
-          <View style={[styles.badgeContainer, { backgroundColor: darkMode ? 'rgba(245, 158, 11, 0.2)' : '#fef3c7', borderColor: '#f59e0b' }]}>
-            <Clock size={14} color="#f59e0b" />
-            <Text style={[styles.badgeText, { color: '#f59e0b' }]}>Pendente</Text>
-          </View>
-        );
-    }
-  };
-
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color="#0284c7" />
-        <Text style={[styles.loadingText, { color: theme.subText }]}>Carregando orçamento...</Text>
+        <Text style={[styles.textoCarregando, { color: theme.subText }]}>Carregando orçamento...</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={styles.contentContainer}>
+    <ScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={styles.conteudoContainer} showsVerticalScrollIndicator={false}>
       <StatusBar barStyle={darkMode ? "light-content" : "dark-content"} />
 
-      {/* CABEÇALHO DO ORÇAMENTO */}
-      <View style={[styles.headerCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <View style={styles.headerTopRow}>
-          <View style={styles.headerTitleGroup}>
-            <View style={styles.iconWrapper}>
+     {/* CABEÇALHO DO ORÇAMENTO */}
+      <View style={[styles.cartaoCabecalho, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View style={styles.linhaSuperiorCabecalho}>
+
+          <TouchableOpacity 
+            onPress={() => router.back()} 
+            style={styles.botaoVoltar}
+            activeOpacity={0.7}
+          >
+            <ArrowLeft size={22} color={theme.text} />
+          </TouchableOpacity>
+
+          <View style={styles.grupoTituloCabecalho}>
+            <View style={styles.envolvedorIcone}>
               <DollarSign size={22} color="#0284c7" />
             </View>
-            <View>
-              <Text style={[styles.headerSubtitle, { color: theme.subText }]}>ORÇAMENTO DE SERVIÇO</Text>
-              <Text style={[styles.headerTitle, { color: theme.text }]}>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={[styles.subtituloCabecalho, { color: theme.subText }]}>ORÇAMENTO DE SERVIÇO</Text>
+              <Text style={[styles.tituloCabecalho, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
                 {proposalNumber ? `#${proposalNumber}` : 'Novo Orçamento'}
               </Text>
             </View>
           </View>
-          {renderStatusBadge()}
         </View>
 
-        <View style={[styles.ticketVincContainer, { backgroundColor: darkMode ? 'rgba(2, 132, 199, 0.1)' : '#f0f9ff', borderColor: darkMode ? 'rgba(2, 132, 199, 0.3)' : '#bae6fd' }]}>
-          <Text style={[styles.ticketVincText, { color: '#0284c7' }]}>
+        <View style={[styles.containerVinculoChamado, { backgroundColor: darkMode ? 'rgba(2, 132, 199, 0.1)' : '#f0f9ff', borderColor: darkMode ? 'rgba(2, 132, 199, 0.3)' : '#bae6fd' }]}>
+          <Text style={[styles.textoVinculoChamado, { color: '#0284c7' }]} numberOfLines={1}>
             Vinculado ao Chamado <Text style={{ fontWeight: 'bold' }}>#{chamadoId}</Text>
           </Text>
         </View>
       </View>
 
       {/* LISTA DE PEÇAS E MATERIAIS */}
-      <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Peças e Materiais</Text>
-          <Text style={[styles.itemCountText, { color: theme.subText }]}>{itens.length} {itens.length === 1 ? 'item' : 'itens'}</Text>
+      <View style={[styles.cartaoSessao, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <View style={styles.cabecalhoSessao}>
+          <Text style={[styles.tituloSessao, { color: theme.text }]}>Produtos e Serviços</Text>
+          <Text style={[styles.textoContagemItem, { color: theme.subText }]}>{itens.length} {itens.length === 1 ? 'item' : 'itens'}</Text>
         </View>
 
         {itens.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <PackageOpen size={40} color={theme.subText} style={{ opacity: 0.5, marginBottom: 8 }} />
-            <Text style={[styles.emptyText, { color: theme.subText }]}>Nenhum material adicionado até o momento.</Text>
+          <View style={styles.containerVazio}>
+            <PackageOpen size={48} color={theme.subText} style={{ opacity: 0.3, marginBottom: 12 }} />
+            <Text style={[styles.textoVazio, { color: theme.subText }]}>Nenhum material adicionado até o momento.</Text>
           </View>
         ) : (
           itens.map((item, index) => (
-            <View key={item.proposal_item_id ? `item_${item.proposal_item_id}` : `local_${index}`} style={[styles.itemRow, { backgroundColor: darkMode ? 'rgba(255,255,255,0.03)' : '#f8fafc', borderColor: theme.border }]}>
-              <View style={{ flex: 1, marginRight: 8 }}>
-                <Text style={[styles.itemDescricao, { color: theme.text }]}>{item.proposal_item_product_name}</Text>
-                <Text style={[styles.itemDetalhes, { color: theme.subText }]}>
+            <View key={item.proposal_item_id ? `item_${item.proposal_item_id}` : `local_${index}`} style={[styles.linhaItem, { backgroundColor: darkMode ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderColor: theme.border }]}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={[styles.itemDescricao, { color: theme.text }]} numberOfLines={2}>
+                  {item.proposal_item_product_name}
+                </Text>
+                <Text style={[styles.itemDetalhes, { color: theme.subText }]} numberOfLines={1} adjustsFontSizeToFit>
                   {item.proposal_item_product_quantity}x R$ {Number(item.proposal_item_product_price).toFixed(2).replace('.', ',')}
                   {item.is_local_only && <Text style={{ color: '#f59e0b', fontWeight: 'bold' }}> • Não sincronizado</Text>}
                 </Text>
               </View>
-              <Text style={[styles.itemTotal, { color: theme.text }]}>
+              <Text style={[styles.itemTotal, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
                 R$ {Number(item.proposal_item_total).toFixed(2).replace('.', ',')}
               </Text>
               <TouchableOpacity onPress={() => handleRemoverItem(index)} style={styles.botaoDeletar} activeOpacity={0.7}>
@@ -657,60 +659,27 @@ export default function OrcamentoChamado() {
           ))
         )}
 
-        <TouchableOpacity style={styles.botaoAdicionarItem} onPress={() => setModalVisivel(true)} activeOpacity={0.8}>
-          <Plus size={18} color="#0284c7" />
-          <Text style={styles.textoBotaoAdicionarItem}>Adicionar Item / Peça</Text>
+        <TouchableOpacity style={styles.botaoAdicionarItem} onPress={() => setModalVisivel(true)} activeOpacity={0.7}>
+          <Plus size={20} color="#0284c7" />
+          <Text style={styles.textoBotaoAdicionarItem}>Adicionar</Text>
         </TouchableOpacity>
       </View>
 
       {/* RESUMO FINANCEIRO */}
-      <View style={[styles.summaryCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 12 }]}>Resumo Financeiro</Text>
+      <View style={[styles.cartaoResumo, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <Text style={[styles.tituloSessao, { color: theme.text, marginBottom: 12 }]}>Resumo Financeiro</Text>
         
-        <View style={styles.summaryRow}>
-          <Text style={[styles.summaryLabel, { color: theme.subText }]}>Subtotal de Peças</Text>
-          <Text style={[styles.summaryValue, { color: theme.text }]}>R$ {subtotalPecas.toFixed(2).replace('.', ',')}</Text>
-        </View>
+        <View style={[styles.divisor, { backgroundColor: theme.border }]} />
 
-        <View style={styles.summaryRow}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Wrench size={14} color={theme.subText} style={{ marginRight: 6 }} />
-            <Text style={[styles.summaryLabel, { color: theme.subText }]}>Mão de Obra</Text>
-          </View>
-          <Text style={[styles.summaryValue, { color: theme.text }]}>R$ {Number(valorMaoDeObra).toFixed(2).replace('.', ',')}</Text>
-        </View>
-
-        <View style={[styles.divider, { backgroundColor: theme.border }]} />
-
-        <View style={styles.summaryRowTotal}>
-          <Text style={[styles.totalLabel, { color: theme.text }]}>VALOR TOTAL</Text>
-          <Text style={styles.totalValue}>R$ {valorTotal.toFixed(2).replace('.', ',')}</Text>
+        <View style={styles.linhaResumoTotal}>
+          <Text style={[styles.rotuloTotal, { color: theme.text }]}>VALOR TOTAL</Text>
+          <Text style={styles.valorTotal} numberOfLines={1} adjustsFontSizeToFit>
+            R$ {valorTotal.toFixed(2).replace('.', ',')}
+          </Text>
         </View>
       </View>
 
       {/* AÇÕES DE STATUS */}
-      <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 12 }]}>Status do Orçamento</Text>
-        <View style={styles.grupoBotaoStatus}>
-          <TouchableOpacity
-            style={[styles.botaoStatus, status === 'aprovado' && styles.botaoStatusAprovado, { borderColor: status === 'aprovado' ? '#22c55e' : theme.border, backgroundColor: status === 'aprovado' ? '#22c55e' : theme.background }]}
-            onPress={() => handleAlterarStatus('aprovado')}
-            activeOpacity={0.8}
-          >
-            <CheckCircle2 size={16} color={status === 'aprovado' ? '#fff' : '#22c55e'} style={{ marginRight: 6 }} />
-            <Text style={[styles.textoBotaoStatus, { color: status === 'aprovado' ? '#fff' : theme.text }]}>Aprovar</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.botaoStatus, status === 'recusado' && styles.botaoStatusRecusado, { borderColor: status === 'recusado' ? '#ef4444' : theme.border, backgroundColor: status === 'recusado' ? '#ef4444' : theme.background }]}
-            onPress={() => handleAlterarStatus('recusado')}
-            activeOpacity={0.8}
-          >
-            <XCircle size={16} color={status === 'recusado' ? '#fff' : '#ef4444'} style={{ marginRight: 6 }} />
-            <Text style={[styles.textoBotaoStatus, { color: status === 'recusado' ? '#fff' : theme.text }]}>Recusar</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
 
       {/* BOTÃO PRINCIPAL DE SALVAR */}
       <TouchableOpacity 
@@ -720,12 +689,12 @@ export default function OrcamentoChamado() {
         activeOpacity={0.85}
       >
         {salvando ? (
-           <ActivityIndicator size="small" color="#fff" />
+           <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
         ) : (
-           <Save size={20} color="#ffffff" style={{ marginRight: 8 }} />
+           <Save size={22} color="#ffffff" style={{ marginRight: 8 }} />
         )}
         <Text style={styles.textoBotaoSalvarSistema}>
-          {salvando ? 'Enviando...' : 'Salvar Orçamento no Sistema'}
+          {salvando ? 'Salvando...' : 'Salvar'}
         </Text>
       </TouchableOpacity>
 
@@ -734,16 +703,16 @@ export default function OrcamentoChamado() {
         <View style={styles.sobreposicaoModal}>
           <View style={[styles.conteudoModal, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <View style={styles.cabecalhoModal}>
-              <Text style={[styles.tituloModal, { color: theme.text }]}>Adicionar Produto</Text>
-              <TouchableOpacity onPress={() => setModalVisivel(false)} style={styles.modalCloseBtn}>
-                <X size={20} color={theme.subText} />
+              <Text style={[styles.tituloModal, { color: theme.text }]}>Adicionar</Text>
+              <TouchableOpacity onPress={() => setModalVisivel(false)} style={styles.botaoFecharModal} activeOpacity={0.7}>
+                <X size={24} color={theme.subText} />
               </TouchableOpacity>
             </View>
 
             <View style={[styles.caixaPesquisa, { backgroundColor: theme.background, borderColor: theme.border }]}>
-              <Search size={16} color={theme.subText} style={{ marginRight: 8 }} />
+              <Search size={18} color={theme.subText} style={{ marginRight: 8 }} />
               <TextInput
-                style={{ flex: 1, fontSize: 14, color: theme.text }}
+                style={{ flex: 1, fontSize: 15, color: theme.text }}
                 placeholder="Buscar produto no catálogo..."
                 placeholderTextColor={theme.subText}
                 value={buscaProduto}
@@ -751,33 +720,34 @@ export default function OrcamentoChamado() {
               />
             </View>
 
-            <View style={{ height: 220, marginBottom: 16 }}>
+            <View style={{ height: 260, marginBottom: 16 }}>
               <FlatList
                 data={produtosFiltrados}
                 keyExtractor={(item) => String(item.product_id)}
+                showsVerticalScrollIndicator={false}
                 renderItem={({ item }) => {
                   const selecionado = produtoSelecionado?.product_id === item.product_id;
                   return (
                     <TouchableOpacity
-                      style={[styles.opcaoProduto, selecionado && { backgroundColor: darkMode ? 'rgba(2, 132, 199, 0.2)' : '#e0f2fe', borderColor: '#0284c7' }, { borderColor: theme.border }]}
+                      style={[styles.opcaoProduto, selecionado && { backgroundColor: darkMode ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe', borderColor: '#0284c7' }, { borderColor: theme.border }]}
                       onPress={() => setProdutoSelecionado(item)}
-                      activeOpacity={0.8}
+                      activeOpacity={0.7}
                     >
-                      <View style={{ flex: 1, marginRight: 8 }}>
-                        <Text style={[styles.textoOpcaoProduto, { color: theme.text }, selecionado && { fontWeight: 'bold', color: '#0284c7' }]}>
+                      <View style={{ flex: 1, marginRight: 12 }}>
+                        <Text style={[styles.textoOpcaoProduto, { color: theme.text }, selecionado && { fontWeight: '700', color: '#0284c7' }]} numberOfLines={2}>
                           {item.product_name}
                         </Text>
-                        <Text style={[styles.precoOpcaoProduto, { color: theme.subText }]}>
+                        <Text style={[styles.precoOpcaoProduto, { color: theme.subText }]} numberOfLines={1}>
                           R$ {item.product_price.toFixed(2).replace('.', ',')}
                         </Text>
                       </View>
-                      {selecionado && <CheckCircle2 size={18} color="#0284c7" />}
+                      {selecionado && <CheckCircle2 size={20} color="#0284c7" />}
                     </TouchableOpacity>
                   );
                 }}
                 ListEmptyComponent={
-                  <View style={{ padding: 20, alignItems: 'center' }}>
-                    <Text style={{ color: theme.subText, fontSize: 13 }}>Nenhum produto encontrado.</Text>
+                  <View style={{ padding: 30, alignItems: 'center' }}>
+                    <Text style={{ color: theme.subText, fontSize: 14 }}>Nenhum produto encontrado.</Text>
                   </View>
                 }
               />
@@ -797,158 +767,403 @@ export default function OrcamentoChamado() {
           </View>
         </View>
       </Modal>
+
+      {/* MODAL DE ALERTA PERSONALIZADO DA TELA DE ORÇAMENTO */}
+      <Modal transparent visible={alertaModalVisible} animationType="fade" onRequestClose={() => setAlertaModalVisible(false)}>
+        <View style={styles.sobreposicaoModal}>
+          <View style={[styles.conteudoModalAlerta, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            
+            {/* Ícone Indicador de Status */}
+            <View style={[
+              styles.envolvedorIconeAlerta, 
+              { backgroundColor: alertaModalData.tipo === 'success' ? 'rgba(34, 197, 94, 0.15)' : alertaModalData.tipo === 'warning' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)' }
+            ]}>
+              {alertaModalData.tipo === 'success' && <CheckCircle2 size={36} color="#22c55e" />}
+              {alertaModalData.tipo === 'warning' && <Clock size={36} color="#f59e0b" />}
+              {alertaModalData.tipo === 'error' && <XCircle size={36} color="#ef4444" />}
+            </View>
+
+            <Text style={[styles.tituloModalAlerta, { color: theme.text }]}>
+              {alertaModalData.titulo}
+            </Text>
+
+            <Text style={[styles.mensagemModalAlerta, { color: theme.subText }]}>
+              {alertaModalData.mensagem}
+            </Text>
+
+            <TouchableOpacity 
+              style={[
+                styles.botaoConfirmarAlerta, 
+                { backgroundColor: alertaModalData.tipo === 'success' ? '#22c55e' : alertaModalData.tipo === 'warning' ? '#f59e0b' : '#3b82f6' }
+              ]} 
+              onPress={() => setAlertaModalVisible(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.textoBotaoConfirmarAlerta}>OK, Entendido</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 40 },
-  loadingText: { marginTop: 12, fontSize: 14, fontWeight: '500' },
-  
-  headerCard: {
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+  container: { 
+    flex: 1 
   },
-  headerTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
-  headerTitleGroup: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  iconWrapper: {
-    width: 44,
-    height: 44,
+  conteudoContainer: { 
+    padding: 20, 
+    paddingBottom: 50, 
+    marginTop: 40 
+  },
+  textoCarregando: { 
+    marginTop: 16, 
+    fontSize: 15, 
+    fontWeight: '500' 
+  },
+  
+  cartaoCabecalho: {
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  linhaSuperiorCabecalho: {
+    flexDirection: 'row',
+    alignItems: 'center', 
+    marginBottom: 16,
+    gap: 10,
+  },
+  botaoVoltar: {
+    padding: 10,
+    backgroundColor: 'rgba(148, 163, 184, 0.1)',
     borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  grupoTituloCabecalho: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 12, 
+    flex: 1 
+  },
+ 
+  envolvedorIcone: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     backgroundColor: 'rgba(2, 132, 199, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerSubtitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, marginBottom: 2 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold' },
-  badgeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+  subtituloCabecalho: { 
+    fontSize: 12, 
+    fontWeight: '700', 
+    letterSpacing: 0.8, 
+    marginBottom: 4, 
+    textTransform: 'uppercase' 
+  },
+  tituloCabecalho: { 
+    fontSize: 22, 
+    fontWeight: '800' 
+  },
+  containerVinculoChamado: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+
+  },
+  textoVinculoChamado: { 
+    fontSize: 13, 
+  textAlign: 'center',
+    fontWeight: '500' 
+  },
+
+  cartaoSessao: {
     borderRadius: 20,
+    padding: 20,
     borderWidth: 1,
-  },
-  badgeText: { fontSize: 12, fontWeight: '700', marginLeft: 4 },
-  ticketVincContainer: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignSelf: 'flex-start',
-  },
-  ticketVincText: { fontSize: 12, fontWeight: '500' },
-
-  sectionCard: {
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    marginBottom: 16,
+    marginBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionTitle: { fontSize: 15, fontWeight: 'bold' },
-  itemCountText: { fontSize: 12, fontWeight: '500' },
-  emptyContainer: { alignItems: 'center', paddingVertical: 20 },
-  emptyText: { fontSize: 13, fontStyle: 'italic', textAlign: 'center' },
+  cabecalhoSessao: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: 16 
+  },
+  tituloSessao: { 
+    fontSize: 16, 
+    fontWeight: 'bold' 
+  },
+  textoContagemItem: { 
+    fontSize: 13, 
+    fontWeight: '600' 
+  },
+  containerVazio: { 
+    alignItems: 'center', 
+    paddingVertical: 30 
+  },
+  textoVazio: { 
+    fontSize: 14, 
+    fontStyle: 'italic', 
+    textAlign: 'center' 
+  },
 
-  itemRow: {
+  linhaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 8,
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 10,
     borderWidth: 1,
   },
-  itemDescricao: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
-  itemDetalhes: { fontSize: 12 },
-  itemTotal: { fontSize: 14, fontWeight: 'bold', marginRight: 12 },
-  botaoDeletar: { padding: 6, borderRadius: 8, backgroundColor: 'rgba(239, 68, 68, 0.1)' },
+  itemDescricao: { 
+    fontSize: 15, 
+    fontWeight: '700', 
+    marginBottom: 4 
+  },
+  itemDetalhes: { 
+    fontSize: 13, 
+    fontWeight: '500' 
+  },
+  itemTotal: { 
+    fontSize: 15, 
+    fontWeight: '800', 
+    marginRight: 12, 
+    flexShrink: 1 
+  },
+  botaoDeletar: { 
+    padding: 8, 
+    borderRadius: 10, 
+    backgroundColor: 'rgba(239, 68, 68, 0.1)' 
+  },
 
   botaoAdicionarItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 12,
+    padding: 14,
     borderWidth: 1.5,
     borderColor: '#0284c7',
     borderStyle: 'dashed',
-    borderRadius: 12,
-    marginTop: 8,
-    gap: 8,
-    backgroundColor: 'rgba(2, 132, 199, 0.02)',
+    borderRadius: 14,
+    marginTop: 10,
+    gap: 10,
+    backgroundColor: 'rgba(2, 132, 199, 0.04)',
   },
-  textoBotaoAdicionarItem: { color: '#0284c7', fontWeight: '600', fontSize: 14 },
+  textoBotaoAdicionarItem: { 
+    color: '#0284c7', 
+    fontWeight: '700', 
+    fontSize: 15 
+  },
 
-  summaryCard: {
-    borderRadius: 16,
-    padding: 16,
+  cartaoResumo: {
+    borderRadius: 20,
+    padding: 20,
     borderWidth: 1,
-    marginBottom: 16,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  summaryLabel: { fontSize: 13 },
-  summaryValue: { fontSize: 13, fontWeight: '600' },
-  divider: { height: 1, marginVertical: 8 },
-  summaryRowTotal: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
-  totalLabel: { fontSize: 14, fontWeight: 'bold' },
-  totalValue: { fontSize: 20, fontWeight: 'bold', color: '#22c55e' },
-
-  recipienteAcoes: { marginTop: 4, marginBottom: 20 },
-  tituloAcoes: { fontSize: 12, marginBottom: 8 },
-  grupoBotaoStatus: { flexDirection: 'row', gap: 10 },
-  botaoStatus: {
-    flex: 1,
-    flexDirection: 'row',
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  linhaResumo: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginBottom: 12 
   },
-  botaoStatusAprovado: { backgroundColor: '#22c55e', borderColor: '#22c55e' },
-  botaoStatusRecusado: { backgroundColor: '#ef4444', borderColor: '#ef4444' },
-  textoBotaoStatus: { fontSize: 14, fontWeight: '600' },
+  rotuloResumo: { 
+    fontSize: 14 
+  },
+  valorResumo: { 
+    fontSize: 14, 
+    fontWeight: '600' 
+  },
+  divisor: { 
+    height: 1, 
+    marginVertical: 12 
+  },
+  linhaResumoTotal: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginTop: 8 
+  },
+  rotuloTotal: { 
+    fontSize: 15, 
+    fontWeight: '800', 
+    letterSpacing: 0.5 
+  },
+  valorTotal: { 
+    fontSize: 26, 
+    fontWeight: '900', 
+    color: '#22c55e', 
+    flexShrink: 1 
+  },
 
   botaoSalvarSistema: {
     backgroundColor: '#0284c7',
     flexDirection: 'row',
-    paddingVertical: 16,
-    borderRadius: 14,
+    paddingVertical: 18,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#0284c7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-    marginBottom: 10,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
+    marginBottom: 20,
   },
-  textoBotaoSalvarSistema: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 },
+  textoBotaoSalvarSistema: { 
+    color: '#ffffff', 
+    fontWeight: '800', 
+    fontSize: 16, 
+    letterSpacing: 0.5 
+  },
 
-  sobreposicaoModal: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.6)', justifyContent: 'center', padding: 20 },
-  conteudoModal: { borderRadius: 20, padding: 20, borderWidth: 1, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 10, elevation: 10 },
-  cabecalhoModal: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  tituloModal: { fontSize: 18, fontWeight: 'bold' },
-  modalCloseBtn: { padding: 4, borderRadius: 8 },
-  caixaPesquisa: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 12 },
-  opcaoProduto: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 12, borderBottomWidth: 1, borderRadius: 10, marginBottom: 4 },
-  textoOpcaoProduto: { fontSize: 14, fontWeight: '500' },
-  precoOpcaoProduto: { fontSize: 12, marginTop: 2 },
-  rotuloEntrada: { fontSize: 13, fontWeight: '600', marginBottom: 6, marginTop: 4 },
-  entradaTexto: { borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 15 },
-  botaoSalvarItem: { backgroundColor: '#0284c7', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 20 },
-  textoBotaoSalvarItem: { color: '#ffffff', fontWeight: 'bold', fontSize: 15 },
+  sobreposicaoModal: { 
+    flex: 1, 
+    backgroundColor: 'rgba(0, 0, 0, 0.75)', 
+    justifyContent: 'center', 
+    padding: 24 
+  },
+  conteudoModal: { 
+    borderRadius: 24, 
+    padding: 24, 
+    borderWidth: 1, 
+    shadowColor: '#000', 
+    shadowOpacity: 0.3, 
+    shadowRadius: 15, 
+    elevation: 15 
+  },
+  cabecalhoModal: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: 20 
+  },
+  tituloModal: { 
+    fontSize: 20, 
+    fontWeight: '800' 
+  },
+  botaoFecharModal: { 
+    padding: 6, 
+    borderRadius: 12 
+  },
+  caixaPesquisa: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    borderWidth: 1, 
+    borderRadius: 14, 
+    paddingHorizontal: 16, 
+    paddingVertical: 12, 
+    marginBottom: 16 
+  },
+  opcaoProduto: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    paddingVertical: 14, 
+    paddingHorizontal: 14, 
+    borderBottomWidth: 1, 
+    borderRadius: 12, 
+    marginBottom: 8 
+  },
+  textoOpcaoProduto: { 
+    fontSize: 15, 
+    fontWeight: '600', 
+    marginBottom: 4 
+  },
+  precoOpcaoProduto: { 
+    fontSize: 13, 
+    fontWeight: '500' 
+  },
+  rotuloEntrada: { 
+    fontSize: 14, 
+    fontWeight: '700', 
+    marginBottom: 8, 
+    marginTop: 8 
+  },
+  entradaTexto: { 
+    borderWidth: 1, 
+    borderRadius: 14, 
+    padding: 16, 
+    fontSize: 16, 
+    fontWeight: '600' 
+  },
+  botaoSalvarItem: { 
+    backgroundColor: '#0284c7', 
+    padding: 18, 
+    borderRadius: 14, 
+    alignItems: 'center', 
+    marginTop: 24 
+  },
+  textoBotaoSalvarItem: { 
+    color: '#ffffff', 
+    fontWeight: '800', 
+    fontSize: 16 
+  },
+
+  conteudoModalAlerta: {
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+    elevation: 10,
+    maxWidth: 340,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  envolvedorIconeAlerta: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  tituloModalAlerta: {
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  mensagemModalAlerta: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  botaoConfirmarAlerta: {
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textoBotaoConfirmarAlerta: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 15,
+  },
 });

@@ -836,7 +836,7 @@ export default function DetalhesChamado() {
               <TouchableOpacity
                 style={styles.finishedButton}
                 onPress={() =>
-                  router.replace({
+                  router.push({
                     pathname: '/visualizar-relatorio',
                     params: {
                       ticketId: calendar.calendar_id,

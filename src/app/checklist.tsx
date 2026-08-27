@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
+  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -14,7 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { useTheme } from '@/theme/ThemeContext';
-import { Check, ChevronLeft } from 'lucide-react-native';
+import { Check, CheckCircle2, ChevronLeft, Clock, XCircle } from 'lucide-react-native';
 
 export default function TelaChecklistExclusiva() {
   const router = useRouter();
@@ -26,6 +26,25 @@ export default function TelaChecklistExclusiva() {
   const [loadingChecklist, setLoadingChecklist] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const { theme, darkMode } = useTheme();
+
+  // ESTADOS DO MODAL DE ALERTA PERSONALIZADO
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertData, setAlertData] = useState({
+    titulo: '',
+    mensagem: '',
+    tipo: 'success' as 'success' | 'warning' | 'error',
+    onClose: () => {},
+  });
+
+  function mostrarAlerta(
+    titulo: string,
+    mensagem: string,
+    tipo: 'success' | 'warning' | 'error' = 'success',
+    onCloseAction: () => void = () => {}
+  ) {
+    setAlertData({ titulo, mensagem, tipo, onClose: onCloseAction });
+    setAlertVisible(true);
+  }
 
   useEffect(() => {
     carregarDadosChecklist();
@@ -102,11 +121,18 @@ export default function TelaChecklistExclusiva() {
         JSON.stringify(rascunho)
       );
 
-      Alert.alert('Sucesso', 'Checklist salvo localmente!', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      mostrarAlerta(
+        'Sucesso!',
+        'Checklist salvo localmente com sucesso!',
+        'success',
+        () => router.back()
+      );
     } catch (erro) {
-      Alert.alert('Erro', 'Ocorreu um erro ao salvar o checklist.');
+      mostrarAlerta(
+        'Erro',
+        'Ocorreu um erro ao salvar o checklist. Tente novamente.',
+        'error'
+      );
     } finally {
       setSalvando(false);
     }
@@ -126,7 +152,7 @@ export default function TelaChecklistExclusiva() {
     <ScreenWrapper style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={darkMode ? 'light-content' : 'dark-content'} />
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Barra Superior */}
         <View style={styles.topBar}>
           <TouchableOpacity
@@ -198,7 +224,7 @@ export default function TelaChecklistExclusiva() {
                   />
                 )}
 
-                {/* Se for Select (Botões em Lista Vertical) */}
+                {/* Se for Select */}
                 {field.type === 'select' &&
                   field.options?.split('|').map((option: string, opIndex: number) => (
                     <TouchableOpacity
@@ -231,7 +257,7 @@ export default function TelaChecklistExclusiva() {
                     </TouchableOpacity>
                   ))}
 
-                {/* Se for Radio (Uma Única Escolha) */}
+                {/* Se for Radio */}
                 {field.type === 'radio' &&
                   field.options?.split('|').map((option: string, opIndex: number) => (
                     <TouchableOpacity
@@ -253,7 +279,7 @@ export default function TelaChecklistExclusiva() {
                     </TouchableOpacity>
                   ))}
 
-                {/* Se for Checkbox (Múltiplas Escolhas) */}
+                {/* Se for Checkbox */}
                 {field.type === 'checkbox' &&
                   field.options?.split('|').map((option: string, opIndex: number) => {
                     const selected =
@@ -306,6 +332,7 @@ export default function TelaChecklistExclusiva() {
             disabled={salvando}
             style={[styles.submitBtn, salvando && styles.submitBtnDisabled]}
             onPress={salvarEVoltar}
+            activeOpacity={0.85}
           >
             {salvando ? (
               <ActivityIndicator color="#fff" />
@@ -318,6 +345,116 @@ export default function TelaChecklistExclusiva() {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* MODAL DE ALERTA PERSONALIZADO */}
+      <Modal
+        transparent
+        visible={alertVisible}
+        animationType="fade"
+        onRequestClose={() => {
+          setAlertVisible(false);
+          alertData.onClose();
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.75)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 24,
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 340,
+              backgroundColor: theme.card,
+              borderRadius: 24,
+              padding: 24,
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: theme.border,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.25,
+              shadowRadius: 15,
+              elevation: 10,
+            }}
+          >
+            {/* Ícone do Status */}
+            <View
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 32,
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 16,
+                backgroundColor:
+                  alertData.tipo === 'success'
+                    ? 'rgba(34, 197, 94, 0.15)'
+                    : alertData.tipo === 'warning'
+                    ? 'rgba(245, 158, 11, 0.15)'
+                    : 'rgba(239, 68, 68, 0.15)',
+              }}
+            >
+              {alertData.tipo === 'success' && <CheckCircle2 size={36} color="#22c55e" />}
+              {alertData.tipo === 'warning' && <Clock size={36} color="#f59e0b" />}
+              {alertData.tipo === 'error' && <XCircle size={36} color="#ef4444" />}
+            </View>
+
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: '800',
+                color: theme.text,
+                textAlign: 'center',
+                marginBottom: 8,
+              }}
+            >
+              {alertData.titulo}
+            </Text>
+
+            <Text
+              style={{
+                fontSize: 14,
+                color: theme.subText,
+                textAlign: 'center',
+                lineHeight: 20,
+                marginBottom: 24,
+              }}
+            >
+              {alertData.mensagem}
+            </Text>
+
+            <TouchableOpacity
+              style={{
+                width: '100%',
+                paddingVertical: 14,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor:
+                  alertData.tipo === 'success'
+                    ? '#22c55e'
+                    : alertData.tipo === 'warning'
+                    ? '#f59e0b'
+                    : '#ef4444',
+              }}
+              onPress={() => {
+                setAlertVisible(false);
+                alertData.onClose();
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 15 }}>
+                OK, Entendido
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScreenWrapper>
   );
 }

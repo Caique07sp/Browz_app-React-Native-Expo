@@ -7,7 +7,6 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Check, ChevronLeft, PenTool, Trash2 } from 'lucide-react-native';
 import { getApiUrl } from "@/services/api";
 
 import React, { useState } from 'react';
@@ -24,6 +23,16 @@ import {
 } from 'react-native';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { styles } from "../styles/finished-report.styles";
+
+import { 
+  Check, 
+  CheckCircle2, // <-- Adicione este
+  ChevronLeft, 
+  Clock,        // <-- Adicione este
+  PenTool, 
+  Trash2, 
+  XCircle       // <-- Adicione este
+} from 'lucide-react-native';
 
 export default function FinalizacaoRelatorio() {
   const router = useRouter();
@@ -47,6 +56,25 @@ export default function FinalizacaoRelatorio() {
   const [avisoMidiaVisible, setAvisoMidiaVisible] = useState(false);
   const [nomeTecnico, setNomeTecnico] = useState('Técnico');
   const [mediaCount, setMediaCount] = useState(0);
+  // Estados do Modal de Alerta Personalizado
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertData, setAlertData] = useState({
+    titulo: '',
+    mensagem: '',
+    tipo: 'success' as 'success' | 'warning' | 'error',
+    onClose: () => {},
+  });
+
+  function mostrarAlerta(
+    titulo: string,
+    mensagem: string,
+    tipo: 'success' | 'warning' | 'error' = 'success',
+    onCloseAction: () => void = () => {}
+  ) {
+    setAlertData({ titulo, mensagem, tipo, onClose: onCloseAction });
+    setAlertVisible(true);
+  }
+
   ; useFocusEffect(
     React.useCallback(() => {
       let ativo = true;
@@ -368,7 +396,7 @@ text     vira tentry
         resposta.field_value === null ||
         String(resposta.field_value).trim() === ''
       ) {
-        Alert.alert('Checklist obrigatório', `Responda o campo: ${field.label}`);
+        mostrarAlerta('Checklist obrigatório', `Responda o campo: ${field.label}`, 'warning');
         return false;
       }
     }
@@ -818,13 +846,15 @@ text     vira tentry
 
         await atualizarCacheFinalizado();
 
-        Alert.alert(
-          'Finalizado offline',
-          'Relatório, fotos e assinatura foram salvos localmente e serão sincronizados automaticamente quando a internet voltar.'
+       mostrarAlerta(
+          'Finalizado Offline',
+          'Relatório, fotos e assinatura foram salvos localmente e serão sincronizados automaticamente.',
+          'warning',
+          () => {
+            router.dismissAll();
+            router.replace('/home');
+          }
         );
-
-        router.dismissAll();
-        router.replace('/home');
         return;
       }
 
@@ -867,19 +897,20 @@ text     vira tentry
 
         await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
 
-        Alert.alert('Sucesso', 'Atendimento finalizado com sucesso!', [
-          {
-            text: 'OK',
-            onPress: () => {
-              router.dismissAll();
-              router.replace('/home');
-            }
-          },
-        ]);
+       mostrarAlerta(
+          'Sucesso!',
+          'Atendimento finalizado com sucesso!',
+          'success',
+          () => {
+            router.dismissAll();
+            router.replace('/home');
+          }
+        );
       } else {
-        Alert.alert(
+        mostrarAlerta(
           'Atenção',
-          'Alguns dados podem não ter sido enviados. Verifique a conexão e tente novamente.'
+          'Alguns dados podem não ter sido enviados. Verifique a conexão e tente novamente.',
+          'warning'
         );
       }
     } catch (error) {
@@ -895,7 +926,7 @@ text     vira tentry
     if (sending) return;
 
     if (!description.trim()) {
-      return Alert.alert('Erro', 'Descreva o serviço.');
+      return mostrarAlerta('Erro', 'Descreva o serviço realizado.', 'error');
     }
 
     if (!validarChecklistObrigatorio()) {
@@ -903,11 +934,11 @@ text     vira tentry
     }
 
     if (!signerName.trim() || !signerContact.trim() || !signatureImg) {
-      return Alert.alert('Erro', 'Preencha todos os campos e a assinatura.');
+      return mostrarAlerta('Erro', 'Preencha todos os campos obrigatórios e assine o relatório.', 'error');
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerContact.trim())) {
-      return Alert.alert('Erro', 'Por favor, insira um e-mail válido.');
+      return mostrarAlerta('Erro', 'Por favor, insira um e-mail válido.', 'error');
     }
 
 
@@ -1385,6 +1416,116 @@ text     vira tentry
           </View>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* MODAL DE ALERTA PERSONALIZADO */}
+      <Modal
+        transparent
+        visible={alertVisible}
+        animationType="fade"
+        onRequestClose={() => {
+          setAlertVisible(false);
+          alertData.onClose();
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.75)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 24,
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 340,
+              backgroundColor: theme.card,
+              borderRadius: 24,
+              padding: 24,
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: theme.border,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.25,
+              shadowRadius: 15,
+              elevation: 10,
+            }}
+          >
+            {/* Ícone Indicador de Status */}
+            <View
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 32,
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 16,
+                backgroundColor:
+                  alertData.tipo === 'success'
+                    ? 'rgba(34, 197, 94, 0.15)'
+                    : alertData.tipo === 'warning'
+                    ? 'rgba(245, 158, 11, 0.15)'
+                    : 'rgba(239, 68, 68, 0.15)',
+              }}
+            >
+              {alertData.tipo === 'success' && <CheckCircle2 size={36} color="#22c55e" />}
+              {alertData.tipo === 'warning' && <Clock size={36} color="#f59e0b" />}
+              {alertData.tipo === 'error' && <XCircle size={36} color="#ef4444" />}
+            </View>
+
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: '800',
+                color: theme.text,
+                textAlign: 'center',
+                marginBottom: 8,
+              }}
+            >
+              {alertData.titulo}
+            </Text>
+
+            <Text
+              style={{
+                fontSize: 14,
+                color: theme.subText,
+                textAlign: 'center',
+                lineHeight: 20,
+                marginBottom: 24,
+              }}
+            >
+              {alertData.mensagem}
+            </Text>
+
+            <TouchableOpacity
+              style={{
+                width: '100%',
+                paddingVertical: 14,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor:
+                  alertData.tipo === 'success'
+                    ? '#22c55e'
+                    : alertData.tipo === 'warning'
+                    ? '#f59e0b'
+                    : '#ef4444',
+              }}
+              onPress={() => {
+                setAlertVisible(false);
+                alertData.onClose();
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 15 }}>
+                OK, Entendido
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
 
     </ScreenWrapper>

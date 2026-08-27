@@ -98,7 +98,7 @@ const CartaoChamado = memo(({
             onPress={() => aoNavegarDetalhes(chamado.calendar_id, chamado.service_type_id)}
           >
             <CheckCircle2 size={20} color="#fff" />
-            <Text style={estilos.textoAcaoDeslize}>Check-in</Text>
+            <Text style={estilos.textoAcaoDeslize}>Ações</Text>
           </TouchableOpacity>
         )}
 
@@ -108,9 +108,9 @@ const CartaoChamado = memo(({
             onPress={() => aoNavegarDetalhes(chamado.calendar_id, chamado.service_type_id)}
           >
             <Play size={20} color="#fff" />
-            <Text style={estilos.textoAcaoDeslize}>Check-out</Text>
+            <Text style={estilos.textoAcaoDeslize}>Ações</Text>
           </TouchableOpacity>
-        )}
+        )} 
 
         {status === 1 && pausado && (
           <TouchableOpacity
