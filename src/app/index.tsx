@@ -393,7 +393,7 @@ export default function App() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.versionText}>Versão 1.0.0</Text>
+            <Text style={styles.versionText}>Versão 1.4.0</Text>
           </View>
         </View>
       </ScrollView>

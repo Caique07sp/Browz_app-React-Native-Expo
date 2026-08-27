@@ -324,7 +324,7 @@ export default function Configuracoes() {
                     Sobre o aplicativo
                   </Text>
                   <Text style={[styles.itemSubtitle, { color: theme.subText }]}>
-                    Versão 1.0.0_140726_1336
+                    Versão 1.4.0
                   </Text>
                 </View>
               </View>
