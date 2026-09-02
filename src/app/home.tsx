@@ -46,7 +46,6 @@ import {
 } from "react-native";
 import { Swipeable, GestureHandlerRootView } from "react-native-gesture-handler";
 
-// O import do arquivo de estilos agora utiliza a nomenclatura "estilos"
 import { estilos } from "../styles/home.styles";
 
 import { ScreenWrapper } from "@/components/ScreenWrapper";
@@ -246,7 +245,6 @@ export default function Browz() {
   const [online, setOnline] = useState(true);
   const [pendencias, setPendencias] = useState(0);
 
-  // Map para guardar referências dos Swipes
   const refsDeslize = useRef(new Map());
   const idAbertoAtualmente = useRef<string | null>(null);
 
@@ -823,9 +821,45 @@ export default function Browz() {
     await AsyncStorage.setItem("@ultimos_chamados_sync", JSON.stringify(novosChamados));
   }
 
+  // ==========================================
+  // LÓGICA DE CHECKLISTS ATUALIZADA (Otimizada e Inteligente)
+  // ==========================================
   async function cachearChecklistsNovos(token: string, chamados: any[]) {
     try {
       if (chamados.length === 0) return;
+
+      const idsParaBuscar = [];
+
+      // 1. Identificar quais chamados precisam de atualização de checklist
+      for (const chamado of chamados) {
+        const id = chamado.calendar_id;
+        const currentServiceTypeId = chamado.service_type_id;
+
+        const cacheKey = `@checklist_${id}`;
+        const cached = await AsyncStorage.getItem(cacheKey);
+
+        if (!cached) {
+          idsParaBuscar.push(id);
+        } else {
+          try {
+            const parsed = JSON.parse(cached);
+            // Verifica se o tipo de serviço mudou (ou se é um cache antigo sem service_type_id)
+            if (String(parsed.service_type_id) !== String(currentServiceTypeId)) {
+              // Invalida o checklist antigo imediatamente para não ser usado por engano
+              await AsyncStorage.removeItem(cacheKey);
+              idsParaBuscar.push(id);
+            }
+          } catch (e) {
+            // Em caso de erro no parse, forçar busca
+            idsParaBuscar.push(id);
+          }
+        }
+      }
+
+      // 2. Se não houver nenhum checklist novo/desatualizado, cancela a requisição (Otimização Máxima)
+      if (idsParaBuscar.length === 0) return;
+
+      // 3. Buscar checklists na API apenas se necessário
       const response = await fetch(await getApiUrl(), {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -835,21 +869,33 @@ export default function Browz() {
 
       if (data.status !== "success" || !Array.isArray(data.data)) return;
 
+      // 4. Salvar os novos checklists vinculando o service_type_id atual
       for (const chamado of chamados) {
         const id = chamado.calendar_id;
+
+        // Só processa se estava na lista de busca
+        if (!idsParaBuscar.includes(id)) continue;
+
         const item = data.data.find((c: any) => String(c.calendar_id) === String(id));
         if (!item || !item.calendar_checklist_template) continue;
 
         try {
           const template = JSON.parse(item.calendar_checklist_template);
           const ordenado = template.sort((a: any, b: any) => Number(a.order) - Number(b.order));
+          
           await AsyncStorage.setItem(
             `@checklist_${id}`,
-            JSON.stringify({ calendar_checklist_id: item.calendar_checklist_id, template: ordenado })
+            JSON.stringify({
+              calendar_checklist_id: item.calendar_checklist_id,
+              service_type_id: chamado.service_type_id, // SALVA O TIPO DE SERVIÇO AQUI
+              template: ordenado
+            })
           );
         } catch (e) {}
       }
-    } catch (error) {}
+    } catch (error) {
+      // Ignora erro silenciosamente, não quebra o fluxo
+    }
   }
 
   async function carregarQuantidadeNotificacoes() {

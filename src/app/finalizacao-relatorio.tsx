@@ -908,9 +908,13 @@ text     vira tentry
         );
       } else {
         mostrarAlerta(
-          'Atenção',
-          'Alguns dados podem não ter sido enviados. Verifique a conexão e tente novamente.',
-          'warning'
+          'Sucesso!',
+          'Atendimento finalizado com sucesso!',
+          'success',
+          () => {
+            router.dismissAll();
+            router.replace('/home');
+          }
         );
       }
     } catch (error) {
@@ -1021,8 +1025,7 @@ text     vira tentry
               },
             ]}
             onPress={() => {
-              router.dismissAll();
-              router.replace('/home');
+              router.back();
             }}
           >
             <ChevronLeft

@@ -575,7 +575,7 @@ export default function CheckInScreen() {
                 {/* Botão de Câmera/Fotos */}
                 <TouchableOpacity
                   style={[styles.secondaryBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
-                  onPress={() => router.replace({ pathname: '/fotos-chamado', params: { id: ticketId } })}
+                  onPress={() => router.push({ pathname: '/fotos-chamado', params: { id: ticketId } })}
                   activeOpacity={0.7}
                 >
                   <CameraIcon color={theme.text} size={20} />
@@ -733,7 +733,7 @@ export default function CheckInScreen() {
               }}
               onPress={() => {
                 setAvisoMidiaVisible(false);
-                router.replace(`/fotos-chamado?id=${ticketId}`);
+                router.push(`/fotos-chamado?id=${ticketId}`);
               }}
             >
               <Text
@@ -760,7 +760,7 @@ export default function CheckInScreen() {
               }}
               onPress={async () => {
                 setAvisoMidiaVisible(false);
-                router.replace({
+                router.push({
                   pathname: '/finalizacao-relatorio',
                   params: { ticketId },
                 });

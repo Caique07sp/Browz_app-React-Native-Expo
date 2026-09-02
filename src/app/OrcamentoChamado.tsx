@@ -9,6 +9,7 @@ import {
   Save,
   Search,
   Trash2,
+  Pencil,
   X,
   Clock,
   XCircle
@@ -32,7 +33,6 @@ import { getApiUrl } from '@/services/api';
 import { isOnline } from '@/services/network';
 import { adicionarNaFila } from '@/services/offlineQueue';
 import { useTheme } from '@/theme/ThemeContext';
-
 
 interface ProdutoAPI {
   product_id: number;
@@ -72,10 +72,18 @@ export default function OrcamentoChamado() {
   const [produtosFiltrados, setProdutosFiltrados] = useState<ProdutoAPI[]>([]);
   const [buscaProduto, setBuscaProduto] = useState('');
 
+  // Estados do Modal de Adição
   const [modalVisivel, setModalVisivel] = useState(false);
   const [produtoSelecionado, setProdutoSelecionado] = useState<ProdutoAPI | null>(null);
   const [qtdAdicionar, setQtdAdicionar] = useState('1');
 
+  // NOVO: Estados do Modal de Edição
+  const [modalEdicaoVisivel, setModalEdicaoVisivel] = useState(false);
+  const [itemEditandoIndex, setItemEditandoIndex] = useState<number | null>(null);
+  const [precoEditando, setPrecoEditando] = useState('');
+  const [qtdEditando, setQtdEditando] = useState('');
+
+  // Cálculo Dinâmico
   const subtotalPecas = itens.reduce((acc, item) => acc + (Number(item.proposal_item_total) || 0), 0);
   const valorTotal = subtotalPecas + (Number(valorMaoDeObra) || 0);
 
@@ -302,7 +310,7 @@ export default function OrcamentoChamado() {
 
   async function handleConfirmarAdicionarProduto() {
     if (!produtoSelecionado) {
-      Alert.alert('Atenção', 'Selecione um produto da lista.');
+      exibirAlerta('Atenção', 'Selecione um produto da lista.', 'warning');
       return;
     }
 
@@ -328,6 +336,53 @@ export default function OrcamentoChamado() {
     setProdutoSelecionado(null);
     setQtdAdicionar('1');
     setBuscaProduto('');
+  }
+
+  // NOVO: Lógica para abrir o modal de Edição
+  function handleAbrirEdicao(index: number) {
+    const item = itens[index];
+    setItemEditandoIndex(index);
+    // Removemos pontos de milhares se existirem e substituímos o ponto decimal por vírgula para a UI
+    const precoString = Number(item.proposal_item_product_price).toFixed(2).replace('.', ',');
+    setPrecoEditando(precoString);
+    setQtdEditando(String(item.proposal_item_product_quantity));
+    setModalEdicaoVisivel(true);
+  }
+
+  // NOVO: Lógica para salvar a Edição localmente
+  async function handleConfirmarEdicao() {
+    if (itemEditandoIndex === null) return;
+
+    // Converte vírgula para ponto e remove qualquer formatação errada
+    const precoLimpo = precoEditando.replace(/\./g, '').replace(',', '.');
+    const precoNum = parseFloat(precoLimpo);
+    const qtdNum = parseInt(qtdEditando);
+
+    if (isNaN(precoNum) || precoNum < 0) {
+      exibirAlerta('Atenção', 'Informe um valor monetário válido.', 'warning');
+      return;
+    }
+    if (isNaN(qtdNum) || qtdNum <= 0) {
+      exibirAlerta('Atenção', 'Informe uma quantidade válida (maior que zero).', 'warning');
+      return;
+    }
+
+    const novaLista = [...itens];
+    novaLista[itemEditandoIndex] = {
+      ...novaLista[itemEditandoIndex],
+      proposal_item_product_price: precoNum,
+      proposal_item_product_quantity: qtdNum,
+      proposal_item_total: precoNum * qtdNum,
+      is_local_only: true, // Marca o item como editado para que a API o sincronize
+    };
+
+    setItens(novaLista);
+    await salvarLocalmente(novaLista, valorMaoDeObra, status, proposalId, proposalNumber);
+
+    setModalEdicaoVisivel(false);
+    setItemEditandoIndex(null);
+    setPrecoEditando('');
+    setQtdEditando('');
   }
 
   async function handleSalvarOrcamentoNoSistema() {
@@ -371,6 +426,8 @@ export default function OrcamentoChamado() {
           tipo: 'salvar_item_orcamento' as any,
           ticketId: String(chamadoId),
           data: {
+            id: item.proposal_item_id || undefined, // Evitar duplicação offline
+            proposal_item_id: item.proposal_item_id || undefined,
             proposal_id: proposalId || 0,
             product_id: item.product_id,
             proposal_item_product_name: item.proposal_item_product_name,
@@ -414,14 +471,15 @@ export default function OrcamentoChamado() {
       }
 
       if (!idDoOrcamento) {
-       exibirAlerta('Erro', 'Não foi possível gerar um número de orçamento válido no sistema.', 'error');
+         exibirAlerta('Erro', 'Não foi possível gerar um número de orçamento válido no sistema.', 'error');
          setSalvando(false);
          return;
       }
 
       let falhouAlgumItem = false;
       for (const item of itensPendentes) {
-        const payloadItem = {
+        // ATUALIZAÇÃO IMPORTANTE PARA EDIÇÃO: Envio de ID para gerar UPDATE no servidor
+        const payloadItem: any = {
           class: 'ProposalItemService',
           method: 'store',
           data: {
@@ -433,6 +491,12 @@ export default function OrcamentoChamado() {
             proposal_item_total: item.proposal_item_total,
           },
         };
+
+        if (item.proposal_item_id) {
+           payloadItem.id = item.proposal_item_id;
+           payloadItem.data.id = item.proposal_item_id;
+           payloadItem.data.proposal_item_id = item.proposal_item_id;
+        }
 
         const response = await fetch(await getApiUrl(), {
           method: 'POST',
@@ -453,7 +517,6 @@ export default function OrcamentoChamado() {
         setItens(listaAtualizada);
         await salvarLocalmente(listaAtualizada, valorMaoDeObra, status, idDoOrcamento, numOrc);
         
-        // MENSAGEM DE SUCESSO PRINCIPAL
         exibirAlerta('Orçamento Salvo!', 'O orçamento foi registrado com sucesso no sistema.', 'success');
       }
 
@@ -652,9 +715,14 @@ export default function OrcamentoChamado() {
               <Text style={[styles.itemTotal, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
                 R$ {Number(item.proposal_item_total).toFixed(2).replace('.', ',')}
               </Text>
-              <TouchableOpacity onPress={() => handleRemoverItem(index)} style={styles.botaoDeletar} activeOpacity={0.7}>
-                <Trash2 size={18} color="#ef4444" />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                <TouchableOpacity onPress={() => handleAbrirEdicao(index)} style={styles.botaoEditar} activeOpacity={0.7}>
+                  <Pencil size={18} color="#0284c7" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleRemoverItem(index)} style={styles.botaoDeletar} activeOpacity={0.7}>
+                  <Trash2 size={18} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
             </View>
           ))
         )}
@@ -678,8 +746,6 @@ export default function OrcamentoChamado() {
           </Text>
         </View>
       </View>
-
-      {/* AÇÕES DE STATUS */}
 
       {/* BOTÃO PRINCIPAL DE SALVAR */}
       <TouchableOpacity 
@@ -768,12 +834,59 @@ export default function OrcamentoChamado() {
         </View>
       </Modal>
 
+      {/* NOVO: MODAL DE EDIÇÃO DE ITEM */}
+      <Modal visible={modalEdicaoVisivel} transparent animationType="fade" onRequestClose={() => setModalEdicaoVisivel(false)}>
+        <View style={styles.sobreposicaoModal}>
+          <View style={[styles.conteudoModal, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={styles.cabecalhoModal}>
+              <Text style={[styles.tituloModal, { color: theme.text }]}>Editar Produto</Text>
+              <TouchableOpacity onPress={() => setModalEdicaoVisivel(false)} style={styles.botaoFecharModal} activeOpacity={0.7}>
+                <X size={24} color={theme.subText} />
+              </TouchableOpacity>
+            </View>
+
+            {itemEditandoIndex !== null && (
+              <>
+                <Text style={[styles.textoOpcaoProduto, { color: theme.text, marginBottom: 16 }]} numberOfLines={2}>
+                  {itens[itemEditandoIndex]?.proposal_item_product_name}
+                </Text>
+
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.rotuloEntrada, { color: theme.text }]}>Valor Unitário (R$)</Text>
+                    <TextInput
+                      style={[styles.entradaTexto, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                      keyboardType="numeric"
+                      value={precoEditando}
+                      onChangeText={setPrecoEditando}
+                    />
+                  </View>
+
+                  <View style={{ flex: 0.5 }}>
+                    <Text style={[styles.rotuloEntrada, { color: theme.text }]}>Qtd</Text>
+                    <TextInput
+                      style={[styles.entradaTexto, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                      keyboardType="numeric"
+                      value={qtdEditando}
+                      onChangeText={setQtdEditando}
+                    />
+                  </View>
+                </View>
+
+                <TouchableOpacity style={styles.botaoSalvarItem} onPress={handleConfirmarEdicao} activeOpacity={0.85}>
+                  <Text style={styles.textoBotaoSalvarItem}>Salvar Alterações</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {/* MODAL DE ALERTA PERSONALIZADO DA TELA DE ORÇAMENTO */}
       <Modal transparent visible={alertaModalVisible} animationType="fade" onRequestClose={() => setAlertaModalVisible(false)}>
         <View style={styles.sobreposicaoModal}>
           <View style={[styles.conteudoModalAlerta, { backgroundColor: theme.card, borderColor: theme.border }]}>
             
-            {/* Ícone Indicador de Status */}
             <View style={[
               styles.envolvedorIconeAlerta, 
               { backgroundColor: alertaModalData.tipo === 'success' ? 'rgba(34, 197, 94, 0.15)' : alertaModalData.tipo === 'warning' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)' }
@@ -945,6 +1058,11 @@ const styles = StyleSheet.create({
     fontWeight: '800', 
     marginRight: 12, 
     flexShrink: 1 
+  },
+  botaoEditar: { 
+    padding: 8, 
+    borderRadius: 10, 
+    backgroundColor: 'rgba(2, 132, 199, 0.1)' 
   },
   botaoDeletar: { 
     padding: 8, 

@@ -69,7 +69,7 @@ export default function FotosChamado() {
     titulo: '',
     mensagem: '',
     tipo: 'success' as 'success' | 'warning' | 'error',
-    onClose: () => {},
+    onClose: () => { },
   });
 
 
@@ -77,7 +77,7 @@ export default function FotosChamado() {
     titulo: string,
     mensagem: string,
     tipo: 'success' | 'warning' | 'error' = 'success',
-    onCloseAction: () => void = () => {}
+    onCloseAction: () => void = () => { }
   ) {
     setAlertData({ titulo, mensagem, tipo, onClose: onCloseAction });
     setAlertVisible(true);
@@ -196,20 +196,11 @@ export default function FotosChamado() {
 
       const listaAtualizada = [...fotos, ...novasURIs];
       await salvarListaNoStorage(listaAtualizada);
-
-      const online = await isOnline();
-      if (online) {
-        sincronizarPendentes().catch((e) =>
-          console.warn('⚠️ Sync em background falhou:', e)
-        );
-        mostrarAlerta('Sucesso', `${novasURIs.length} arquivo(s) salvo(s) e enviado(s).`, 'success');
-      } else {
-        mostrarAlerta(
-          'Modo Offline',
-          `${novasURIs.length} arquivo(s) salvo(s) no celular.\nSerão enviados automaticamente quando houver conexão.`,
-          'warning'
-        );
-      }
+      mostrarAlerta(
+        'Mídia Adicionada',
+        `${novasURIs.length} arquivo(s) salvo(s) com sucesso no dispositivo.`,
+        'success'
+      );
     } catch (e) {
       console.error(e);
       mostrarAlerta(
@@ -576,8 +567,8 @@ export default function FotosChamado() {
                   alertData.tipo === 'success'
                     ? 'rgba(34, 197, 94, 0.15)'
                     : alertData.tipo === 'warning'
-                    ? 'rgba(245, 158, 11, 0.15)'
-                    : 'rgba(239, 68, 68, 0.15)',
+                      ? 'rgba(245, 158, 11, 0.15)'
+                      : 'rgba(239, 68, 68, 0.15)',
               }}
             >
               {alertData.tipo === 'success' && <CheckCircle2 size={36} color="#22c55e" />}
@@ -620,8 +611,8 @@ export default function FotosChamado() {
                   alertData.tipo === 'success'
                     ? '#22c55e'
                     : alertData.tipo === 'warning'
-                    ? '#f59e0b'
-                    : '#ef4444',
+                      ? '#f59e0b'
+                      : '#ef4444',
               }}
               onPress={() => {
                 setAlertVisible(false);
