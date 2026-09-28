@@ -890,6 +890,7 @@ export default function DetalhesChamado() {
             )}
 
 
+
           </View>
         </View>
 

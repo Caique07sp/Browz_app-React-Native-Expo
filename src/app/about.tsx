@@ -33,7 +33,7 @@ export default function SobreScreen() {
             resizeMode="contain"
           />
           <Text style={[styles.appName, { color: theme.text }]}>Browz Mobile</Text>
-          <Text style={[styles.versionText, { color: theme.subText }]}>Versão 1.0.0_140726_1336</Text>
+          <Text style={[styles.versionText, { color: theme.subText }]}>Versão 1.4</Text>
         </View>
 
         {/* Card de Propósito e Visão Geral */}

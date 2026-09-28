@@ -1,5 +1,6 @@
 import { isOnline } from '@/services/network';
-import { adicionarNaFila } from '@/services/offlineQueue';
+import { adicionarNaFila, buscarFinalizacaoPendente, enfileirarOuAtualizarFinalizacao } from '@/services/offlineQueue';
+import { sincronizarPendentes } from '@/services/sync';
 import { useTheme } from "@/theme/ThemeContext";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -209,122 +210,6 @@ export default function FinalizacaoRelatorio() {
     }
   };
 
-  async function enviarFotosParaApi(setLoadingDetail: any) {
-    try {
-      const token = await AsyncStorage.getItem('token');
-      const fotosSalvasStr = await AsyncStorage.getItem(`@fotos_chamado_${chamadoId}`);
-
-      if (!fotosSalvasStr) return true;
-
-      const listaFotos = JSON.parse(fotosSalvasStr);
-
-      if (!Array.isArray(listaFotos) || listaFotos.length === 0) {
-        return true;
-      }
-
-      const caminhosBanco = listaFotos.map((uri: any, index: number) => {
-        const ehVideo = uri.toLowerCase().endsWith('.mp4');
-        const ext = ehVideo ? 'mp4' : 'jpg';
-        return `files/calendar/${chamadoId}/midia_${index + 1}_${Date.now()}.${ext}`;
-      });
-
-      // O FOR COMEÇA AQUI:
-      for (const [index, fotoUri] of listaFotos.entries()) {
-        setLoadingDetail(`Foto ${index + 1} de ${listaFotos.length}`);
-
-        // 🌟 ADICIONE ESSA LINHA AQUI DENTRO DO FOR:
-        const ehVideo = fotoUri.toLowerCase().endsWith('.mp4');
-
-        const uriComprimida = await comprimirImagem(fotoUri);
-
-        const formData = new FormData();
-
-        const caminhoBanco = caminhosBanco[index];
-        const nomeArquivo = caminhoBanco.split('/').pop() || `foto_${Date.now()}_${index}.jpg`;
-
-        formData.append('class', 'CalendarService');
-        formData.append('method', 'store');
-
-        formData.append('data[id]', String(chamadoId));
-        formData.append('data[calendar_id]', String(chamadoId));
-
-        // manda TODOS os caminhos juntos em todas as requisições
-        formData.append('data[calendar_images]', caminhosBanco.join(','));
-
-        formData.append('path', `files/calendar/${chamadoId}`);
-
-        formData.append('file', {
-          uri: uriComprimida,
-          name: nomeArquivo,
-          type: ehVideo ? 'video/mp4' : 'image/jpeg'
-        } as any);
-
-        const response = await fetch(await getApiUrl(), {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        });
-
-        const data = await response.json();
-
-        //console.log(`RETORNO FOTO ${index + 1}:`, data);
-
-        if (data.status !== 'success') {
-          return false;
-        }
-      }
-
-      return true;
-    } catch (error) {
-      //console.log('ERRO AO ENVIAR FOTOS:', error);
-      return false;
-    }
-  }
-
-  async function enviarAssinaturaParaApi() {
-    try {
-      if (!signatureImg) return true;
-      const token = await AsyncStorage.getItem('token');
-
-      // Define o nome do arquivo
-      const nomeArquivo = `assinatura.png`;
-      // Define o caminho exato que você quer no banco
-      const caminhoBanco = `files/signatures/${chamadoId}/${nomeArquivo}`;
-
-      const formData = new FormData();
-      formData.append('class', 'CalendarService');
-      formData.append('method', 'store');
-      formData.append('data[id]', chamadoId);
-
-      // Esta linha grava o caminho que você pediu no banco de dados
-      formData.append('data[calendar_signature]', caminhoBanco);
-
-      // Define a pasta onde o arquivo físico será salvo no servidor
-      formData.append('path', `files/signatures/${chamadoId}`);
-
-      // O arquivo propriamente dito
-      formData.append('file', {
-        uri: signatureImg,
-        name: nomeArquivo,
-        type: 'image/png'
-      } as any);
-
-
-      const res = await fetch(await getApiUrl(), {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-
-      const resultado = await res.json();
-      return resultado.status === 'success';
-    } catch (e) {
-      return false;
-    }
-  }
-
   //Aqui eu criei meio que um mapa, pq na API vem esses nome tcombo tentry essas coisa, vai ser um relacionamento e tranformar tambem nos campos
 
   /*Exemplo
@@ -403,142 +288,22 @@ text     vira tentry
 
     return true;
   }
-  async function enviarChecklistParaApi(relatorioFinal: any) {
+  /**
+   * Captura a geolocalização atual (com fallback para a última localização
+   * conhecida, mesmo padrão já usado em salvarEventoCheckin/salvarEventoLinhaTempo)
+   * para registrar no relatório de finalização, independentemente de
+   * online/offline.
+   */
+  async function capturarLocalizacaoAtualOuUltima(): Promise<string> {
+    let location;
     try {
-      const token = await AsyncStorage.getItem('token');
-
-      if (!calendarChecklistId) {
-        //console.log('❌ Erro: Nenhum calendar_checklist_id encontrado no estado');
-        return false;
-      }
-
-      // MONTAGEM DO OBJETO DATA
-      const payload = {
-        class: 'CalendarChecklistService',
-        method: 'store',
-
-
-        data: {
-          id: Number(calendarChecklistId),
-          calendar_checklist_id: Number(calendarChecklistId),
-          calendar_id: Number(chamadoId),
-          calendar_checklist_template: JSON.stringify(checklistTemplate),
-          calendar_checklist_response: JSON.stringify(relatorioFinal.checklist_response),
-
-        },
-      };
-
-      // LOG PARA DEBUG - Verifique se o calendar_checklist_id está correto aqui!
-      //console.log('🚀 ENVIANDO PARA API:', JSON.stringify(payload, null, 2));
-
-      const response = await fetch(await getApiUrl(), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-
-      //console.log('✅ RETORNO DA API:', data);
-
-      return data.status === 'success';
-    } catch (error) {
-      //console.log('BTU - ERRO AO ENVIAR:', error);
-      return false;
+      location = await Location.getCurrentPositionAsync({});
+      await AsyncStorage.setItem("@ultima_localizacao", JSON.stringify(location));
+    } catch {
+      const ultima = await AsyncStorage.getItem("@ultima_localizacao");
+      if (ultima) location = JSON.parse(ultima);
     }
-  }
-
-  async function enviarRelatorioCalendarParaApi(relatorioFinal: any) {
-    try {
-      const token = await AsyncStorage.getItem('token');
-
-      // PEGA LOCALIZAÇÃO ATUAL
-      let location;
-
-      try {
-        location =
-          await Location.getCurrentPositionAsync({});
-
-        await AsyncStorage.setItem(
-          "@ultima_localizacao",
-          JSON.stringify(location)
-        );
-
-      } catch {
-
-        const ultima =
-          await AsyncStorage.getItem(
-            "@ultima_localizacao"
-          );
-
-        if (ultima) {
-          location = JSON.parse(ultima);
-        }
-      }
-
-      // AJUSTA GMT-3
-      const now = new Date();
-
-      const brasilDate = new Date(
-        now.getTime() - 3 * 60 * 60 * 1000
-      ).toISOString();
-
-      const payload = {
-        class: 'CalendarService',
-        method: 'store',
-
-        data: {
-          id: Number(chamadoId),
-          calendar_id: Number(chamadoId),
-
-          calendar_report: relatorioFinal.descricao,
-
-          calendar_signatory_name:
-            relatorioFinal.assinante_nome,
-
-          calendar_signatory_email:
-            relatorioFinal.assinante_contato,
-
-          calendar_signature:
-            `files/signatures/${chamadoId}/assinatura.png`,
-
-          calendar_status: 2,
-
-          // CHECKOUT
-          calendar_last_checkout_date: brasilDate,
-
-          calendar_last_checkout_geo:
-            location
-              ? `${location.coords.latitude}, ${location.coords.longitude}`
-              : '',
-        },
-      };
-
-
-
-      const response = await fetch(
-        await getApiUrl(),
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      const data = await response.json();
-
-      //console.log('✅ RETORNO ENVIO RELATÓRIO:', data);
-
-      return data.status === 'success';
-    } catch (error) {
-      return false;
-    }
+    return location ? `${location.coords.latitude}, ${location.coords.longitude}` : '';
   }
 
   const handleClearSignature = async () => {
@@ -732,18 +497,25 @@ text     vira tentry
 
   // 🌟 MUDOU: Esta passou a ser a execução real do envio após todas as validações e confirmações
   const executarFinalizacaoReal = async () => {
+    // Controla a mensagem do catch: se a persistência local já aconteceu,
+    // o relatório está seguro (na fila) mesmo que algo dê errado depois —
+    // isso NUNCA deve ser reportado ao técnico como perda de dados.
+    let salvoLocalmente = false;
+
     try {
       setSending(true);
+      setLoadingMessage('Salvando relatório...');
+      setLoadingDetail('Preparando fotos e assinatura');
 
       const checkin = await AsyncStorage.getItem(`@checkin_${chamadoId}`);
       const fotosStr = await AsyncStorage.getItem(`@fotos_chamado_${chamadoId}`);
       const notasStr = await AsyncStorage.getItem(`notas_chamado_${chamadoId}`);
-      const online = await isOnline();
 
-      const nomeTecnico =
-        (await AsyncStorage.getItem('nome')) || "tecnico";
+      const nomeTecnico = (await AsyncStorage.getItem('nome')) || "tecnico";
+      const checkoutGeo = await capturarLocalizacaoAtualOuUltima();
+      const fotosOriginais: string[] = fotosStr ? JSON.parse(fotosStr) : [];
 
-      const relatorioFinal = {
+      const relatorioFinal: any = {
         calendar_id: chamadoId,
         calendar_checklist_id: calendarChecklistId,
         descricao: description.trim(),
@@ -753,173 +525,136 @@ text     vira tentry
         checklist_template: checklistTemplate,
         checklist_response: Object.values(checklistResponses),
         checkin: checkin ? JSON.parse(checkin) : null,
-        fotos: fotosStr ? JSON.parse(fotosStr) : [],
+        fotos: fotosOriginais,
         notas: notasStr ? JSON.parse(notasStr) : [],
         finalizado_em: new Date().toISOString(),
+        checkout_geo: checkoutGeo,
       };
 
-      // FLUXO OFFLINE
-      if (!online) {
-        setLoadingMessage('Salvando dados offline...');
-        setLoadingDetail('Copiando arquivos para armazenamento permanente');
+      // ── PASSO 1 — LOCAL-FIRST ────────────────────────────────────────
+      // Fotos e assinatura são copiadas para um diretório PERMANENTE antes
+      // de qualquer tentativa de rede, esteja o app online ou offline. O
+      // arquivo original (cache do picker / do componente de assinatura)
+      // pode ser limpo pelo sistema operacional a qualquer momento; a
+      // cópia permanente é o que garante que nada se perca enquanto o
+      // envio não for confirmado pela API.
+      setLoadingDetail('Copiando arquivos para armazenamento permanente');
 
-        const garantirDiretorio = async (dir: string) => {
-          const info = await FileSystem.getInfoAsync(dir);
-          if (!info.exists) {
-            await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-          }
-        };
-
-        let assinaturaPath: string | null = null;
-        if (signatureImg) {
-          const dirAssinatura = `${FileSystem.documentDirectory}browz/assinaturas/${chamadoId}`;
-          await garantirDiretorio(dirAssinatura);
-          const destAssinatura = `${dirAssinatura}/assinatura.png`;
-
-          if (signatureImg.startsWith('data:')) {
-            const base64 = signatureImg.split(',')[1];
-            await FileSystem.writeAsStringAsync(destAssinatura, base64, {
-              encoding: 'base64' as any,
-            });
-          } else {
-            await FileSystem.copyAsync({ from: signatureImg, to: destAssinatura });
-          }
-          assinaturaPath = destAssinatura;
-          //console.log('📝 Assinatura persistida:', assinaturaPath);
+      const garantirDiretorio = async (dir: string) => {
+        const info = await FileSystem.getInfoAsync(dir);
+        if (!info.exists) {
+          await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
         }
+      };
 
-        const fotosPermanentes: string[] = [];
-        if (relatorioFinal.fotos?.length > 0) {
-          const dirFotos = `${FileSystem.documentDirectory}browz/fotos/${chamadoId}`;
-          await garantirDiretorio(dirFotos);
+      let assinaturaPath: string | null = null;
+      if (signatureImg) {
+        const dirAssinatura = `${FileSystem.documentDirectory}browz/assinaturas/${chamadoId}`;
+        await garantirDiretorio(dirAssinatura);
+        const destAssinatura = `${dirAssinatura}/assinatura.png`;
 
-          for (const [i, uri] of relatorioFinal.fotos.entries()) {
-            const ehVideo = uri.toLowerCase().endsWith('.mp4');
-            const dest = `${dirFotos}/foto_${i + 1}.${ehVideo ? 'mp4' : 'jpg'}`;
-
-            try {
-              const info = await FileSystem.getInfoAsync(uri);
-              if (info.exists) {
-                await FileSystem.copyAsync({ from: uri, to: dest });
-                fotosPermanentes.push(dest);
-                //console.log(`📸 Mídia ${i + 1} persistida:`, dest);
-              } else {
-                //console.log(`⚠️ Mídia ${i + 1} não encontrada, pulando:`, uri);
-              }
-            } catch (e) {
-              //console.log(`⚠️ Erro ao copiar mídia ${i + 1}:`, e);
-            }
-          }
-        }
-
-        const relatorioParaFila = {
-          ...relatorioFinal,
-          assinatura: assinaturaPath,
-          fotos: fotosPermanentes,
-        };
-
-        const filaAtual = await AsyncStorage.getItem("@offline_queue");
-        const listaAtual = filaAtual ? JSON.parse(filaAtual) : [];
-        const jaTemFinalizacao = listaAtual.some(
-          (item: any) => item.tipo === "finalizacao" && item.ticketId === chamadoId
-        );
-
-        if (!jaTemFinalizacao) {
-          await adicionarNaFila({
-            tipo: "finalizacao",
-            ticketId: chamadoId,
-            relatorioFinal: relatorioParaFila,
-            criadoEm: new Date().toISOString(),
-            tentativas: 0,
+        if (signatureImg.startsWith('data:')) {
+          const base64 = signatureImg.split(',')[1];
+          await FileSystem.writeAsStringAsync(destAssinatura, base64, {
+            encoding: 'base64' as any,
           });
-          //console.log('📥 Finalização adicionada à fila offline para ticket:', chamadoId);
+        } else {
+          await FileSystem.copyAsync({ from: signatureImg, to: destAssinatura });
         }
+        assinaturaPath = destAssinatura;
+      }
 
-        await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
-        await salvarEventoCheckin(2);
+      const fotosPermanentes: string[] = [];
+      if (fotosOriginais.length > 0) {
+        const dirFotos = `${FileSystem.documentDirectory}browz/fotos/${chamadoId}`;
+        await garantirDiretorio(dirFotos);
 
-        await salvarEventoLinhaTempo(
-          "Conclusão",
-          `Atendimento concluído por ${nomeTecnico}`,
-          "fa:calendar-check bg-success"
-        );
+        for (const [i, uri] of fotosOriginais.entries()) {
+          setLoadingDetail(`Mídia ${i + 1} de ${fotosOriginais.length}`);
+          const ehVideo = uri.toLowerCase().endsWith('.mp4');
+          const dest = `${dirFotos}/foto_${i + 1}.${ehVideo ? 'mp4' : 'jpg'}`;
 
-        await atualizarCacheFinalizado();
+          try {
+            const info = await FileSystem.getInfoAsync(uri);
+            if (info.exists) {
+              // Compressão (antes só aplicada no caminho online) agora
+              // acontece sempre, uma única vez, aqui na persistência —
+              // reduz espaço local e tempo de upload depois. comprimirImagem
+              // já ignora vídeos (retorna a uri original nesse caso).
+              const origemFinal = await comprimirImagem(uri);
+              await FileSystem.copyAsync({ from: origemFinal, to: dest });
+              fotosPermanentes.push(dest);
+            }
+          } catch (e) {
+            console.log(`⚠️ Erro ao persistir mídia ${i + 1}:`, e);
+          }
+        }
+      }
 
-       mostrarAlerta(
-          'Finalizado Offline',
-          'Relatório, fotos e assinatura foram salvos localmente e serão sincronizados automaticamente.',
+      relatorioFinal.assinatura = assinaturaPath;
+      relatorioFinal.fotos = fotosPermanentes;
+
+      // ── PASSO 2 — PERSISTÊNCIA GARANTIDA NA FILA (OUTBOX) ────────────
+      // A partir daqui o relatório está seguro: existe uma cópia completa
+      // (dados + arquivos) no armazenamento local, com status pendente de
+      // sincronização. Repetir "Finalizar" no mesmo chamado atualiza esta
+      // MESMA entrada em vez de criar uma segunda (evita duplicidade).
+      setLoadingMessage('Registrando finalização...');
+      await enfileirarOuAtualizarFinalizacao(chamadoId, relatorioFinal);
+      salvoLocalmente = true;
+
+      // Eventos de check-out / timeline seguem sua própria lógica já
+      // existente (enviam direto se online, senão vão para a fila) — não
+      // fazem parte do "relatório" propriamente dito.
+      await salvarEventoCheckin(2);
+      await salvarEventoLinhaTempo(
+        "Conclusão",
+        `Atendimento concluído por ${nomeTecnico}`,
+        "fa:calendar-check bg-success"
+      );
+
+      // O chamado já é considerado finalizado LOCALMENTE neste ponto —
+      // isso não depende de rede nem do resultado da tentativa de envio
+      // a seguir.
+      await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
+      await atualizarCacheFinalizado();
+
+    // ── PASSO 3 — TENTATIVA DE SINCRONIZAÇÃO EM SEGUNDO PLANO ────────
+      setLoadingMessage('Finalizando...');
+      setLoadingDetail('Enviando relatório para o servidor');
+      
+      // Dispara a sincronização sem usar "await", deixando-a rodar em background
+      sincronizarPendentes();
+
+      // Libera o técnico imediatamente após a persistência local (Passo 1 e 2)
+      mostrarAlerta(
+        'Chamado Finalizado',
+        'O relatório foi salvo localmente e será sincronizado automaticamente. Você pode continuar trabalhando normalmente.',
+        'success',
+        () => {
+          router.dismissAll();
+          router.replace('/home');
+        }
+      );
+    } catch (error) {
+      console.error('ERRO CRÍTICO NO FINALIZE:', error);
+
+      if (salvoLocalmente) {
+        // A persistência local (passo 1+2) já aconteceu com sucesso antes
+        // do erro — o relatório está seguro na fila e será reenviado
+        // automaticamente. Nunca dizer ao técnico que algo foi perdido.
+        mostrarAlerta(
+          'Chamado finalizado',
+          'O relatório foi salvo localmente e será sincronizado automaticamente. Você pode continuar trabalhando normalmente.',
           'warning',
           () => {
             router.dismissAll();
             router.replace('/home');
           }
         );
-        return;
-      }
-
-      // ENVIOS SEQUENCIAIS ONLINE
-      setLoadingMessage('Registrando check-out...');
-      setLoadingDetail('Salvando evento de saída');
-      const enviadoCheckout = await salvarEventoCheckin(2);
-
-      const enviadoEventoCheckout = await salvarEventoLinhaTempo(
-        "Conclusão",
-        `Atendimento concluído por ${nomeTecnico}`,
-        "fa:calendar-check bg-success"
-      );
-
-      setLoadingMessage('Enviando checklist...');
-      setLoadingDetail('Sincronizando respostas técnicas');
-      const enviadoChecklist = await enviarChecklistParaApi(relatorioFinal);
-
-      setLoadingMessage('Enviando relatório...');
-      setLoadingDetail('Salvando descrição do atendimento');
-      const enviadoRelatorio = await enviarRelatorioCalendarParaApi(relatorioFinal);
-
-      setLoadingMessage('Enviando assinatura...');
-      setLoadingDetail('Validando assinatura do cliente');
-      const enviadoAssinatura = await enviarAssinaturaParaApi();
-
-      setLoadingMessage('Enviando imagens...');
-      setLoadingDetail('Sincronizando fotos da galeria');
-      const enviadoFotos = await enviarFotosParaApi(setLoadingDetail);
-
-      if (enviadoCheckout && enviadoEventoCheckout && enviadoChecklist && enviadoRelatorio && enviadoAssinatura && enviadoFotos) {
-        await atualizarCacheFinalizado();
-        await AsyncStorage.multiRemove([
-          `@rascunho_relatorio_${chamadoId}`,
-          `@assinatura_cliente_${chamadoId}`,
-          `@fotos_chamado_${chamadoId}`,
-          `foto_chamado_${chamadoId}`,
-          `notas_chamado_${chamadoId}`,
-        ]);
-
-        await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
-
-       mostrarAlerta(
-          'Sucesso!',
-          'Atendimento finalizado com sucesso!',
-          'success',
-          () => {
-            router.dismissAll();
-            router.replace('/home');
-          }
-        );
       } else {
-        mostrarAlerta(
-          'Sucesso!',
-          'Atendimento finalizado com sucesso!',
-          'success',
-          () => {
-            router.dismissAll();
-            router.replace('/home');
-          }
-        );
+        Alert.alert('Erro', 'Não foi possível salvar o relatório localmente. Tente novamente.');
       }
-    } catch (error) {
-      console.error('ERRO CRÍTICO NO FINALIZE:', error);
-      Alert.alert('Erro', 'Ocorreu um erro inesperado ao finalizar.');
     } finally {
       setSending(false);
     }
@@ -1534,4 +1269,3 @@ text     vira tentry
     </ScreenWrapper>
   );
 }
-

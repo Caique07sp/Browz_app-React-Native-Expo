@@ -75,7 +75,7 @@ export default function TelaSincronizacao() {
 
     try {
       setSincronizando(true);
-      await sincronizarPendentes();
+      await sincronizarPendentes({ manual: true });
       await carregarDadosFila();
     } catch (error) {
       Alert.alert("Aviso", "Ocorreu um erro ao processar a sincronização.");
@@ -122,6 +122,13 @@ export default function TelaSincronizacao() {
         return { titulo: "⏱️ Evento da Linha do Tempo", cor: "#06b6d4" };
       case "evento_checkin":
         return { titulo: "📝 Registro de Check-in", cor: "#6366f1" };
+      case "orcamento_upsert":
+      case "atualizar_status_orcamento":
+      case "salvar_item_orcamento":
+        return { titulo: "💰 Orçamento", cor: "#0ea5e9" };
+      case "orcamento_delete_item":
+      case "deletar_item_orcamento":
+        return { titulo: "🗑️ Exclusão de Item de Orçamento", cor: "#0ea5e9" };
       default:
         return { titulo: `⚡ ${item.tipo || "Ação Offline"}`, cor: "#64748b" };
     }
@@ -258,6 +265,7 @@ export default function TelaSincronizacao() {
             pendencias.map((item, index) => {
               const acao = getInfoAcao(item);
               const temErro = (item.tentativas || 0) > 0;
+              const erroPermanente = !!item.erroPermanente;
 
               return (
                 <View
@@ -268,7 +276,7 @@ export default function TelaSincronizacao() {
                     borderRadius: 14,
                     marginBottom: 10,
                     borderLeftWidth: 4,
-                    borderLeftColor: temErro ? "#ef4444" : acao.cor,
+                    borderLeftColor: erroPermanente ? "#b91c1c" : temErro ? "#ef4444" : acao.cor,
                     borderWidth: 1,
                     borderColor: theme.border,
                   }}
@@ -320,8 +328,27 @@ export default function TelaSincronizacao() {
                     </Text>
                   )}
 
-                  {/* INDICADOR DE ERROS / TENTATIVAS DA SUA LÓGICA SYNC */}
-                  {temErro && (
+                  {/* ERRO PERMANENTE: não é retentado automaticamente,
+                      precisa de atenção manual (dado nunca é perdido, só
+                      não fica tentando sozinho para sempre) */}
+                  {erroPermanente ? (
+                    <View
+                      style={{
+                        marginTop: 8,
+                        padding: 8,
+                        backgroundColor: "#b91c1c15",
+                        borderRadius: 8,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <AlertTriangle size={14} color="#b91c1c" />
+                      <Text style={{ color: "#b91c1c", fontSize: 11, fontWeight: "600" }}>
+                        Erro — requer atenção. Toque em "Forçar Re-sincronização" para tentar de novo.
+                      </Text>
+                    </View>
+                  ) : temErro ? (
                     <View
                       style={{
                         marginTop: 8,
@@ -338,7 +365,7 @@ export default function TelaSincronizacao() {
                         Falha no envio ({item.tentativas}/5 tentativas)
                       </Text>
                     </View>
-                  )}
+                  ) : null}
                 </View>
               );
             })

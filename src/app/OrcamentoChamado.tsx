@@ -50,6 +50,15 @@ interface ItemOrcamento {
   proposal_item_product_quantity: number;
   proposal_item_total: number;
   is_local_only?: boolean;
+  // Identificador estável gerado no dispositivo (independente do proposal_item_id,
+  // que só existe depois que o item é confirmado pelo servidor). Usado para
+  // reconciliar o cache local com o resultado de uma sincronização feita em
+  // segundo plano, evitando reenviar/duplicar um item já salvo.
+  localId?: string;
+}
+
+function gerarLocalId(): string {
+  return `local_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
 }
 
 export default function OrcamentoChamado() {
@@ -68,6 +77,10 @@ export default function OrcamentoChamado() {
   const [valorMaoDeObra, setValorMaoDeObra] = useState<number>(0);
   const [status, setStatus] = useState<'pendente' | 'aprovado' | 'recusado'>('pendente');
 
+  // Desconto da proposta (proposal_discount)
+  const [proposalDiscount, setProposalDiscount] = useState<number>(0);
+  const [descontoTexto, setDescontoTexto] = useState<string>('0,00');
+
   const [catalogoProdutos, setCatalogoProdutos] = useState<ProdutoAPI[]>([]);
   const [produtosFiltrados, setProdutosFiltrados] = useState<ProdutoAPI[]>([]);
   const [buscaProduto, setBuscaProduto] = useState('');
@@ -85,7 +98,9 @@ export default function OrcamentoChamado() {
 
   // Cálculo Dinâmico
   const subtotalPecas = itens.reduce((acc, item) => acc + (Number(item.proposal_item_total) || 0), 0);
-  const valorTotal = subtotalPecas + (Number(valorMaoDeObra) || 0);
+  const subtotalGeral = subtotalPecas + (Number(valorMaoDeObra) || 0);
+  // Desconto (proposal_discount) aplicado sobre o subtotal, sem permitir total negativo
+  const valorTotal = Math.max(0, subtotalGeral - (Number(proposalDiscount) || 0));
 
   const [alertaModalVisible, setAlertaModalVisible] = useState(false);
   const [alertaModalData, setAlertaModalData] = useState({
@@ -190,6 +205,9 @@ export default function OrcamentoChamado() {
         setValorMaoDeObra(parseFloat(data.proposal_labor_value) || 0);
         setStatus(data.proposal_status || 'pendente');
         setItens(data.itens || []);
+        const descontoCache = parseFloat(data.proposal_discount) || 0;
+        setProposalDiscount(descontoCache);
+        setDescontoTexto(descontoCache.toFixed(2).replace('.', ','));
       }
 
       const online = await isOnline();
@@ -223,6 +241,9 @@ export default function OrcamentoChamado() {
         }
         setValorMaoDeObra(parseFloat(prop.proposal_price) || 0);
         setStatus(prop.proposal_status || 'pendente');
+        const descontoApi = parseFloat(prop.proposal_discount) || 0;
+        setProposalDiscount(descontoApi);
+        setDescontoTexto(descontoApi.toFixed(2).replace('.', ','));
 
         const payloadItens = {
           class: 'ProposalItemService',
@@ -262,6 +283,7 @@ export default function OrcamentoChamado() {
           customer_id: cId,
           proposal_labor_value: prop.proposal_price,
           proposal_status: prop.proposal_status,
+          proposal_discount: prop.proposal_discount,
           itens: listaFinal,
         }));
       }
@@ -295,7 +317,7 @@ export default function OrcamentoChamado() {
     }
   }
 
-  async function salvarLocalmente(novoItens: ItemOrcamento[], novoMaoDeObra: number, novoStatus: string, idAtual = proposalId, numAtual = proposalNumber) {
+  async function salvarLocalmente(novoItens: ItemOrcamento[], novoMaoDeObra: number, novoStatus: string, idAtual = proposalId, numAtual = proposalNumber, novoDesconto = proposalDiscount) {
     const cacheChave = `@orcamento_chamado_${chamadoId}`;
     const payload = {
       proposal_id: idAtual, 
@@ -303,9 +325,23 @@ export default function OrcamentoChamado() {
       customer_id: customerId,
       proposal_labor_value: novoMaoDeObra,
       proposal_status: novoStatus,
+      proposal_discount: novoDesconto,
       itens: novoItens,
     };
     await AsyncStorage.setItem(cacheChave, JSON.stringify(payload));
+  }
+
+  // NOVO: Lógica para alterar o desconto da proposta (proposal_discount)
+  function handleAlterarDesconto(texto: string) {
+    setDescontoTexto(texto);
+
+    // Mesmo padrão de parsing monetário usado em precoEditando: vírgula -> ponto
+    const descontoLimpo = texto.replace(/\./g, '').replace(',', '.');
+    const descontoNum = parseFloat(descontoLimpo);
+    const novoDesconto = isNaN(descontoNum) || descontoNum < 0 ? 0 : descontoNum;
+
+    setProposalDiscount(novoDesconto);
+    salvarLocalmente(itens, valorMaoDeObra, status, proposalId, proposalNumber, novoDesconto);
   }
 
   async function handleConfirmarAdicionarProduto() {
@@ -325,7 +361,8 @@ export default function OrcamentoChamado() {
       proposal_item_product_price: preco,
       proposal_item_product_quantity: qtd,
       proposal_item_total: total,
-      is_local_only: true, 
+      is_local_only: true,
+      localId: gerarLocalId(),
     };
 
     const novaLista = [...itens, novoItem];
@@ -404,6 +441,7 @@ export default function OrcamentoChamado() {
       calendar_id: Number(chamadoId),
       proposal_date: dataAtual,
       proposal_price: valorMaoDeObra, 
+      proposal_discount: proposalDiscount,
       proposal_total_general: valorTotal, 
       proposal_status: status 
     };
@@ -413,32 +451,30 @@ export default function OrcamentoChamado() {
     if (customerId) payloadCabecalho.customer_id = Number(customerId);
 
     if (!online) {
+      // Cabeçalho + itens pendentes entram como UMA única operação atômica.
+      // O proposal_id definitivo dos itens é resolvido pelo handler de
+      // sincronização a partir do resultado do próprio cabeçalho — nunca a
+      // partir do estado local `proposalId`, que ainda pode ser null aqui
+      // (orçamento criado 100% offline).
       await adicionarNaFila({
-        tipo: 'atualizar_status_orcamento' as any,
+        tipo: 'orcamento_upsert',
         ticketId: String(chamadoId),
-        data: payloadCabecalho,
-        criadoEm: new Date().toISOString(),
-        tentativas: 0,
-      } as any);
-
-      for (const item of itensPendentes) {
-        await adicionarNaFila({
-          tipo: 'salvar_item_orcamento' as any,
-          ticketId: String(chamadoId),
-          data: {
-            id: item.proposal_item_id || undefined, // Evitar duplicação offline
+        data: {
+          header: payloadCabecalho,
+          itens: itensPendentes.map((item) => ({
+            id: item.proposal_item_id || undefined,
             proposal_item_id: item.proposal_item_id || undefined,
-            proposal_id: proposalId || 0,
+            localId: item.localId,
             product_id: item.product_id,
             proposal_item_product_name: item.proposal_item_product_name,
             proposal_item_product_price: item.proposal_item_product_price,
             proposal_item_product_quantity: item.proposal_item_product_quantity,
             proposal_item_total: item.proposal_item_total,
-          },
-          criadoEm: new Date().toISOString(),
-          tentativas: 0,
-        } as any);
-      }
+          })),
+        },
+        criadoEm: new Date().toISOString(),
+        tentativas: 0,
+      });
       exibirAlerta('Modo Offline', 'As alterações foram salvas localmente e estão na fila de sincronização.', 'warning');
       setSalvando(false);
       return;
@@ -477,6 +513,10 @@ export default function OrcamentoChamado() {
       }
 
       let falhouAlgumItem = false;
+      // proposal_item_id real retornado pela API, indexado pelo localId do
+      // item pendente (para itens já existentes, mantemos o próprio id).
+      const idsResolvidos = new Map<string, number>();
+
       for (const item of itensPendentes) {
         // ATUALIZAÇÃO IMPORTANTE PARA EDIÇÃO: Envio de ID para gerar UPDATE no servidor
         const payloadItem: any = {
@@ -507,13 +547,20 @@ export default function OrcamentoChamado() {
         const result = await response.json();
         if (result.status !== 'success') {
           falhouAlgumItem = true;
+        } else if (item.localId) {
+          const idReal = Number(result.data?.proposal_item_id || result.data?.id || item.proposal_item_id || 0);
+          if (idReal) idsResolvidos.set(item.localId, idReal);
         }
       }
 
       if (falhouAlgumItem) {
        exibirAlerta('Atenção', 'O cabeçalho foi salvo, mas alguns itens falharam ao enviar.', 'warning');
       } else {
-       const listaAtualizada = itens.map(i => ({ ...i, is_local_only: false }));
+       const listaAtualizada = itens.map(i => ({
+         ...i,
+         is_local_only: false,
+         proposal_item_id: (i.localId && idsResolvidos.get(i.localId)) || i.proposal_item_id,
+       }));
         setItens(listaAtualizada);
         await salvarLocalmente(listaAtualizada, valorMaoDeObra, status, idDoOrcamento, numOrc);
         
@@ -567,12 +614,12 @@ export default function OrcamentoChamado() {
 
   async function enfileirarDelete(idItem: number) {
     await adicionarNaFila({
-      tipo: 'deletar_item_orcamento' as any,
+      tipo: 'orcamento_delete_item',
       ticketId: String(chamadoId),
-      data: { id: idItem, proposal_item_id: idItem }, 
+      data: { proposal_item_id: idItem },
       criadoEm: new Date().toISOString(),
       tentativas: 0,
-    } as any);
+    });
   }
 
   async function handleAlterarStatus(novoStatus: 'aprovado' | 'recusado') {
@@ -596,6 +643,7 @@ export default function OrcamentoChamado() {
       calendar_id: Number(chamadoId),
       proposal_date: dataAtual,
       proposal_price: valorMaoDeObra,
+      proposal_discount: proposalDiscount,
       proposal_total_general: valorTotal,
       proposal_status: novoStatus
     };
@@ -625,21 +673,21 @@ export default function OrcamentoChamado() {
 
       } catch (e) {
         await adicionarNaFila({
-            tipo: 'atualizar_status_orcamento' as any,
+            tipo: 'orcamento_upsert',
             ticketId: String(chamadoId),
-            data: payloadStatus,
+            data: { header: payloadStatus, itens: [] },
             criadoEm: new Date().toISOString(),
             tentativas: 0,
-        } as any);
+        });
       }
     } else {
        await adicionarNaFila({
-            tipo: 'atualizar_status_orcamento' as any,
+            tipo: 'orcamento_upsert',
             ticketId: String(chamadoId),
-            data: payloadStatus,
+            data: { header: payloadStatus, itens: [] },
             criadoEm: new Date().toISOString(),
             tentativas: 0,
-       } as any);
+       });
     }
   }
 
@@ -736,7 +784,24 @@ export default function OrcamentoChamado() {
       {/* RESUMO FINANCEIRO */}
       <View style={[styles.cartaoResumo, { backgroundColor: theme.card, borderColor: theme.border }]}>
         <Text style={[styles.tituloSessao, { color: theme.text, marginBottom: 12 }]}>Resumo Financeiro</Text>
-        
+
+        <View style={styles.linhaResumo}>
+          <Text style={[styles.rotuloResumo, { color: theme.subText }]}>Subtotal</Text>
+          <Text style={[styles.valorResumo, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
+            R$ {subtotalGeral.toFixed(2).replace('.', ',')}
+          </Text>
+        </View>
+
+        <Text style={[styles.rotuloEntrada, { color: theme.text, marginTop: 4 }]}>Desconto (R$)</Text>
+        <TextInput
+          style={[styles.entradaTexto, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+          keyboardType="numeric"
+          value={descontoTexto}
+          onChangeText={handleAlterarDesconto}
+          placeholder="0,00"
+          placeholderTextColor={theme.subText}
+        />
+
         <View style={[styles.divisor, { backgroundColor: theme.border }]} />
 
         <View style={styles.linhaResumoTotal}>

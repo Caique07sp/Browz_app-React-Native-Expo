@@ -1,7 +1,7 @@
 import NetInfo from "@react-native-community/netinfo";
 import { Stack, useRootNavigationState, useRouter, useSegments } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Platform, View } from "react-native";
+import { ActivityIndicator, AppState, Platform, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import * as NavigationBar from "expo-navigation-bar";
@@ -126,6 +126,18 @@ function AppContent() {
       }
     });
 
+    // Gatilho de "voltar ao foreground": o app pode ter ficado minutos em
+    // background com a conectividade oscilando sem que o listener de
+    // NetInfo acima tenha disparado nesse período (ex.: usuário estava
+    // numa tela que não recarrega nada sozinha). Ao voltar ao primeiro
+    // plano, tenta sincronizar de novo — sincronizarPendentes() já é
+    // barata quando não há nada pendente (retorna cedo).
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        sincronizarPendentes();
+      }
+    });
+
     const subscription = Notifications.addNotificationReceivedListener(async (notification) => {
       try {
         // 🔴 CHECAGEM CRUCIAL: Se o usuário desativou as notificações, ignora o recebimento por completo
@@ -169,6 +181,7 @@ function AppContent() {
 
     return () => {
       unsubscribeNet();
+      appStateSubscription.remove();
       subscription.remove();
     };
   }, []);

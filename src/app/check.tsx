@@ -529,6 +529,18 @@ export default function CheckInScreen() {
             )}
           </View>
 
+          {/* Botão de Orçamento - sempre visível: chamado não iniciado, em atendimento ou pausado */}
+          <TouchableOpacity
+            style={[styles.secondaryBtn, { backgroundColor: theme.card, borderColor: theme.border, marginBottom: 12 }]}
+            onPress={() => router.push({ pathname: '/OrcamentoChamado', params: { id: ticketId } })}
+            activeOpacity={0.7}
+          >
+            <DollarSign color="#0284c7" size={20} />
+            <Text style={[styles.btnText, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
+              Orçamento
+            </Text>
+          </TouchableOpacity>
+
           {/* ÁREA DE BOTÕES INTERATIVOS */}
           {!started ? (
             <TouchableOpacity
@@ -560,18 +572,6 @@ export default function CheckInScreen() {
           ) : (
             <>
               <View style={styles.actionGrid}>
-                {/* Botão de Orçamento */}
-                <TouchableOpacity
-                  style={[styles.secondaryBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
-                  onPress={() => router.push({ pathname: '/OrcamentoChamado', params: { id: ticketId } })}
-                  activeOpacity={0.7}
-                >
-                  <DollarSign color="#0284c7" size={20} />
-                  <Text style={[styles.btnText, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
-                    Orçamento
-                  </Text>
-                </TouchableOpacity>
-
                 {/* Botão de Câmera/Fotos */}
                 <TouchableOpacity
                   style={[styles.secondaryBtn, { backgroundColor: theme.card, borderColor: theme.border }]}

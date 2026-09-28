@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { styles } from "../styles/photo.styles";
 
-import { adicionarNaFila } from '@/services/offlineQueue';
 import { useTheme } from '@/theme/ThemeContext';
 
 import { ScreenWrapper } from "@/components/ScreenWrapper";
@@ -172,7 +171,6 @@ export default function FotosChamado() {
       for (const asset of resultado.assets) {
         const ehVideo = asset.type === 'video' || asset.uri.toLowerCase().endsWith('.mp4');
         const extensao = ehVideo ? 'mp4' : 'jpg';
-        const tipoFila = ehVideo ? 'video_chamado' : 'foto_chamado';
 
         const nomeArquivo = `ticket_${ticketId}_${Date.now()}_${Math.floor(
           Math.random() * 10000
@@ -181,15 +179,10 @@ export default function FotosChamado() {
 
         await FileSystem.copyAsync({ from: asset.uri, to: destino });
 
-        await adicionarNaFila({
-          tipo: tipoFila,
-          ticketId,
-          uri: destino,
-          fileName: nomeArquivo,
-          description: ehVideo ? 'Vídeo do chamado' : 'Foto do chamado',
-          criadoEm: new Date().toISOString(),
-          tentativas: 0,
-        } as any);
+        // OBS: a foto/vídeo NÃO é adicionada à fila geral de sincronização
+        // (offlineQueue). Fotos têm lógica própria e são enviadas somente
+        // na finalização do chamado (ver sincronizarFinalizacao em sync.ts),
+        // usando a lista salva em `@fotos_chamado_${ticketId}` logo abaixo.
 
         novasURIs.push(destino);
       }
