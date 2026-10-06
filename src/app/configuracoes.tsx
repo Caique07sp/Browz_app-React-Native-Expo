@@ -13,11 +13,13 @@ import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { obterStatusNotificacaoSalva, requisitarEPersistirPermissao } from "@/services/notifications";
 import { logout } from "@/services/session";
 import { useTheme } from "@/theme/ThemeContext";
+import { TimezoneService } from "@/services/TimezoneService";
 import { useRouter } from "expo-router";
 import {
   ArrowLeft,
   Bell,
   ChevronRight,
+  Clock,
   Info,
   LogOut,
   Moon,
@@ -26,6 +28,9 @@ import {
   User
 } from "lucide-react-native";
 import { styles } from "../styles/settings.styles";
+
+
+import { Picker } from '@react-native-picker/picker';
 
 // Componente auxiliar para fazer os itens surgirem suavemente de baixo para cima
 function FadeInItem({ children, delay }: { children: React.ReactNode; delay: number }) {
@@ -57,11 +62,23 @@ export default function Configuracoes() {
   const { theme, darkMode, toggleTheme } = useTheme();
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  
+
+  const [timezone, setTimezone] = useState("");
+  const [timezoneList, setTimezoneList] = useState<{ id: string, label: string }[]>([]);
+
   // Valor animado para controlar o fade na troca de tema
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    async function loadTz() {
+      const currentTz = await TimezoneService.getCurrentTimezone();
+      setTimezone(currentTz);
+
+      // Carrega a lista formatada dinamicamente (já calcula horário de verão)
+      const formattedList = TimezoneService.getFormattedTimezoneList();
+      setTimezoneList(formattedList);
+    }
+    loadTz();
     async function carregarPreferencia() {
       const ativado = await obterStatusNotificacaoSalva();
       setNotificationsEnabled(ativado);
@@ -91,6 +108,12 @@ export default function Configuracoes() {
     });
   }
 
+  async function handleChangeTimezone(itemValue: string) {
+    setTimezone(itemValue);
+    await TimezoneService.setCurrentTimezone(itemValue);
+
+  }
+
   async function fazerLogout() {
     await logout();
     router.replace("/");
@@ -108,7 +131,7 @@ export default function Configuracoes() {
       <StatusBar barStyle={darkMode ? "light-content" : "dark-content"} />
 
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-        
+
         {/* HEADER */}
         <View
           style={[
@@ -139,7 +162,7 @@ export default function Configuracoes() {
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
-          
+
           {/* SEÇÃO: CONTA */}
           <FadeInItem delay={100}>
             <Text style={[styles.sectionTitle, { color: theme.subText }]}>
@@ -249,6 +272,28 @@ export default function Configuracoes() {
                 thumbColor="#fff"
               />
             </View>
+
+            <View style={[styles.item, { backgroundColor: theme.card, borderColor: theme.border, flexDirection: 'column', alignItems: 'flex-start' }]}>
+              <View style={[styles.itemLeft, { marginBottom: 10 }]}>
+                <Clock color={theme.primary} size={22} />
+                <View>
+                  <Text style={[styles.itemTitle, { color: theme.text }]}>Fuso Horário Global</Text>
+                  <Text style={[styles.itemSubtitle, { color: theme.subText }]}>Define os horários de todo o sistema</Text>
+                </View>
+              </View>
+              <View style={{ width: '100%', borderWidth: 1, borderColor: theme.border, borderRadius: 8 }}>
+                <Picker
+                  selectedValue={timezone}
+                  onValueChange={handleChangeTimezone}
+                  style={{ color: theme.text }}
+                  dropdownIconColor={theme.text}
+                >
+                  {timezoneList.map(tz => (
+                    <Picker.Item key={tz.id} label={tz.label} value={tz.id} />
+                  ))}
+                </Picker>
+              </View>
+            </View>
           </FadeInItem>
 
           {/* SEÇÃO: SISTEMA */}
@@ -265,7 +310,7 @@ export default function Configuracoes() {
                   borderColor: theme.border,
                 },
               ]}
-              onPress={() =>router.navigate("/seguranca")}
+              onPress={() => router.navigate("/seguranca")}
             >
               <View style={styles.itemLeft}>
                 <Shield color={theme.primary} size={22} />
@@ -340,7 +385,7 @@ export default function Configuracoes() {
               <Text style={styles.logoutText}>Sair</Text>
             </TouchableOpacity>
           </FadeInItem>
-          
+
         </ScrollView>
       </Animated.View>
     </ScreenWrapper>

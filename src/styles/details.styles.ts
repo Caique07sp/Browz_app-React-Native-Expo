@@ -149,7 +149,7 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 12,
     height: 55,
     borderRadius: 16,
   },
@@ -355,5 +355,146 @@ export const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  routesButtonText: {
+    width: '50%',
+    marginLeft: 12,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  
+  // --- NOVOS ESTILOS: BOTTOM SHEET ROTAS ---
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  simpleRouteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 48, // Altura padrão de botão pequeno (parecido com os botões antigos)
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 0,
+     shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.50,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  simpleRouteButtonText: {
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  bottomSheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    borderTopWidth: 1,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    alignSelf: 'center',
+    marginBottom: 24,
+  },
+  sheetHeader: {
+    marginBottom: 20,
+  },
+  sheetTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  sheetSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  optionsContainer: {
+    marginBottom: 20,
+  },
+  routeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  routeIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  routeTextData: {
+    flex: 1,
+  },
+  routeAppName: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  routeAppDesc: {
+    fontSize: 13,
+  },
+  cancelRouteBtn: {
+    height: 55,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  cancelRouteText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  routesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 72, // Aumentamos um pouco a altura para caber o subtítulo
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+  },
+  routesButtonIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  routesButtonTextContainer: {
+    flex: 1,
+    marginLeft: 12,
+    justifyContent: 'center',
+  },
+  routesButtonTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  routesButtonSubtitle: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  routesOpenPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    gap: 2,
+  },
+  routesOpenPillText: {
+    color: '#3b82f6',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

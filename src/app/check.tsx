@@ -6,6 +6,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getApiUrl } from "@/services/api";
+import { sincronizarPendentes } from "@/services/sync";
+import { formatInTimeZone } from 'date-fns-tz';
+import { TimezoneService } from "@/services/TimezoneService";
 import {
   Camera as CameraIcon,
   CheckCircle,
@@ -16,7 +19,7 @@ import {
   Play,
   ShieldCheck,
   X,
-  XCircle 
+  XCircle
 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
@@ -59,6 +62,12 @@ export default function CheckInScreen() {
   const { theme, darkMode } = useTheme();
   const [alertVisible, setAlertVisible] = useState(false);
   const [avisoMidiaVisible, setAvisoMidiaVisible] = useState(false);
+
+  const [userTz, setUserTz] = useState('America/Sao_Paulo');
+
+  useEffect(() => {
+    TimezoneService.getCurrentTimezone().then((tz) => setUserTz(tz));
+  }, []);
 
   const [alertData, setAlertData] = useState({
     titulo: '',
@@ -284,7 +293,7 @@ export default function CheckInScreen() {
       calendar_id: Number(ticketId),
       event_title: titulo,
       event_description: descricao,
-      event_datetime: agora.toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'),
+      event_datetime: formatInTimeZone(agora, userTz, "yyyy-MM-dd'T'HH:mm:ss"),
       event_icon: icon,
     };
 
@@ -314,7 +323,7 @@ export default function CheckInScreen() {
       calendar_checkin_type: tipo,
       calendar_checkin_geo: latitude && longitude ? `${latitude}, ${longitude}` : '',
       calendar_checkin_latlng: latitude && longitude ? `{lat: ${latitude},lng: ${longitude}}` : '',
-      calendar_checkin_datetime: agora.toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'),
+      calendar_checkin_datetime: formatInTimeZone(agora, userTz, "yyyy-MM-dd'T'HH:mm:ss"),
     };
 
     const online = await isOnline();
@@ -343,7 +352,7 @@ export default function CheckInScreen() {
       const checkinData = {
         calendar_id: ticketId,
         horario: now.toISOString(),
-        horario_formatado: now.toLocaleTimeString('PT-br', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
+        horario_formatado: formatInTimeZone(now, userTz, 'HH:mm'),
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
         status: 'checkin_realizado',
@@ -360,7 +369,7 @@ export default function CheckInScreen() {
 
       await atualizarStatusChamado(1, {
         agenda_pause: 0,
-        calendar_last_checkin_date: now.toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T'),
+        calendar_last_checkin_date: formatInTimeZone(now, userTz, "yyyy-MM-dd'T'HH:mm:ss"),
         calendar_last_checkin_geo: `${location.coords.latitude},${location.coords.longitude}`,
       });
 
@@ -385,7 +394,7 @@ export default function CheckInScreen() {
 
     const nomeTecnico = (await AsyncStorage.getItem('nome')) || "tecnico";
     const data = JSON.parse(savedCheckIn);
-    const agora = getBrazilDateTime();
+    const agora = new Date();
 
     const pausado = {
       ...data,
@@ -393,34 +402,30 @@ export default function CheckInScreen() {
       status: 'pausado',
       pausa_motivo: reason.trim(),
       pausa_data: agora.toISOString(),
-      pausa_horario_formatado: agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      pausa_horario_formatado: formatInTimeZone(agora, userTz, 'HH:mm'),
     };
 
+
     await AsyncStorage.setItem(`@checkin_${ticketId}`, JSON.stringify(pausado));
+    await AsyncStorage.setItem(`@ticket_${ticketId}_pausado`, "1");
+    await atualizarCacheChamado(1, 1);
+
+
     await salvarEventoLinhaTempo("Pausa", `Atendimento colocado em modo de espera por ${nomeTecnico}. <br/>Motivo: <br/> ${reason.trim()}`, "fa:arrow-right bg-calendar-pause");
     await salvarEventoCheckin(3);
 
-    const online = await isOnline();
-    if (!online) {
-      await adicionarNaFila({
-        tipo: "pausar_chamado",
-        ticketId,
-        data: { pausa_motivo: reason.trim(), pausa_data: agora.toISOString() },
-        criadoEm: new Date().toISOString(),
-        tentativas: 0,
-      });
-      await atualizarCacheChamado(1, 1);
-    } else {
-      await atualizarStatusChamado(1, {
-        agenda_pause: 1,
-        calendar_status: 1,
-        pausa_motivo: reason.trim(),
-        pausa_data: agora.toISOString(),
-      });
-    }
 
-    await AsyncStorage.setItem(`@ticket_${ticketId}_pausado`, "1");
+    await adicionarNaFila({
+      tipo: "pausar_chamado",
+      ticketId,
+      data: { pausa_motivo: reason.trim(), pausa_data: agora.toISOString() },
+      criadoEm: new Date().toISOString(),
+      tentativas: 0,
+    });
+
+
     await AsyncStorage.removeItem(`@checkin_${ticketId}`);
+
 
     setStarted(false);
     setIsActive(false);
@@ -428,8 +433,12 @@ export default function CheckInScreen() {
     setReason('');
     setModalType(null);
 
+    // 4. DISPARO EM SEGUNDO PLANO: Aciona o envio silencioso (sem await)
+    sincronizarPendentes();
+
+    // 5. Libera o técnico imediatamente para a Home
     router.replace('/home');
-    mostrarAlerta('Atendimento pausado', 'Será necessário realizar novo check-in para continuar.');
+    mostrarAlerta('Atendimento pausado', 'A pausa foi registrada localmente e será sincronizada automaticamente. Realize novo check-in para continuar.', 'success');
   }
 
   async function handleFinish() {
@@ -509,9 +518,11 @@ export default function CheckInScreen() {
           )}
 
           <View style={[styles.timeCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.timeLabel, { color: theme.subText }]}>HORA ATUAL</Text>
+            <Text style={[styles.timeLabel, { color: theme.subText }]}>
+              HORA ATUAL • {TimezoneService.getDynamicOffset(userTz)}
+            </Text>
             <Text style={[styles.timeValue, { color: theme.text }]}>
-              {currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              {formatInTimeZone(currentTime, userTz, 'HH:mm:ss')}
             </Text>
 
             {checkInTime && (
@@ -785,13 +796,13 @@ export default function CheckInScreen() {
       {/* MODAL DE ALERTA PERSONALIZADO */}
       <Modal transparent visible={alertVisible} animationType="fade" onRequestClose={() => setAlertVisible(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-          <View 
-            style={{ 
-              width: '100%', 
-              maxWidth: 340, 
-              backgroundColor: theme.card, 
-              borderRadius: 24, 
-              padding: 24, 
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 340,
+              backgroundColor: theme.card,
+              borderRadius: 24,
+              padding: 24,
               alignItems: 'center',
               borderWidth: 1,
               borderColor: theme.border,
@@ -803,19 +814,19 @@ export default function CheckInScreen() {
             }}
           >
             {/* Ícone Indicador de Status */}
-            <View 
-              style={{ 
+            <View
+              style={{
                 width: 64,
                 height: 64,
                 borderRadius: 32,
                 justifyContent: 'center',
                 alignItems: 'center',
                 marginBottom: 16,
-                backgroundColor: alertData.tipo === 'success' 
-                  ? 'rgba(34, 197, 94, 0.15)' 
-                  : alertData.tipo === 'warning' 
-                  ? 'rgba(245, 158, 11, 0.15)' 
-                  : 'rgba(59, 130, 246, 0.15)'
+                backgroundColor: alertData.tipo === 'success'
+                  ? 'rgba(34, 197, 94, 0.15)'
+                  : alertData.tipo === 'warning'
+                    ? 'rgba(245, 158, 11, 0.15)'
+                    : 'rgba(59, 130, 246, 0.15)'
               }}
             >
               {alertData.tipo === 'success' && <CheckCircle2 size={36} color="#22c55e" />}
@@ -831,19 +842,19 @@ export default function CheckInScreen() {
               {alertData.mensagem}
             </Text>
 
-            <TouchableOpacity 
-              style={{ 
-                width: '100%', 
-                paddingVertical: 14, 
-                borderRadius: 14, 
-                alignItems: 'center', 
+            <TouchableOpacity
+              style={{
+                width: '100%',
+                paddingVertical: 14,
+                borderRadius: 14,
+                alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: alertData.tipo === 'success' 
-                  ? '#22c55e' 
-                  : alertData.tipo === 'warning' 
-                  ? '#f59e0b' 
-                  : '#3b82f6'
-              }} 
+                backgroundColor: alertData.tipo === 'success'
+                  ? '#22c55e'
+                  : alertData.tipo === 'warning'
+                    ? '#f59e0b'
+                    : '#3b82f6'
+              }}
               onPress={() => setAlertVisible(false)}
               activeOpacity={0.85}
             >

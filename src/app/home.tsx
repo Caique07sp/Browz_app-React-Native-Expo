@@ -53,6 +53,8 @@ import { estaSincronizando, sincronizarPendentes } from "@/services/sync";
 import { isOnline } from '@/services/network';
 import { logout } from "@/services/session";
 import { getApiUrl } from "@/services/api";
+import { TimezoneService } from "@/services/TimezoneService";
+import { formatInTimeZone } from "date-fns-tz/formatInTimeZone";
 
 let alertaDeslogarVisivel = false;
 
@@ -81,6 +83,7 @@ const CartaoChamado = memo(({
   aoAbrirDeslize,
   aoRegistrarRef,
   aoNavegarDetalhes,
+  userTz,
   aoNavegarEditarRelatorio,
   aoNavegarDetalhesChamados,
   aoNavegarChecklist
@@ -109,7 +112,7 @@ const CartaoChamado = memo(({
             <Play size={20} color="#fff" />
             <Text style={estilos.textoAcaoDeslize}>Ações</Text>
           </TouchableOpacity>
-        )} 
+        )}
 
         {status === 1 && pausado && (
           <TouchableOpacity
@@ -181,13 +184,7 @@ const CartaoChamado = memo(({
             </View>
 
             <Text style={[estilos.dataRodape, { color: tema.subText }]}>
-              {new Date(chamado.calendar_start).toLocaleDateString("pt-BR", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+              {formatInTimeZone(new Date(chamado.calendar_start), userTz, "dd/MM/yyyy HH:mm")}
             </Text>
 
             <Text style={[estilos.tituloCartao, { color: tema.text }]}>
@@ -221,11 +218,17 @@ export default function Browz() {
   const [menuVisible, setMenuVisible] = useState(false);
 
   const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
+
+
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
-
+const [userTz, setUserTz] = useState('America/Sao_Paulo');
+  useEffect(() => {
+    TimezoneService.getCurrentTimezone().then((tz) => setUserTz(tz));
+  }, []);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [nome, setNome] = useState("");
@@ -238,7 +241,7 @@ export default function Browz() {
   const [todosChamados, setTodosChamados] = useState<any[]>([]);
   const [filteredChamados, setFilteredChamados] = useState<any[]>([]);
   const [ultimosChamados, setUltimosChamados] = useState<any[]>([]);
-  
+
   const [quantidadeNotificacoes, setQuantidadeNotificacoes] = useState(0);
   const { theme, darkMode } = useTheme();
 
@@ -270,28 +273,28 @@ export default function Browz() {
     idAbertoAtualmente.current = id;
   }, []);
 
-  const navegarEditarRelatorio= useCallback((id: string, service_type_id?: any) => {
-  if (idAbertoAtualmente.current) {
-    const ref = refsDeslize.current.get(idAbertoAtualmente.current);
-    if (ref) ref.close();
-  }
-  router.navigate({
-    pathname: "/visualizar-relatorio",
-    params: { id, service_type_id, ticketId: id },
-  });
-}, []);
+  const navegarEditarRelatorio = useCallback((id: string, service_type_id?: any) => {
+    if (idAbertoAtualmente.current) {
+      const ref = refsDeslize.current.get(idAbertoAtualmente.current);
+      if (ref) ref.close();
+    }
+    router.navigate({
+      pathname: "/visualizar-relatorio",
+      params: { id, service_type_id, ticketId: id },
+    });
+  }, []);
 
 
- const navegarDetalhes = useCallback((id: string, service_type_id?: any) => {
-  if (idAbertoAtualmente.current) {
-    const ref = refsDeslize.current.get(idAbertoAtualmente.current);
-    if (ref) ref.close();
-  }
-  router.navigate({
-    pathname: "/check",
-    params: { id, service_type_id },
-  });
-}, []);
+  const navegarDetalhes = useCallback((id: string, service_type_id?: any) => {
+    if (idAbertoAtualmente.current) {
+      const ref = refsDeslize.current.get(idAbertoAtualmente.current);
+      if (ref) ref.close();
+    }
+    router.navigate({
+      pathname: "/check",
+      params: { id, service_type_id },
+    });
+  }, []);
   const aoNavegarDetalhesChamados = useCallback((id: string) => {
     if (idAbertoAtualmente.current) {
       const ref = refsDeslize.current.get(idAbertoAtualmente.current);
@@ -324,12 +327,54 @@ export default function Browz() {
     return true;
   }
 
+
   async function carregarDadosDeApoio() {
     await Promise.all([
       buscarTecnicos(),
       buscarCategorias(),
-      buscarClientes()
+      buscarClientes(),
+      buscarProdutos()
     ]);
+  }
+
+
+  async function buscarProdutos() {
+    try {
+      const isOnlineStatus = await isOnline();
+      if (!isOnlineStatus) {
+        return;
+      }
+
+      const token = await AsyncStorage.getItem("token");
+      const response = await fetch(await getApiUrl(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ class: "ProductService", method: "loadAll" }),
+      });
+
+      const res = await response.json();
+      if (res.status === "success" && Array.isArray(res.data)) {
+
+        const ativos = res.data.filter((p: any) =>
+          p.product_active === 'Y' ||
+          p.product_active === true ||
+          p.product_active === '1' ||
+          p.product_active === 1
+        );
+
+        const formatados = ativos.map((p: any) => ({
+          product_id: Number(p.product_id),
+          product_name: p.product_name,
+          product_price: parseFloat(p.product_price) || 0,
+          product_active: p.product_active,
+        }));
+
+
+        await AsyncStorage.setItem("@cache_catalogo_produtos", JSON.stringify(formatados));
+      }
+    } catch (error) {
+      console.log("Erro ao buscar produtos em background na Home:", error);
+    }
   }
 
   async function sincronizarEBuscarChamados() {
@@ -362,14 +407,34 @@ export default function Browz() {
           const sessaoOk = await verificarSessaoValida();
           if (!sessaoOk) return;
 
-          const filtrosSalvos = await AsyncStorage.getItem("@saved_selected_status");
-          if (filtrosSalvos) setSelectedStatus(JSON.parse(filtrosSalvos));
-
           const dataInicioSalva = await AsyncStorage.getItem("@saved_start_date");
-          if (dataInicioSalva) setStartDate(new Date(dataInicioSalva));
-
           const dataFimSalva = await AsyncStorage.getItem("@saved_end_date");
-          if (dataFimSalva) setEndDate(new Date(dataFimSalva));
+          const filtroDataLimpado = await AsyncStorage.getItem("@filtro_data_limpado");
+
+          const tz = await TimezoneService.getCurrentTimezone();
+          if (dataInicioSalva) {
+            setStartDate(new Date(dataInicioSalva));
+          } else if (filtroDataLimpado !== "true") {
+            // Se não tem salvo e não foi limpo intencionalmente, define o início da semana no fuso
+            const hoje = new Date();
+            const inicioSemana = new Date(hoje);
+            inicioSemana.setDate(hoje.getDate() - hoje.getDay()); // Domingo
+            setStartDate(await TimezoneService.getStartOfDayZoned(inicioSemana));
+          } else {
+            setStartDate(null);
+          }
+
+          if (dataFimSalva) {
+            setEndDate(new Date(dataFimSalva));
+          } else if (filtroDataLimpado !== "true") {
+            // Define o fim da semana no fuso
+            const hoje = new Date();
+            const fimSemana = new Date(hoje);
+            fimSemana.setDate(hoje.getDate() + (6 - hoje.getDay())); // Sábado
+            setEndDate(await TimezoneService.getEndOfDayZoned(fimSemana));
+          } else {
+            setEndDate(null);
+          }
 
           await carregarUsuario();
           await carregarDadosDeApoio();
@@ -529,7 +594,7 @@ export default function Browz() {
         await AsyncStorage.setItem("@cache_chamados", JSON.stringify(chamadosComEstadoLocal));
         await verificarAlteracoes(chamadosComEstadoLocal);
 
-        if (token) cachearChecklistsNovos(token, chamadosComEstadoLocal).catch(() => {});
+        if (token) cachearChecklistsNovos(token, chamadosComEstadoLocal).catch(() => { });
 
         setUltimosChamados(chamadosComEstadoLocal);
         setTodosChamados(chamadosComEstadoLocal);
@@ -587,16 +652,12 @@ export default function Browz() {
     }
 
     if (startDate && endDate) {
-      const inicio = new Date(startDate);
-      inicio.setHours(0, 0, 0, 0);
-
-      const fim = new Date(endDate);
-      fim.setHours(23, 59, 59, 999);
-
       lista = lista.filter((item) => {
         if (!item.calendar_start) return false;
-        const dataChamado = new Date(item.calendar_start);
-        return dataChamado >= inicio && dataChamado <= fim;
+        // As datas do backend (calendar_start) e os nossos estados (startDate/endDate) 
+        // já são timestamps absolutos. Basta comparar os milissegundos.
+        const dataChamado = new Date(item.calendar_start).getTime();
+        return dataChamado >= startDate.getTime() && dataChamado <= endDate.getTime();
       });
     }
 
@@ -701,7 +762,7 @@ export default function Browz() {
         AsyncStorage.setItem("@saved_selected_status", JSON.stringify(novoStatus)).catch();
         return novoStatus;
       });
-    } catch (error) {}
+    } catch (error) { }
   };
 
   const limparFiltros = async () => {
@@ -713,7 +774,8 @@ export default function Browz() {
       await AsyncStorage.removeItem("@saved_selected_status");
       await AsyncStorage.removeItem("@saved_start_date");
       await AsyncStorage.removeItem("@saved_end_date");
-    } catch (error) {}
+      await AsyncStorage.setItem("@filtro_data_limpado", "true");
+    } catch (error) { }
   };
 
   async function carregarUsuario() {
@@ -784,7 +846,7 @@ export default function Browz() {
       tipo,
       uniqueId,
       lida: false,
-      data: new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
+      data: formatInTimeZone(new Date(), userTz, "dd/MM/yyyy HH:mm:ss"),
       timestamp: new Date().toISOString(),
     });
 
@@ -882,7 +944,7 @@ export default function Browz() {
         try {
           const template = JSON.parse(item.calendar_checklist_template);
           const ordenado = template.sort((a: any, b: any) => Number(a.order) - Number(b.order));
-          
+
           await AsyncStorage.setItem(
             `@checklist_${id}`,
             JSON.stringify({
@@ -891,7 +953,7 @@ export default function Browz() {
               template: ordenado
             })
           );
-        } catch (e) {}
+        } catch (e) { }
       }
     } catch (error) {
       // Ignora erro silenciosamente, não quebra o fluxo
@@ -967,7 +1029,7 @@ export default function Browz() {
         {/* LISTA DE CHAMADOS OTMIZADA */}
         <FlatList
           data={filteredChamados}
-          extraData={theme}
+          extraData={{ theme, userTz }}
           keyExtractor={(item) => String(item.calendar_id)}
           initialNumToRender={10}
           maxToRenderPerBatch={10}
@@ -1014,6 +1076,7 @@ export default function Browz() {
             <CartaoChamado
               chamado={item}
               tema={theme}
+              userTz={userTz}
               textoCliente={getClienteText(item.customer_id)}
               textoCategoria={getCategoriaText(item.service_type_id)}
               textoStatus={getStatusText(item.calendar_status, item.agenda_pause)}
@@ -1096,6 +1159,7 @@ export default function Browz() {
                     setEndDate(null);
                     await AsyncStorage.removeItem("@saved_start_date");
                     await AsyncStorage.removeItem("@saved_end_date");
+                    await AsyncStorage.setItem("@filtro_data_limpado", "true");
                   }}
                 >
                   <Text style={estilos.textoLimparData}>Limpar período de data</Text>
@@ -1112,11 +1176,32 @@ export default function Browz() {
               </View>
 
               {showStartPicker && Platform.OS === "android" && (
-                <DateTimePicker value={startDate || new Date()} mode="date" display="default" locale="pt-BR" onChange={(event, date) => { setShowStartPicker(false); if (date) { setStartDate(date); AsyncStorage.setItem("@saved_start_date", date.toISOString()).catch(); } }} />
+                <DateTimePicker
+                  value={startDate || new Date()}
+                  mode="date"
+                  display="default"
+                  locale="pt-BR"
+                  onChange={(event, date) => {
+                    setShowStartPicker(false);
+                    if (date) {
+                      setStartDate(date);
+                      AsyncStorage.setItem("@saved_start_date", date.toISOString()).catch();
+                      AsyncStorage.removeItem("@filtro_data_limpado").catch(); // <--- AQUI
+                    }
+                  }}
+                />
               )}
 
               {showEndPicker && Platform.OS === "android" && (
-                <DateTimePicker value={endDate || new Date()} mode="date" display="default" locale="pt-BR" onChange={(event, date) => { setShowEndPicker(false); if (date) { setEndDate(date); AsyncStorage.setItem("@saved_end_date", date.toISOString()).catch(); } }} />
+                <DateTimePicker
+                  value={endDate || new Date()} mode="date" display="default" locale="pt-BR" onChange={(event, date) => {
+                    setShowEndPicker(false);
+                    if (date) {
+                      setEndDate(date);
+                      AsyncStorage.setItem("@saved_end_date", date.toISOString()).catch();
+                      AsyncStorage.removeItem("@filtro_data_limpado").catch(); // <--- AQUI
+                    }
+                  }} />
               )}
 
               {Platform.OS === "ios" && (
@@ -1176,7 +1261,7 @@ export default function Browz() {
                     <ChevronRight size={16} color={theme.subText} />
                   </TouchableOpacity>
 
-                
+
 
                   <TouchableOpacity style={estilos.itemMenu} onPress={() => { setMenuVisible(false); router.push("/mapa-chamados"); }}>
                     <MapPin size={20} color="#3b82f6" />

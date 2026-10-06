@@ -142,6 +142,8 @@ export default function OrcamentoChamado() {
         const dados = JSON.parse(cacheProds);
         setCatalogoProdutos(dados);
         setProdutosFiltrados(dados);
+
+        if (dados.length > 0) return;
       }
 
       const online = await isOnline();

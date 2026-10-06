@@ -220,52 +220,165 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingContainer: {
+ loadingContainer: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#020617', // Dark tech base
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 25,
   },
-
-  loadingCard: {
+  loadingOverlay: {
+    flex: 1,
     width: '100%',
-    backgroundColor: '#1e293b',
-    borderRadius: 30,
     padding: 30,
+    justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
   },
-
-  loadingTitle: {
+  
+  // --- TELA PROCESSING (ETAPAS) ---
+  processingWrapper: {
+    width: '100%',
+    maxWidth: 400,
+  },
+  processingTitle: {
     color: '#fff',
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginTop: 25,
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: 2,
     textAlign: 'center',
   },
-
-  loadingSubtitle: {
+  processingSubtitle: {
     color: '#94a3b8',
     fontSize: 15,
-    marginTop: 10,
+    marginTop: 6,
+    marginBottom: 40,
+    textAlign: 'center',
+  },
+  stepsContainer: {
+    gap: 20,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  stepWaiting: {
+    opacity: 0.3,
+  },
+  stepIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)'
+  },
+  stepText: {
+    color: '#94a3b8',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  stepTextActive: {
+    color: '#3b82f6',
+    fontWeight: '700',
+  },
+  stepTextDone: {
+    color: '#f8fafc',
+    fontWeight: '600',
+  },
+  stepTextPending: {
+    color: '#f59e0b',
+    fontWeight: '600',
+  },
+
+  // --- TELA CONCLUSAO (GRANDE MOMENTO) ---
+  conclusionWrapper: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  checkCircleLarge: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+    marginBottom: 24,
+  },
+  conclusionTitle: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
+  conclusionSubtitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 8,
+    marginBottom: 40,
     textAlign: 'center',
   },
 
-  loadingBarBackground: {
+  // --- GLASSMORPHISM CARD ---
+  glassCard: {
     width: '100%',
-    height: 10,
-    backgroundColor: '#0f172a',
-    borderRadius: 999,
-    marginTop: 30,
-    overflow: 'hidden',
+    maxWidth: 360,
+    backgroundColor: 'rgba(30, 41, 59, 0.7)',
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.5,
+    shadowRadius: 30,
+    elevation: 10,
   },
-
-  loadingBarFill: {
-    width: '70%',
-    height: '100%',
-    backgroundColor: '#3b82f6',
-    borderRadius: 999,
+  glassHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    paddingBottom: 16,
+    marginBottom: 16,
   },
+  glassHeaderTitle: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  glassHeaderDate: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  glassContent: {
+    gap: 8,
+  },
+  glassLabel: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  glassValue: {
+    color: '#f8fafc',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 16,
+  },
+  glassRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  glassCol: {
+    flex: 1,
+  }
 });

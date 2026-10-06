@@ -9,8 +9,10 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getApiUrl } from "@/services/api";
+import { formatInTimeZone } from 'date-fns-tz';
 
-import React, { useState } from 'react';
+
+import React, { useState, useRef, useEffect } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -20,19 +22,26 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  Animated,
+  Easing,
 } from 'react-native';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { styles } from "../styles/finished-report.styles";
+import { TimezoneService } from "@/services/TimezoneService";
 
-import { 
-  Check, 
+import {
+  Check,
   CheckCircle2, // <-- Adicione este
-  ChevronLeft, 
+  ChevronLeft,
   Clock,        // <-- Adicione este
-  PenTool, 
-  Trash2, 
-  XCircle       // <-- Adicione este
+  PenTool,
+  Trash2,
+  XCircle,
+  Server,
+  Save,
+  Camera,
+  ClipboardCheck,      // <-- Adicione este
 } from 'lucide-react-native';
 
 export default function FinalizacaoRelatorio() {
@@ -46,11 +55,46 @@ export default function FinalizacaoRelatorio() {
   const [signerContact, setSignerContact] = useState('');
   const [signatureImg, setSignatureImg] = useState<string | null>(null);
 
+  const [userTz, setUserTz] = useState('America/Sao_Paulo');
+
+  useEffect(() => {
+    TimezoneService.getCurrentTimezone().then((tz) => setUserTz(tz));
+  }, []);
+
   const [checklistTemplate, setChecklistTemplate] = useState<any[]>([]); //Aqui guardei os campos que vai aparecer na tela
   const [checklistResponses, setChecklistResponses] = useState<any>({});
   const [loadingChecklist, setLoadingChecklist] = useState(false);
   const [calendarChecklistId, setCalendarChecklistId] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
+  // ESTADOS DA NOVA ANIMAÇÃO DE FINALIZAÇÃO
+  type StepStatus = 'waiting' | 'active' | 'done' | 'pending';
+  const [stepChecklist, setStepChecklist] = useState<StepStatus>('waiting');
+  const [stepFiles, setStepFiles] = useState<StepStatus>('waiting');
+  const [stepLocal, setStepLocal] = useState<StepStatus>('waiting');
+  const [stepSync, setStepSync] = useState<StepStatus>('waiting');
+
+  const [showConclusion, setShowConclusion] = useState(false);
+  const [syncSuccess, setSyncSuccess] = useState(false);
+  const [conclusionData, setConclusionData] = useState<any>(null);
+
+  // Referências de Animação
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const checkScale = useRef(new Animated.Value(0)).current;
+  const cardOpacity = useRef(new Animated.Value(0)).current;
+  const cardTranslateY = useRef(new Animated.Value(50)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Inicia o efeito de pulso contínuo para itens processando
+  useEffect(() => {
+    if (sending && !showConclusion) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.2, duration: 500, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 500, useNativeDriver: true })
+        ])
+      ).start();
+    }
+  }, [sending, showConclusion]);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [loadingDetail, setLoadingDetail] = useState('');
   const { theme, darkMode } = useTheme();
@@ -63,14 +107,16 @@ export default function FinalizacaoRelatorio() {
     titulo: '',
     mensagem: '',
     tipo: 'success' as 'success' | 'warning' | 'error',
-    onClose: () => {},
+    onClose: () => { },
   });
+
+
 
   function mostrarAlerta(
     titulo: string,
     mensagem: string,
     tipo: 'success' | 'warning' | 'error' = 'success',
-    onCloseAction: () => void = () => {}
+    onCloseAction: () => void = () => { }
   ) {
     setAlertData({ titulo, mensagem, tipo, onClose: onCloseAction });
     setAlertVisible(true);
@@ -86,7 +132,7 @@ export default function FinalizacaoRelatorio() {
         buscarChecklist();
         carregarNomeTecnico();
 
- 
+
         AsyncStorage.getItem(`@fotos_chamado_${chamadoId}`).then((fotosStr) => {
           if (fotosStr) {
             const lista = JSON.parse(fotosStr);
@@ -129,7 +175,7 @@ export default function FinalizacaoRelatorio() {
     try {
       setLoadingChecklist(true);
 
-     
+
       const cache = await AsyncStorage.getItem(`@checklist_${chamadoId}`);
 
       if (cache) {
@@ -141,7 +187,7 @@ export default function FinalizacaoRelatorio() {
         setChecklistTemplate([]);
       }
 
-      
+
 
     } catch (error) {
       // console.log('ERRO CHECKLIST:', error);
@@ -150,7 +196,7 @@ export default function FinalizacaoRelatorio() {
     }
   }
 
-  
+
   {/*async function enviarFotoParaApi() {
     try {
       const token = await AsyncStorage.getItem('token');
@@ -244,7 +290,7 @@ text     vira tentry
 } isso é um exemplo viu
   
   */
- function handleChecklistChange(field: any, value: any) {
+  function handleChecklistChange(field: any, value: any) {
     setChecklistResponses((old: any) => {
       const novasRespostas = {
         ...old,
@@ -401,11 +447,7 @@ text     vira tentry
         latitude && longitude ? `${latitude}, ${longitude}` : '',
       calendar_checkin_latlng:
         latitude && longitude ? `{lat: ${latitude},lng: ${longitude}}` : '',
-      calendar_checkin_datetime: agora
-        .toLocaleString('sv-SE', {
-          timeZone: 'America/Sao_Paulo',
-        })
-        .replace(' ', 'T'),
+      calendar_checkin_datetime: formatInTimeZone(agora, userTz, "yyyy-MM-dd'T'HH:mm:ss"),
     };
 
     const online = await isOnline();
@@ -453,11 +495,7 @@ text     vira tentry
       calendar_id: Number(chamadoId),
       event_title: titulo,
       event_description: descricao,
-      event_datetime: agora
-        .toLocaleString("sv-SE", {
-          timeZone: "America/Sao_Paulo",
-        })
-        .replace(" ", "T"),
+      event_datetime: formatInTimeZone(agora, userTz, "yyyy-MM-dd'T'HH:mm:ss"),
       event_icon: icon,
     };
 
@@ -497,54 +535,36 @@ text     vira tentry
 
   // 🌟 MUDOU: Esta passou a ser a execução real do envio após todas as validações e confirmações
   const executarFinalizacaoReal = async () => {
-    // Controla a mensagem do catch: se a persistência local já aconteceu,
-    // o relatório está seguro (na fila) mesmo que algo dê errado depois —
-    // isso NUNCA deve ser reportado ao técnico como perda de dados.
     let salvoLocalmente = false;
 
     try {
       setSending(true);
-      setLoadingMessage('Salvando relatório...');
-      setLoadingDetail('Preparando fotos e assinatura');
+      Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
 
-      const checkin = await AsyncStorage.getItem(`@checkin_${chamadoId}`);
+      // ── PASSO 1: Preparando Dados e Checklist
+      setStepChecklist('active');
+      const checkinStr = await AsyncStorage.getItem(`@checkin_${chamadoId}`);
+      const checkin = checkinStr ? JSON.parse(checkinStr) : null;
       const fotosStr = await AsyncStorage.getItem(`@fotos_chamado_${chamadoId}`);
       const notasStr = await AsyncStorage.getItem(`notas_chamado_${chamadoId}`);
-
-      const nomeTecnico = (await AsyncStorage.getItem('nome')) || "tecnico";
       const checkoutGeo = await capturarLocalizacaoAtualOuUltima();
       const fotosOriginais: string[] = fotosStr ? JSON.parse(fotosStr) : [];
 
       const relatorioFinal: any = {
-        calendar_id: chamadoId,
-        calendar_checklist_id: calendarChecklistId,
-        descricao: description.trim(),
-        assinante_nome: signerName.trim(),
-        assinante_contato: signerContact.trim(),
-        assinatura: signatureImg,
-        checklist_template: checklistTemplate,
-        checklist_response: Object.values(checklistResponses),
-        checkin: checkin ? JSON.parse(checkin) : null,
-        fotos: fotosOriginais,
-        notas: notasStr ? JSON.parse(notasStr) : [],
-        finalizado_em: new Date().toISOString(),
-        checkout_geo: checkoutGeo,
+        calendar_id: chamadoId, calendar_checklist_id: calendarChecklistId, descricao: description.trim(),
+        assinante_nome: signerName.trim(), assinante_contato: signerContact.trim(), assinatura: signatureImg,
+        checklist_template: checklistTemplate, checklist_response: Object.values(checklistResponses), checkin: checkin,
+        fotos: fotosOriginais, notas: notasStr ? JSON.parse(notasStr) : [], finalizado_em: formatInTimeZone(new Date(), userTz, "yyyy-MM-dd'T'HH:mm:ss"), checkout_geo: checkoutGeo,
       };
 
-      // ── PASSO 1 — LOCAL-FIRST ────────────────────────────────────────
-      // Fotos e assinatura são copiadas para um diretório PERMANENTE antes
-      // de qualquer tentativa de rede, esteja o app online ou offline. O
-      // arquivo original (cache do picker / do componente de assinatura)
-      // pode ser limpo pelo sistema operacional a qualquer momento; a
-      // cópia permanente é o que garante que nada se perca enquanto o
-      // envio não for confirmado pela API.
-      setLoadingDetail('Copiando arquivos para armazenamento permanente');
+      await new Promise(r => setTimeout(r, 300));
+      setStepChecklist('done');
 
+      // ── PASSO 2: Mídias (Fotos e Assinatura)
+      setStepFiles('active');
       const garantirDiretorio = async (dir: string) => {
         const info = await FileSystem.getInfoAsync(dir);
-        if (!info.exists) {
-          await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-        }
+        if (!info.exists) await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
       };
 
       let assinaturaPath: string | null = null;
@@ -552,12 +572,9 @@ text     vira tentry
         const dirAssinatura = `${FileSystem.documentDirectory}browz/assinaturas/${chamadoId}`;
         await garantirDiretorio(dirAssinatura);
         const destAssinatura = `${dirAssinatura}/assinatura.png`;
-
         if (signatureImg.startsWith('data:')) {
           const base64 = signatureImg.split(',')[1];
-          await FileSystem.writeAsStringAsync(destAssinatura, base64, {
-            encoding: 'base64' as any,
-          });
+          await FileSystem.writeAsStringAsync(destAssinatura, base64, { encoding: 'base64' as any });
         } else {
           await FileSystem.copyAsync({ from: signatureImg, to: destAssinatura });
         }
@@ -568,95 +585,101 @@ text     vira tentry
       if (fotosOriginais.length > 0) {
         const dirFotos = `${FileSystem.documentDirectory}browz/fotos/${chamadoId}`;
         await garantirDiretorio(dirFotos);
-
         for (const [i, uri] of fotosOriginais.entries()) {
-          setLoadingDetail(`Mídia ${i + 1} de ${fotosOriginais.length}`);
           const ehVideo = uri.toLowerCase().endsWith('.mp4');
           const dest = `${dirFotos}/foto_${i + 1}.${ehVideo ? 'mp4' : 'jpg'}`;
-
           try {
             const info = await FileSystem.getInfoAsync(uri);
             if (info.exists) {
-              // Compressão (antes só aplicada no caminho online) agora
-              // acontece sempre, uma única vez, aqui na persistência —
-              // reduz espaço local e tempo de upload depois. comprimirImagem
-              // já ignora vídeos (retorna a uri original nesse caso).
               const origemFinal = await comprimirImagem(uri);
               await FileSystem.copyAsync({ from: origemFinal, to: dest });
               fotosPermanentes.push(dest);
             }
-          } catch (e) {
-            console.log(`⚠️ Erro ao persistir mídia ${i + 1}:`, e);
-          }
+          } catch (e) { }
         }
       }
-
       relatorioFinal.assinatura = assinaturaPath;
       relatorioFinal.fotos = fotosPermanentes;
+      setStepFiles('done');
 
-      // ── PASSO 2 — PERSISTÊNCIA GARANTIDA NA FILA (OUTBOX) ────────────
-      // A partir daqui o relatório está seguro: existe uma cópia completa
-      // (dados + arquivos) no armazenamento local, com status pendente de
-      // sincronização. Repetir "Finalizar" no mesmo chamado atualiza esta
-      // MESMA entrada em vez de criar uma segunda (evita duplicidade).
-      setLoadingMessage('Registrando finalização...');
+      // ── PASSO 3: Fila Local Segura
+      setStepLocal('active');
       await enfileirarOuAtualizarFinalizacao(chamadoId, relatorioFinal);
       salvoLocalmente = true;
-
-      // Eventos de check-out / timeline seguem sua própria lógica já
-      // existente (enviam direto se online, senão vão para a fila) — não
-      // fazem parte do "relatório" propriamente dito.
       await salvarEventoCheckin(2);
-      await salvarEventoLinhaTempo(
-        "Conclusão",
-        `Atendimento concluído por ${nomeTecnico}`,
-        "fa:calendar-check bg-success"
-      );
-
-      // O chamado já é considerado finalizado LOCALMENTE neste ponto —
-      // isso não depende de rede nem do resultado da tentativa de envio
-      // a seguir.
+      await salvarEventoLinhaTempo("Conclusão", `Atendimento concluído por ${nomeTecnico}`, "fa:calendar-check bg-success");
       await AsyncStorage.setItem(`@ticket_${chamadoId}_status`, 'concluido');
       await atualizarCacheFinalizado();
+      setStepLocal('done');
 
-    // ── PASSO 3 — TENTATIVA DE SINCRONIZAÇÃO EM SEGUNDO PLANO ────────
-      setLoadingMessage('Finalizando...');
-      setLoadingDetail('Enviando relatório para o servidor');
-      
-      // Dispara a sincronização sem usar "await", deixando-a rodar em background
-      sincronizarPendentes();
+      // ── PASSO 4: Sincronização Inteligente
+      setStepSync('active');
+      const connection = await isOnline();
+      let syncResult = false;
 
-      // Libera o técnico imediatamente após a persistência local (Passo 1 e 2)
-      mostrarAlerta(
-        'Chamado Finalizado',
-        'O relatório foi salvo localmente e será sincronizado automaticamente. Você pode continuar trabalhando normalmente.',
-        'success',
-        () => {
+      if (connection) {
+        sincronizarPendentes(); // Roda em background
+        await new Promise(r => setTimeout(r, 1500)); // Aguarda tentativa rápida da API
+        const pendente = await buscarFinalizacaoPendente(chamadoId);
+        if (!pendente) syncResult = true; // API respondeu rápido e removeu da fila
+      } else {
+        await new Promise(r => setTimeout(r, 800)); // Pausa visual para offline
+      }
+
+      setStepSync(syncResult ? 'done' : 'pending');
+      setSyncSuccess(syncResult);
+
+      // Prepara os dados para o Cartão de Conclusão Glassmorphism
+      let duracaoStr = '--h--';
+      if (checkin && checkin.horario) {
+        const diff = new Date().getTime() - new Date(checkin.horario).getTime();
+        const hrs = Math.floor(diff / (1000 * 60 * 60));
+        const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        duracaoStr = `${hrs.toString().padStart(2, '0')}h${mins.toString().padStart(2, '0')}`;
+      }
+
+      setConclusionData({
+        cliente: signerName.trim() || 'Cliente',
+        dataStr: formatInTimeZone(new Date(), userTz, "dd MMM yyyy").toUpperCase(),
+        duracao: duracaoStr,
+        fotosCount: fotosPermanentes.length,
+        checklistCount: `${Object.keys(checklistResponses).length}/${checklistTemplate.length}`
+      });
+
+      // ── PASSO 5: Transição para a Grande Conclusão
+      setShowConclusion(true);
+      Animated.sequence([
+        Animated.spring(checkScale, { toValue: 1, tension: 40, friction: 5, useNativeDriver: true }),
+        Animated.delay(300),
+        Animated.parallel([
+          Animated.timing(cardOpacity, { toValue: 1, duration: 400, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+          Animated.spring(cardTranslateY, { toValue: 0, tension: 30, friction: 6, useNativeDriver: true })
+        ])
+      ]).start(() => {
+        setTimeout(() => {
           router.dismissAll();
           router.replace('/home');
-        }
-      );
-    } catch (error) {
-      console.error('ERRO CRÍTICO NO FINALIZE:', error);
+        }, 2800);
+      });
 
+    } catch (error) {
       if (salvoLocalmente) {
-        // A persistência local (passo 1+2) já aconteceu com sucesso antes
-        // do erro — o relatório está seguro na fila e será reenviado
-        // automaticamente. Nunca dizer ao técnico que algo foi perdido.
-        mostrarAlerta(
-          'Chamado finalizado',
-          'O relatório foi salvo localmente e será sincronizado automaticamente. Você pode continuar trabalhando normalmente.',
-          'warning',
-          () => {
-            router.dismissAll();
-            router.replace('/home');
-          }
-        );
+        setStepSync('pending');
+        setSyncSuccess(false);
+        setShowConclusion(true);
+        Animated.sequence([
+          Animated.spring(checkScale, { toValue: 1, tension: 40, friction: 5, useNativeDriver: true }),
+          Animated.parallel([
+            Animated.timing(cardOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+            Animated.spring(cardTranslateY, { toValue: 0, tension: 30, friction: 6, useNativeDriver: true })
+          ])
+        ]).start(() => {
+          setTimeout(() => { router.dismissAll(); router.replace('/home'); }, 2500);
+        });
       } else {
-        Alert.alert('Erro', 'Não foi possível salvar o relatório localmente. Tente novamente.');
+        setSending(false);
+        mostrarAlerta('Erro', 'Não foi possível salvar o relatório localmente. Tente novamente.', 'error');
       }
-    } finally {
-      setSending(false);
     }
   };
 
@@ -691,51 +714,125 @@ text     vira tentry
 
   if (sending) {
     return (
-      <ScreenWrapper
-        style={[
-          styles.loadingContainer,
-          {
-            backgroundColor: theme.background,
-          },
-        ]}
-      >
-        <View
-          style={[
-            styles.loadingCard,
-            {
-              backgroundColor: theme.card,
-              borderColor: theme.border,
-            },
-          ]}
-        >
-          <ActivityIndicator size="large" color="#3b82f6" />
+      <ScreenWrapper style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
+        <Animated.View style={[styles.loadingOverlay, { opacity: fadeAnim }]}>
 
-          <Text
-            style={[
-              styles.loadingTitle,
-              {
-                color: theme.text,
-              },
-            ]}
-          >
-            {loadingMessage}
-          </Text>
+          {!showConclusion ? (
+            // TELA DE PROCESSAMENTO
+            <View style={styles.processingWrapper}>
+              <Text style={[styles.processingTitle, { color: theme.text }]}>FINALIZANDO</Text>
+              <Text style={[styles.processingSubtitle, { color: theme.subText }]}>Preparando seu atendimento...</Text>
 
-          <Text
-            style={[
-              styles.loadingSubtitle,
-              {
-                color: theme.subText,
-              },
-            ]}
-          >
-            {loadingDetail}
-          </Text>
+              <View style={styles.stepsContainer}>
+                {/* Step 1: Checklist */}
+                <View style={[styles.stepRow, stepChecklist === 'waiting' && styles.stepWaiting]}>
+                  <View style={[styles.stepIconBox, { backgroundColor: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: theme.border }]}>
+                    {stepChecklist === 'done' ? <CheckCircle2 color="#10b981" size={20} /> :
+                      stepChecklist === 'active' ? <Animated.View style={{ transform: [{ scale: pulseAnim }] }}><ClipboardCheck color="#3b82f6" size={20} /></Animated.View> :
+                        <ClipboardCheck color={theme.subText} size={20} />}
+                  </View>
+                  <Text style={[styles.stepText, { color: theme.subText }, stepChecklist === 'active' && styles.stepTextActive, stepChecklist === 'done' && { color: theme.text, fontWeight: '600' }]}>
+                    {stepChecklist === 'done' ? 'Checklist validado' : 'Validando checklist...'}
+                  </Text>
+                </View>
 
-          <View style={styles.loadingBarBackground}>
-            <View style={styles.loadingBarFill} />
-          </View>
-        </View>
+                {/* Step 2: Mídias */}
+                <View style={[styles.stepRow, stepFiles === 'waiting' && styles.stepWaiting]}>
+                  <View style={[styles.stepIconBox, { backgroundColor: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: theme.border }]}>
+                    {stepFiles === 'done' ? <CheckCircle2 color="#10b981" size={20} /> :
+                      stepFiles === 'active' ? <Animated.View style={{ transform: [{ scale: pulseAnim }] }}><Camera color="#3b82f6" size={20} /></Animated.View> :
+                        <Camera color={theme.subText} size={20} />}
+                  </View>
+                  <Text style={[styles.stepText, { color: theme.subText }, stepFiles === 'active' && styles.stepTextActive, stepFiles === 'done' && { color: theme.text, fontWeight: '600' }]}>
+                    {stepFiles === 'done' ? 'Fotos e assinatura processadas' : 'Processando mídias...'}
+                  </Text>
+                </View>
+
+                {/* Step 3: Local Save */}
+                <View style={[styles.stepRow, stepLocal === 'waiting' && styles.stepWaiting]}>
+                  <View style={[styles.stepIconBox, { backgroundColor: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: theme.border }]}>
+                    {stepLocal === 'done' ? <CheckCircle2 color="#10b981" size={20} /> :
+                      stepLocal === 'active' ? <Animated.View style={{ transform: [{ scale: pulseAnim }] }}><Save color="#3b82f6" size={20} /></Animated.View> :
+                        <Save color={theme.subText} size={20} />}
+                  </View>
+                  <Text style={[styles.stepText, { color: theme.subText }, stepLocal === 'active' && styles.stepTextActive, stepLocal === 'done' && { color: theme.text, fontWeight: '600' }]}>
+                    {stepLocal === 'done' ? 'Relatório salvo com segurança' : 'Criptografando e salvando...'}
+                  </Text>
+                </View>
+
+                {/* Step 4: Sync */}
+                <View style={[styles.stepRow, stepSync === 'waiting' && styles.stepWaiting]}>
+                  <View style={[styles.stepIconBox, { backgroundColor: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: theme.border }]}>
+                    {stepSync === 'done' ? <CheckCircle2 color="#10b981" size={20} /> :
+                      stepSync === 'pending' ? <Clock color="#f59e0b" size={20} /> :
+                        stepSync === 'active' ? <Animated.View style={{ transform: [{ scale: pulseAnim }] }}><Server color="#3b82f6" size={20} /></Animated.View> :
+                          <Server color={theme.subText} size={20} />}
+                  </View>
+                  <Text style={[
+                    styles.stepText, { color: theme.subText },
+                    stepSync === 'active' && styles.stepTextActive,
+                    stepSync === 'done' && { color: theme.text, fontWeight: '600' },
+                    stepSync === 'pending' && styles.stepTextPending
+                  ]}>
+                    {stepSync === 'done' ? 'Sincronizado com o servidor' :
+                      stepSync === 'pending' ? 'Sincronização pendente' : 'Sincronizando dados...'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+          ) : (
+            // GRANDE CONCLUSÃO
+            <View style={styles.conclusionWrapper}>
+              <Animated.View style={[styles.checkCircleLarge, { backgroundColor: darkMode ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.4)' }]}>
+                <Check color="#10b981" size={56} strokeWidth={3} />
+              </Animated.View>
+
+              <Text style={[styles.conclusionTitle, { color: theme.text }]}>ATENDIMENTO CONCLUÍDO</Text>
+              <Text style={[styles.conclusionSubtitle, syncSuccess ? { color: '#10b981' } : { color: '#f59e0b' }]}>
+                {syncSuccess ? 'Sincronizado com sucesso' : 'Salvo localmente • Sincronização em background'}
+              </Text>
+
+              {/* CARTÃO GLASSMORPHISM ADAPTÁVEL AO TEMA */}
+              <Animated.View style={[
+                styles.glassCard,
+                {
+                  opacity: cardOpacity,
+                  transform: [{ translateY: cardTranslateY }],
+                  backgroundColor: darkMode ? 'rgba(30, 41, 59, 0.7)' : 'rgba(255, 255, 255, 0.85)',
+                  borderColor: theme.border,
+                  shadowOpacity: darkMode ? 0.5 : 0.08
+                }
+              ]}>
+                <View style={[styles.glassHeader, { borderBottomColor: theme.border }]}>
+                  <Text style={[styles.glassHeaderTitle, { color: theme.subText }]}>RESUMO DA OS #{chamadoId}</Text>
+                  <Text style={[styles.glassHeaderDate, { color: theme.subText }]}>{conclusionData?.dataStr}</Text>
+                </View>
+
+                <View style={styles.glassContent}>
+                  <Text style={[styles.glassLabel, { color: theme.subText }]}>Cliente</Text>
+                  <Text style={[styles.glassValue, { color: theme.text }]} numberOfLines={1}>{conclusionData?.cliente}</Text>
+
+                  <View style={styles.glassRow}>
+                    <View style={styles.glassCol}>
+                      <Text style={[styles.glassLabel, { color: theme.subText }]}>Duração</Text>
+                      <Text style={[styles.glassValue, { color: theme.text }]}>{conclusionData?.duracao}</Text>
+                    </View>
+                    <View style={styles.glassCol}>
+                      <Text style={[styles.glassLabel, { color: theme.subText }]}>Mídias</Text>
+                      <Text style={[styles.glassValue, { color: theme.text }]}>{conclusionData?.fotosCount} Fotos</Text>
+                    </View>
+                    <View style={styles.glassCol}>
+                      <Text style={[styles.glassLabel, { color: theme.subText }]}>Checklist</Text>
+                      <Text style={[styles.glassValue, { color: theme.text }]}>{conclusionData?.checklistCount}</Text>
+                    </View>
+                  </View>
+                </View>
+              </Animated.View>
+            </View>
+          )}
+
+        </Animated.View>
       </ScreenWrapper>
     );
   }
@@ -1204,8 +1301,8 @@ text     vira tentry
                   alertData.tipo === 'success'
                     ? 'rgba(34, 197, 94, 0.15)'
                     : alertData.tipo === 'warning'
-                    ? 'rgba(245, 158, 11, 0.15)'
-                    : 'rgba(239, 68, 68, 0.15)',
+                      ? 'rgba(245, 158, 11, 0.15)'
+                      : 'rgba(239, 68, 68, 0.15)',
               }}
             >
               {alertData.tipo === 'success' && <CheckCircle2 size={36} color="#22c55e" />}
@@ -1248,8 +1345,8 @@ text     vira tentry
                   alertData.tipo === 'success'
                     ? '#22c55e'
                     : alertData.tipo === 'warning'
-                    ? '#f59e0b'
-                    : '#ef4444',
+                      ? '#f59e0b'
+                      : '#ef4444',
               }}
               onPress={() => {
                 setAlertVisible(false);

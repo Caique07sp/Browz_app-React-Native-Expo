@@ -15,7 +15,11 @@ import {
   MapPin,
   Phone,
   User,
-  Wrench
+  Wrench,
+  Navigation,
+  Map,
+  ChevronRight,
+  Car
 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
@@ -26,7 +30,9 @@ import {
   StatusBar,
   Text,
   TouchableOpacity,
-  View
+  View,
+  Modal,
+  Platform
 } from 'react-native';
 import { styles } from "../styles/details.styles";
 import { getApiUrl } from "@/services/api";
@@ -79,6 +85,86 @@ export default function DetalhesChamado() {
   const [notas, setNotas] = useState<string[]>([]);
   const router = useRouter();
   const { theme, darkMode } = useTheme();
+
+  const [contactModalVisible, setContactModalVisible] = useState(false);
+
+  // NOVA FUNÇÃO CENTRALIZADA DE CONTATO
+  const handleContactAction = (type: string) => {
+    setContactModalVisible(false);
+    
+    setTimeout(() => {
+      if (type === 'telefone') {
+        if (!telefoneCliente) return Alert.alert('Atenção', 'Telefone não informado.');
+        Linking.openURL(`tel:+55${telefoneCliente.replace(/\D/g, '')}`);
+      } else if (type === 'celular') {
+        if (!mobileCliente) return Alert.alert('Atenção', 'Celular não informado.');
+        Linking.openURL(`tel:+55${mobileCliente.replace(/\D/g, '')}`);
+      } else if (type === 'whatsapp') {
+        if (!mobileCliente) return Alert.alert('Atenção', 'Celular não informado.');
+        Linking.openURL(`https://wa.me/55${mobileCliente.replace(/\D/g, '')}`);
+      }
+    }, 300);
+  };
+
+  const [routeModalVisible, setRouteModalVisible] = useState(false);
+
+  // NOVA FUNÇÃO CENTRALIZADA DE ROTAS
+  // NOVA FUNÇÃO CENTRALIZADA DE ROTAS (FORÇANDO ABERTURA NATIVA)
+  const handleOpenRoute = async (app: string) => {
+    setRouteModalVisible(false); // Fecha o modal ao clicar
+
+    // Pequeno delay para a animação do modal não travar a transição de app
+    setTimeout(async () => {
+      const address = encodeURIComponent(endereco);
+      let url = '';
+      let fallbackUrl = '';
+
+      switch (app) {
+        case 'google':
+          // Usa o esquema nativo de navegação do Google Maps
+          url = Platform.OS === 'ios' 
+            ? `comgooglemaps://?daddr=${address}&directionsmode=driving` 
+            : `google.navigation:q=${address}`;
+          fallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${address}`;
+          break;
+        case 'waze':
+          // Força a abertura pelo esquema nativo do Waze
+          url = `waze://?q=${address}&navigate=yes`;
+          fallbackUrl = `https://waze.com/ul?q=${address}&navigate=yes`;
+          break;
+        case 'apple':
+          url = `maps://?daddr=${address}`;
+          fallbackUrl = `http://maps.apple.com/?daddr=${address}`;
+          break;
+        case 'uber':
+          url = `uber://?action=setPickup&dropoff[formatted_address]=${address}`;
+          fallbackUrl = `https://m.uber.com/ul/?action=setPickup&dropoff[formatted_address]=${address}`;
+          break;
+        case '99':
+          url = 'taxis99://';
+          fallbackUrl = Platform.OS === 'ios'
+            ? 'https://apps.apple.com/br/app/99-motorista-e-passageiro/id550280459'
+            : 'https://play.google.com/store/apps/details?id=com.taxis99';
+          break;
+      }
+
+      try {
+        // 1. TENTA FORÇAR A ABERTURA NATIVA DIRETO NO APLICATIVO
+        await Linking.openURL(url);
+      } catch (error) {
+        // 2. SE DER ERRO (App não instalado), CAI NO FALLBACK (Loja ou Site Mobile)
+        if (fallbackUrl) {
+          try {
+            await Linking.openURL(fallbackUrl);
+          } catch (fallbackError) {
+            Alert.alert('Erro', 'Não foi possível abrir a rota ou a loja de aplicativos.');
+          }
+        } else {
+          Alert.alert('App não instalado', 'Não conseguimos abrir o aplicativo selecionado.');
+        }
+      }
+    }, 300);
+  };
 
   async function atualizarCacheChamado(chamadoAtualizado: any) {
 
@@ -820,18 +906,19 @@ export default function DetalhesChamado() {
             </Text>
           </View>
 
-          <View style={styles.actionContainer}>
-            <View style={styles.mapRow}>
-              <TouchableOpacity style={styles.mapButton} onPress={openMaps}>
-                <FontAwesome5 name="google" size={20} color="#28bb0bff" />
-                <Text style={styles.buttonTextSmall}>Maps</Text>
-              </TouchableOpacity>
+        <View style={styles.actionContainer}>
+            
+            {/* NOVO BOTÃO CENTRALIZADO DE ROTAS MELHORADO */}
+           {/* BOTÃO SIMPLES E PEQUENO DE ROTAS */}
+            <TouchableOpacity 
+              style={[styles.simpleRouteButton, { backgroundColor: theme.card, borderColor: theme.border }]} 
+              onPress={() => setRouteModalVisible(true)}
+              activeOpacity={0.7}
+            >
+              <Navigation color="#3b82f6" size={20} />
+              <Text style={[styles.simpleRouteButtonText, { color: theme.text }]}>Rotas</Text>
+            </TouchableOpacity>
 
-              <TouchableOpacity style={styles.wazeButton} onPress={openWaze}>
-                <MaterialCommunityIcons name="waze" size={29} color="#3b82f6" />
-                <Text style={styles.buttonSmall}>Waze</Text>
-              </TouchableOpacity>
-            </View>
             {statusChamado === 2 ? (
               <TouchableOpacity
                 style={styles.finishedButton}
@@ -933,17 +1020,15 @@ export default function DetalhesChamado() {
             value={mobileCliente || 'Não informado'}
           />
 
-          <View style={styles.mapRow}>
-            <TouchableOpacity style={styles.callButton} onPress={callClient}>
-              <Phone size={20} color="#22c55e" />
-              <Text style={styles.buttonTextTel}>Telefone</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.callButton2} onPress={callMobile}>
-              <FontAwesome5 name="mobile-alt" size={20} color="#3b82f6" />
-              <Text style={styles.buttonTextCel}>Celular</Text>
-            </TouchableOpacity>
-          </View>
+          {/* BOTÃO SIMPLES E PEQUENO DE CONTATO */}
+          <TouchableOpacity 
+            style={[styles.simpleRouteButton, { backgroundColor: theme.card, borderColor: theme.border, marginTop: 12 }]} 
+            onPress={() => setContactModalVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Phone color="#22c55e" size={20} />
+            <Text style={[styles.simpleRouteButtonText, { color: theme.text }]}>Opções de Contato</Text>
+          </TouchableOpacity>
         </View>
 
         {/*
@@ -1006,7 +1091,181 @@ export default function DetalhesChamado() {
 
       </ScrollView>
 
+      {/* NOVO MODAL DE ROTAS (BOTTOM SHEET) */}
+      <Modal
+        visible={routeModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setRouteModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setRouteModalVisible(false)}
+        >
+          <View style={[styles.bottomSheet, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: darkMode ? '#334155' : '#cbd5e1' }]} />
 
+            <View style={styles.sheetHeader}>
+              <Text style={[styles.sheetTitle, { color: theme.text }]}>Escolha como chegar</Text>
+              <Text style={[styles.sheetSubtitle, { color: theme.subText }]}>Selecione seu aplicativo para iniciar a rota</Text>
+            </View>
+
+            <View style={styles.optionsContainer}>
+              {/* GOOGLE MAPS */}
+              <TouchableOpacity style={[styles.routeOption, { borderBottomColor: theme.border }]} onPress={() => handleOpenRoute('google')}>
+                <View style={[styles.routeIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
+                  <FontAwesome5 name="google" size={20} color="#3b82f6" />
+                </View>
+                <View style={styles.routeTextData}>
+                  <Text style={[styles.routeAppName, { color: theme.text }]}>Google Maps</Text>
+                  <Text style={[styles.routeAppDesc, { color: theme.subText }]}>Navegação e GPS</Text>
+                </View>
+                <ChevronRight size={18} color={theme.subText} />
+              </TouchableOpacity>
+
+              {/* WAZE */}
+              <TouchableOpacity style={[styles.routeOption, { borderBottomColor: theme.border }]} onPress={() => handleOpenRoute('waze')}>
+                <View style={[styles.routeIconBox, { backgroundColor: 'rgba(14, 165, 233, 0.1)' }]}>
+                  <MaterialCommunityIcons name="waze" size={24} color="#0ea5e9" />
+                </View>
+                <View style={styles.routeTextData}>
+                  <Text style={[styles.routeAppName, { color: theme.text }]}>Waze</Text>
+                  <Text style={[styles.routeAppDesc, { color: theme.subText }]}>Rotas e trânsito em tempo real</Text>
+                </View>
+                <ChevronRight size={18} color={theme.subText} />
+              </TouchableOpacity>
+
+              {/* APPLE MAPAS (SÓ APARECE NO iOS) */}
+              {Platform.OS === 'ios' && (
+                <TouchableOpacity style={[styles.routeOption, { borderBottomColor: theme.border }]} onPress={() => handleOpenRoute('apple')}>
+                  <View style={[styles.routeIconBox, { backgroundColor: darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)' }]}>
+                    <FontAwesome5 name="apple" size={22} color={theme.text} />
+                  </View>
+                  <View style={styles.routeTextData}>
+                    <Text style={[styles.routeAppName, { color: theme.text }]}>Apple Mapas</Text>
+                    <Text style={[styles.routeAppDesc, { color: theme.subText }]}>Navegação nativa</Text>
+                  </View>
+                  <ChevronRight size={18} color={theme.subText} />
+                </TouchableOpacity>
+              )}
+
+              {/* UBER */}
+              <TouchableOpacity style={[styles.routeOption, { borderBottomColor: theme.border }]} onPress={() => handleOpenRoute('uber')}>
+                <View style={[styles.routeIconBox, { backgroundColor: darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)' }]}>
+                  <FontAwesome5 name="uber" size={20} color={theme.text} />
+                </View>
+                <View style={styles.routeTextData}>
+                  <Text style={[styles.routeAppName, { color: theme.text }]}>Uber</Text>
+                  <Text style={[styles.routeAppDesc, { color: theme.subText }]}>Solicitar transporte particular</Text>
+                </View>
+                <ChevronRight size={18} color={theme.subText} />
+              </TouchableOpacity>
+
+              {/* 99 */}
+              <TouchableOpacity style={[styles.routeOption, { borderBottomWidth: 0 }]} onPress={() => handleOpenRoute('99')}>
+                <View style={[styles.routeIconBox, { backgroundColor: 'rgba(250, 204, 21, 0.15)' }]}>
+                  <FontAwesome5 name="taxi" size={18} color="#eab308" />
+                </View>
+                <View style={styles.routeTextData}>
+                  <Text style={[styles.routeAppName, { color: theme.text }]}>99</Text>
+                  <Text style={[styles.routeAppDesc, { color: theme.subText }]}>Corridas via aplicativo</Text>
+                </View>
+                <ChevronRight size={18} color={theme.subText} />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.cancelRouteBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
+              onPress={() => setRouteModalVisible(false)}
+            >
+              <Text style={[styles.cancelRouteText, { color: theme.text }]}>Cancelar</Text>
+            </TouchableOpacity>
+
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* NOVO MODAL DE CONTATO (BOTTOM SHEET) */}
+      <Modal
+        visible={contactModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setContactModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setContactModalVisible(false)}
+        >
+          <View style={[styles.bottomSheet, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: darkMode ? '#334155' : '#cbd5e1' }]} />
+            
+            <View style={styles.sheetHeader}>
+              <Text style={[styles.sheetTitle, { color: theme.text }]}>Falar com o cliente</Text>
+              <Text style={[styles.sheetSubtitle, { color: theme.subText }]}>Escolha o canal de atendimento</Text>
+            </View>
+
+            <View style={styles.optionsContainer}>
+              {/* WHATSAPP */}
+              {mobileCliente ? (
+                <TouchableOpacity style={[styles.routeOption, { borderBottomColor: theme.border }]} onPress={() => handleContactAction('whatsapp')}>
+                  <View style={[styles.routeIconBox, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
+                    <FontAwesome5 name="whatsapp" size={26} color="#22c55e" />
+                  </View>
+                  <View style={styles.routeTextData}>
+                    <Text style={[styles.routeAppName, { color: theme.text }]}>WhatsApp</Text>
+                    <Text style={[styles.routeAppDesc, { color: theme.subText }]}>{mobileCliente}</Text>
+                  </View>
+                  <ChevronRight size={18} color={theme.subText} />
+                </TouchableOpacity>
+              ) : null}
+
+              {/* LIGAÇÃO CELULAR */}
+              {mobileCliente ? (
+                <TouchableOpacity style={[styles.routeOption, { borderBottomColor: theme.border }]} onPress={() => handleContactAction('celular')}>
+                  <View style={[styles.routeIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}>
+                    <FontAwesome5 name="mobile-alt" size={22} color="#3b82f6" />
+                  </View>
+                  <View style={styles.routeTextData}>
+                    <Text style={[styles.routeAppName, { color: theme.text }]}>Ligar para Celular</Text>
+                    <Text style={[styles.routeAppDesc, { color: theme.subText }]}>{mobileCliente}</Text>
+                  </View>
+                  <ChevronRight size={18} color={theme.subText} />
+                </TouchableOpacity>
+              ) : null}
+
+              {/* LIGAÇÃO FIXO */}
+              {telefoneCliente ? (
+                <TouchableOpacity style={[styles.routeOption, { borderBottomWidth: 0 }]} onPress={() => handleContactAction('telefone')}>
+                  <View style={[styles.routeIconBox, { backgroundColor: darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)' }]}>
+                    <Phone color={theme.text} size={20} />
+                  </View>
+                  <View style={styles.routeTextData}>
+                    <Text style={[styles.routeAppName, { color: theme.text }]}>Ligar para Fixo</Text>
+                    <Text style={[styles.routeAppDesc, { color: theme.subText }]}>{telefoneCliente}</Text>
+                  </View>
+                  <ChevronRight size={18} color={theme.subText} />
+                </TouchableOpacity>
+              ) : null}
+
+              {/* MENSAGEM SE NÃO HOUVER NÚMEROS */}
+              {(!telefoneCliente && !mobileCliente) && (
+                <Text style={{ color: theme.subText, textAlign: 'center', padding: 20 }}>
+                  Nenhum número de contacto disponível.
+                </Text>
+              )}
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.cancelRouteBtn, { backgroundColor: theme.card, borderColor: theme.border }]} 
+              onPress={() => setContactModalVisible(false)}
+            >
+              <Text style={[styles.cancelRouteText, { color: theme.text }]}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </ScreenWrapper>
   );
 }
