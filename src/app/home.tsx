@@ -53,9 +53,6 @@ import { estaSincronizando, sincronizarPendentes } from "@/services/sync";
 import { isOnline } from '@/services/network';
 import { logout } from "@/services/session";
 import { getApiUrl } from "@/services/api";
-import { TimezoneService } from "@/services/TimezoneService";
-import { formatInTimeZone } from "date-fns-tz/formatInTimeZone";
-
 let alertaDeslogarVisivel = false;
 
 /// ==========================================
@@ -83,7 +80,6 @@ const CartaoChamado = memo(({
   aoAbrirDeslize,
   aoRegistrarRef,
   aoNavegarDetalhes,
-  userTz,
   aoNavegarEditarRelatorio,
   aoNavegarDetalhesChamados,
   aoNavegarChecklist
@@ -184,7 +180,13 @@ const CartaoChamado = memo(({
             </View>
 
             <Text style={[estilos.dataRodape, { color: tema.subText }]}>
-              {formatInTimeZone(new Date(chamado.calendar_start), userTz, "dd/MM/yyyy HH:mm")}
+              {new Date(chamado.calendar_start).toLocaleDateString("pt-BR", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </Text>
 
             <Text style={[estilos.tituloCartao, { color: tema.text }]}>
@@ -225,10 +227,6 @@ export default function Browz() {
 
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
-const [userTz, setUserTz] = useState('America/Sao_Paulo');
-  useEffect(() => {
-    TimezoneService.getCurrentTimezone().then((tz) => setUserTz(tz));
-  }, []);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [nome, setNome] = useState("");
@@ -411,15 +409,13 @@ const [userTz, setUserTz] = useState('America/Sao_Paulo');
           const dataFimSalva = await AsyncStorage.getItem("@saved_end_date");
           const filtroDataLimpado = await AsyncStorage.getItem("@filtro_data_limpado");
 
-          const tz = await TimezoneService.getCurrentTimezone();
           if (dataInicioSalva) {
             setStartDate(new Date(dataInicioSalva));
           } else if (filtroDataLimpado !== "true") {
-            // Se não tem salvo e não foi limpo intencionalmente, define o início da semana no fuso
-            const hoje = new Date();
-            const inicioSemana = new Date(hoje);
-            inicioSemana.setDate(hoje.getDate() - hoje.getDay()); // Domingo
-            setStartDate(await TimezoneService.getStartOfDayZoned(inicioSemana));
+            const data = new Date();
+            data.setDate(data.getDate() - data.getDay());
+            data.setHours(0, 0, 0, 0);
+            setStartDate(data);
           } else {
             setStartDate(null);
           }
@@ -427,11 +423,10 @@ const [userTz, setUserTz] = useState('America/Sao_Paulo');
           if (dataFimSalva) {
             setEndDate(new Date(dataFimSalva));
           } else if (filtroDataLimpado !== "true") {
-            // Define o fim da semana no fuso
-            const hoje = new Date();
-            const fimSemana = new Date(hoje);
-            fimSemana.setDate(hoje.getDate() + (6 - hoje.getDay())); // Sábado
-            setEndDate(await TimezoneService.getEndOfDayZoned(fimSemana));
+            const data = new Date();
+            data.setDate(data.getDate() + (6 - data.getDay()));
+            data.setHours(23, 59, 59, 999);
+            setEndDate(data);
           } else {
             setEndDate(null);
           }
@@ -651,13 +646,18 @@ const [userTz, setUserTz] = useState('America/Sao_Paulo');
       });
     }
 
+    // Substitua o bloco if (startDate && endDate) por este:
     if (startDate && endDate) {
+      const inicio = new Date(startDate);
+      inicio.setHours(0, 0, 0, 0);
+
+      const fim = new Date(endDate);
+      fim.setHours(23, 59, 59, 999);
+
       lista = lista.filter((item) => {
         if (!item.calendar_start) return false;
-        // As datas do backend (calendar_start) e os nossos estados (startDate/endDate) 
-        // já são timestamps absolutos. Basta comparar os milissegundos.
-        const dataChamado = new Date(item.calendar_start).getTime();
-        return dataChamado >= startDate.getTime() && dataChamado <= endDate.getTime();
+        const dataChamado = new Date(item.calendar_start);
+        return dataChamado >= inicio && dataChamado <= fim;
       });
     }
 
@@ -846,7 +846,7 @@ const [userTz, setUserTz] = useState('America/Sao_Paulo');
       tipo,
       uniqueId,
       lida: false,
-      data: formatInTimeZone(new Date(), userTz, "dd/MM/yyyy HH:mm:ss"),
+      data: new Date().toLocaleString("pt-BR"),
       timestamp: new Date().toISOString(),
     });
 
@@ -1029,7 +1029,7 @@ const [userTz, setUserTz] = useState('America/Sao_Paulo');
         {/* LISTA DE CHAMADOS OTMIZADA */}
         <FlatList
           data={filteredChamados}
-          extraData={{ theme, userTz }}
+          extraData={theme}
           keyExtractor={(item) => String(item.calendar_id)}
           initialNumToRender={10}
           maxToRenderPerBatch={10}
@@ -1076,7 +1076,6 @@ const [userTz, setUserTz] = useState('America/Sao_Paulo');
             <CartaoChamado
               chamado={item}
               tema={theme}
-              userTz={userTz}
               textoCliente={getClienteText(item.customer_id)}
               textoCategoria={getCategoriaText(item.service_type_id)}
               textoStatus={getStatusText(item.calendar_status, item.agenda_pause)}

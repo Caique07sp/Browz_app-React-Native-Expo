@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   ScrollView,
   StatusBar,
@@ -9,6 +9,10 @@ import {
   Animated
 } from "react-native";
 
+import { Image } from "react-native";
+import { formatInTimeZone } from 'date-fns-tz';
+
+import { useFocusEffect } from 'expo-router';
 import { ScreenWrapper } from "@/components/ScreenWrapper";
 import { obterStatusNotificacaoSalva, requisitarEPersistirPermissao } from "@/services/notifications";
 import { logout } from "@/services/session";
@@ -20,6 +24,7 @@ import {
   Bell,
   ChevronRight,
   Clock,
+  Globe,
   Info,
   LogOut,
   Moon,
@@ -57,6 +62,22 @@ function FadeInItem({ children, delay }: { children: React.ReactNode; delay: num
   );
 }
 
+// COMPONENTE: Relógio em Tempo Real para o card de Configurações
+const RealTimeClock = React.memo(({ tz, color }: { tz: string, color: string }) => {
+  const [time, setTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <Text style={{ fontSize: 18, fontWeight: '600', fontVariant: ['tabular-nums'], color }}>
+      {formatInTimeZone(time, tz, 'HH:mm:ss')}
+    </Text>
+  );
+});
+
 export default function Configuracoes() {
   const router = useRouter();
   const { theme, darkMode, toggleTheme } = useTheme();
@@ -64,27 +85,29 @@ export default function Configuracoes() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
   const [timezone, setTimezone] = useState("");
-  const [timezoneList, setTimezoneList] = useState<{ id: string, label: string }[]>([]);
+  const [timezoneList, setTimezoneList] = useState<any[]>([]);
 
   // Valor animado para controlar o fade na troca de tema
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  useEffect(() => {
-    async function loadTz() {
-      const currentTz = await TimezoneService.getCurrentTimezone();
-      setTimezone(currentTz);
+  useFocusEffect(
+    useCallback(() => {
+      async function loadTz() {
+        const currentTz = await TimezoneService.getCurrentTimezone();
+        setTimezone(currentTz);
 
-      // Carrega a lista formatada dinamicamente (já calcula horário de verão)
-      const formattedList = TimezoneService.getFormattedTimezoneList();
-      setTimezoneList(formattedList);
-    }
-    loadTz();
-    async function carregarPreferencia() {
-      const ativado = await obterStatusNotificacaoSalva();
-      setNotificationsEnabled(ativado);
-    }
-    carregarPreferencia();
-  }, []);
+        // Carrega a lista formatada dinamicamente (já calcula horário de verão)
+        const fullList = TimezoneService.getFullTimezoneData();
+        setTimezoneList(fullList);
+      }
+      loadTz();
+      async function carregarPreferencia() {
+        const ativado = await obterStatusNotificacaoSalva();
+        setNotificationsEnabled(ativado);
+      }
+      carregarPreferencia();
+    }, [])
+  );
 
   async function handleToggleNotifications(valor: boolean) {
     const resultado = await requisitarEPersistirPermissao(valor);
@@ -118,6 +141,14 @@ export default function Configuracoes() {
     await logout();
     router.replace("/");
   }
+
+  const currentTzData = timezoneList.find(t => t.id === timezone) || {
+    id: timezone || 'America/Sao_Paulo',
+    city: 'São Paulo',
+    country: 'Brasil',
+    code: 'br',
+    dynamicOffset: 'UTC-3'
+  };
 
   return (
     <ScreenWrapper
@@ -281,17 +312,112 @@ export default function Configuracoes() {
                   <Text style={[styles.itemSubtitle, { color: theme.subText }]}>Define os horários de todo o sistema</Text>
                 </View>
               </View>
-              <View style={{ width: '100%', borderWidth: 1, borderColor: theme.border, borderRadius: 8 }}>
-                <Picker
-                  selectedValue={timezone}
-                  onValueChange={handleChangeTimezone}
-                  style={{ color: theme.text }}
-                  dropdownIconColor={theme.text}
+              <View style={{ width: '100%', borderColor: theme.border, borderRadius: 8 }}>
+
+
+                {/* SEÇÃO DO RELÓGIO MUNDIAL */}
+                <TouchableOpacity
+                  style={[
+                    styles.item,
+                    {
+                      backgroundColor: theme.card,
+                      borderColor: theme.border,
+                      alignItems: 'center',
+                      padding: 16,
+                    },
+                  ]}
+                  onPress={() => router.push("/relogio-mundial" as any)}
+                  activeOpacity={0.7}
                 >
-                  {timezoneList.map(tz => (
-                    <Picker.Item key={tz.id} label={tz.label} value={tz.id} />
-                  ))}
-                </Picker>
+                  {/* Lado Esquerdo: Bandeira e Local */}
+                  <View
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Image
+                      source={{
+                        uri: `https://flagcdn.com/w40/${currentTzData.code}.png`,
+                      }}
+                      style={{
+                        width: 32,
+                        height: 24,
+                        borderRadius: 4,
+                        marginRight: 12,
+                      }}
+                    />
+
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{
+                          color: theme.text,
+                          fontSize: 17,
+                          fontWeight: '700',
+                          marginBottom: 2,
+                        }}
+                      >
+                        {currentTzData.city}
+                      </Text>
+
+                      <Text
+                        style={{
+                          color: theme.subText,
+                          fontSize: 13,
+                          fontWeight: '500',
+                        }}
+                      >
+                        {currentTzData.country}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Lado Direito: Hora ao vivo e UTC */}
+                  <View
+                    style={{
+                      alignItems: 'flex-end',
+                      marginRight: 16,
+                    }}
+                  >
+                    <RealTimeClock
+                      color={theme.text}
+                      tz={currentTzData.id}
+                    />
+
+                    <Text
+                      style={{
+                        color: theme.subText,
+                        fontSize: 12,
+                        fontWeight: '600',
+                        marginTop: 2,
+                      }}
+                    >
+                      {currentTzData.dynamicOffset ||
+                        TimezoneService.getDynamicOffset(currentTzData.id)}
+                    </Text>
+                  </View>
+
+                  {/* Seta divisória */}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      borderLeftWidth: 1,
+                      borderLeftColor: 'rgba(150,150,150,0.2)',
+                      paddingLeft: 12,
+                    }}
+                  >
+                    <ChevronRight
+                      color={theme.subText}
+                      size={22}
+                    />
+                  </View>
+                </TouchableOpacity>
+
+
+
+
               </View>
             </View>
           </FadeInItem>
